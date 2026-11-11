@@ -5,6 +5,8 @@ import { derivePanels, type Panel } from '../geom/carve';
 import { syncGroups } from '../geom/groups';
 import { renderPage } from '../render/page';
 import { drawBackdrop } from './backdrop';
+import { drawComposition } from './composition';
+import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
 import { h, toast } from './dom';
 import { closePopover, displayButton, popover } from './popover';
@@ -107,6 +109,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     return () => {};
   }
   const art = await studio.focus(page);
+  const composition = stage === 'layout' || stage === 'draw' || stage === 'caption';
   await studio.residency.pin(art);
   studio.setLast(page, stage);
   if (page.state[stage] === 0) studio.markStage(page, stage, 1);
@@ -194,6 +197,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     drawBackdrop(g, { width: r.width, height: r.height, ox, oy, s, pageW: page.widthIn, pageH: page.heightIn }, { ...colors, kind: p.backdrop, strength: p.gridOpacity, vignette: p.vignette });
     g.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
     renderPage(g, page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), panels: ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    if (composition) drawComposition(g, p.guide, page.widthIn, page.heightIn, s);
     mode.overlay?.(g, s);
     stageEl.dataset.cursor = mode.cursor?.() ?? '';
   }
@@ -442,7 +446,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         h('button', { type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
         `${idx + 1} / ${book.pages.length}`,
         h('button', { type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›')),
-      save, undoBtn(), redoBtn(), displayButton(true), layoutBtn('⤢', 'Focus layout'), doneBtn,
+      save, undoBtn(), redoBtn(), spreadButton(studio, page, stage, go), displayButton(true, composition), layoutBtn('⤢', 'Focus layout'), doneBtn,
       h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio) }, 'Export')),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),
@@ -452,7 +456,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       deskSelect,
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›'),
-      undoBtn(), redoBtn(), inspBtn, displayButton(true), layoutBtn('⤡', 'Studio layout')),
+      undoBtn(), redoBtn(), inspBtn, spreadButton(studio, page, stage, go, true), displayButton(true, composition), layoutBtn('⤡', 'Studio layout')),
   );
   inspBtn.addEventListener('click', () => {
     const on = !screen.classList.contains('insp-open');
@@ -494,6 +498,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   studio.afterUndo.add(onUndo);
   const offHistory = () => studio.afterUndo.delete(onUndo);
   const onKey = (e: KeyboardEvent) => {
+    if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
     const t = e.target as HTMLElement | null;
     const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -509,7 +514,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       studio.redo();
       return;
     }
-    if (typing) return;
+    if (typing || t?.closest('.layer-picker')) return;
     // Tab toggles the layout only when nothing has keyboard focus, so Tab still moves focus
     if (e.key === 'Tab' && !e.shiftKey && (document.activeElement === document.body || document.activeElement === null)) {
       e.preventDefault();

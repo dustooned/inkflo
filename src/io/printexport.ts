@@ -33,7 +33,7 @@ export interface PageRange {
   to: number;
 }
 
-function pagesIn(book: Book, range?: PageRange): Page[] {
+export function pagesIn(book: Book, range?: PageRange): Page[] {
   if (!range) return book.pages;
   const a = Math.max(1, Math.min(range.from, range.to));
   const b = Math.min(book.pages.length, Math.max(range.from, range.to));

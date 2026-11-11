@@ -4,6 +4,7 @@ import { renderThumb } from '../render/page';
 import { openExport } from './exportdialog';
 import { askText, confirmDialog, h } from './dom';
 import { displayButton } from './popover';
+import { spreadButton } from './spread';
 
 const STAGE_LABEL: Record<string, string> = { script: 'Script', layout: 'Layout', draw: 'Draw', caption: 'Caption', print: 'Print' };
 
@@ -64,6 +65,7 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Undo', title: 'Undo (Ctrl+Z)', onclick: () => studio.undo() }, '↶'),
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => studio.redo() }, '↷'),
         h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio) }, 'Export'),
+        spreadButton(studio, undefined, 'layout', go),
         h('button', { class: 'btn danger', type: 'button', onclick: async () => {
           if (await confirmDialog('Delete book?', `“${book.title}” and all its pages are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
             await studio.deleteBook(book.id);

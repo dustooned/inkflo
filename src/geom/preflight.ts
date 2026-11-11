@@ -3,6 +3,7 @@ import type { Panel } from './carve';
 import { printOf } from './printkinds';
 import { readingOrderIssues } from './lettering';
 import { readabilityAll } from './readability';
+import { centreCrossing, revealIssues } from './composition';
 
 /** Print preflight that reads like a checklist (PLAN §3 Print). Pure apart from `box`. */
 
@@ -50,5 +51,7 @@ export function preflightPage(book: Book, page: Page, panels: Panel[], box: Lett
   if (lines > lettered) out.push({ level: 'warn', text: `${lines - lettered} script line${lines - lettered === 1 ? '' : 's'} not lettered.` });
   const order = readingOrderIssues(page, panels);
   if (order.length) out.push({ level: 'warn', text: `${order.length} balloon${order.length === 1 ? '' : 's'} out of reading order.` });
+  if (centreCrossing(page)) out.push({ level: 'info', text: 'A gutter crossing sits at the centre of the page.' });
+  for (const issue of revealIssues(book, page, panels)) out.push({ level: 'warn', text: issue.text });
   return out;
 }

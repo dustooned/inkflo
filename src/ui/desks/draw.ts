@@ -15,15 +15,15 @@ import { putPixels, RasterEngine } from '../../engine/brush/raster';
 import { Smoother } from '../../engine/brush/smoothing';
 import type { StrokePoint, StrokeRecord } from '../../engine/core/stroke';
 import { panelAt } from '../../geom/carve';
+import { nearestGuide } from '../../geom/composition';
+import { prefs } from '../prefs';
 import { groupAt, groupLabel, insertIndex, layerOfType } from '../../geom/groups';
 import { browserPlaneOps } from '../../io/canvasops';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { confirmDialog, h, seg, slider, toast } from '../dom';
-import { layersPanel } from '../layerspanel';
+import { layersPanel, type LayerScope, type LayerTarget, type LayerView } from '../layerspanel';
 import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
 import { brushWidth, eraseStrokes, hitStroke, pointAt, reshape, scaleWidth, simplify, smooth, type VectorErase } from '../../draw/vectoredit';
-
-type Target = 'auto' | 'layer';
 
 type SizedTool = 'pencil' | 'ink' | 'eraser';
 /** Sizes (inches) remembered per tool for the session. */
@@ -97,7 +97,6 @@ const state = {
   showPencil: true,
   color: PALETTE[1]!,
   gap: 0.02,
-  target: 'auto' as Target,
   /** Line alpha that counts as a wall (Procreate's threshold; drag sideways while filling). */
   threshold: FILL_THRESHOLD,
   /** Grow (+) / shrink (−) fills, inches. */
@@ -118,6 +117,7 @@ const FILL_HINT: Record<FillVariant, string> = {
 };
 /** The selected layer per page, for the session. */
 const activeLayer = new Map<string, string>();
+const targetByPage = new Map<string, LayerTarget>();
 
 let seedCounter = 1;
 
@@ -128,6 +128,14 @@ let seedCounter = 1;
  */
 export function drawDesk(ctx: DeskCtx): DeskMode {
   const { studio, page, art, book } = ctx;
+  let target = targetByPage.get(page.id) ?? 'auto';
+  let layerScope: LayerScope = 'context';
+  let layerView: LayerView = { kind: 'stack' };
+  let contextGroupId: string | null = null;
+  let lastCanvasGroupId: string | null = null;
+  let picker: HTMLElement | null = null;
+  let pickerAnchor: HTMLButtonElement | null = null;
+  let dismissPicker: (() => void) | null = null;
   const dpi = book.dpi;
   const engine = new RasterEngine(art.width, art.height);
   let live: {
@@ -192,6 +200,91 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     return id ? findLayer(page, id) : null;
   };
 
+  function contextGroup(): LayerGroup | undefined {
+    ctx.panels();
+    const match = (id: string | null) => page.groups.find((g) => g.id === id);
+    return match(contextGroupId) ?? (target === 'layer' ? active()?.group : undefined) ??
+      match(lastCanvasGroupId) ?? page.groups.find((g) => g.kind === 'panel') ?? page.groups[0];
+  }
+
+  function setTarget(next: LayerTarget): void {
+    target = next;
+    targetByPage.set(page.id, next);
+    ctx.chrome();
+    ctx.request();
+  }
+
+  function refreshPicker(focus = false): void {
+    if (!picker) return;
+    const focused = document.activeElement;
+    const hadFocus = focused instanceof HTMLElement && picker.contains(focused);
+    const token = hadFocus ? focused.dataset.focus ?? focused.getAttribute('aria-label') ?? focused.textContent?.trim() : null;
+    const scroll = picker.scrollTop;
+    picker.replaceChildren(layersPanel({
+      studio,
+      page,
+      panels: ctx.panels(),
+      active: active()?.layer.id ?? null,
+      target,
+      scope: layerScope,
+      contextGroup: contextGroup()?.id ?? null,
+      view: layerView,
+      onTarget: setTarget,
+      onScope: (scope) => { layerScope = scope; refreshPicker(true); },
+      onContext: (id) => { contextGroupId = id; refreshPicker(true); },
+      onView: (view) => { layerView = view; if (picker) picker.scrollTop = 0; refreshPicker(true); },
+      onSelect: (id) => {
+        if (id) {
+          activeLayer.set(page.id, id);
+          contextGroupId = active()?.group.id ?? null;
+        } else activeLayer.delete(page.id);
+        setTarget(id ? 'layer' : 'auto');
+      },
+      refresh: () => { ctx.chrome(); ctx.request(); },
+    }));
+    picker.scrollTop = scroll;
+    if (hadFocus || focus) {
+      const controls = [...picker.querySelectorAll<HTMLElement>('button:not([disabled]), select, input')];
+      const same = token ? controls.find((e) => (e.dataset.focus ?? e.getAttribute('aria-label') ?? e.textContent?.trim()) === token) : undefined;
+      (same ?? picker.querySelector<HTMLElement>('[aria-label="Back to layers"], [aria-label="Layer view"] [aria-pressed="true"]'))?.focus({ preventScroll: true });
+    }
+  }
+
+  function layerButton(side: 'below' | 'left'): HTMLButtonElement {
+    const button = h('button', { class: 'btn layer-trigger', type: 'button', 'aria-label': 'Layers', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
+    button.addEventListener('click', () => {
+      if (pickerAnchor === button) {
+        dismissPicker?.();
+        return;
+      }
+      dismissPicker?.();
+      pickerAnchor = button;
+      layerView = { kind: 'stack' };
+      picker = h('div', { class: 'layer-picker' });
+      refreshPicker();
+      button.setAttribute('aria-expanded', 'true');
+      dismissPicker = popover(button, picker, side, 'Layers', () => {
+        button.setAttribute('aria-expanded', 'false');
+        picker = null;
+        pickerAnchor = null;
+        dismissPicker = null;
+      });
+      picker.querySelector<HTMLElement>('[aria-label="Layer view"] [aria-pressed="true"]')?.focus();
+    });
+    return button;
+  }
+
+  const contextLayers = layerButton('below');
+  const inspectorLayers = layerButton('left');
+  function updateLayerButton(button: HTMLButtonElement): void {
+    const pinned = target === 'layer' ? active()?.layer.name : null;
+    const hint = target === 'auto' ? 'Panel under pen' : pinned ?? 'Choose a layer';
+    button.title = 'Layers · ' + hint;
+    button.replaceChildren(h('span', {}, 'Layers'),
+      h('small', {}, target === 'auto' ? 'Auto' : pinned ?? 'Choose layer'),
+      h('span', { class: 'layer-chevron', 'aria-hidden': 'true' }, '⌄'));
+  }
+
   /** Add a layer of a type to a group as its own command; returns its id. */
   function addLayer(group: LayerGroup, type: LayerType, vector = false): string {
     const layer = newLayer(type);
@@ -212,9 +305,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
    * mark and the new layer combine into one undo step), or a reason it can't draw.
    */
   function resolve(p: Pt, type: LayerType, create: boolean, vector = false): { layerId: string; created: boolean } | string {
-    if (state.target === 'layer') {
+    if (target === 'layer') {
       const a = active();
-      if (!a) return 'Pick a layer in the Layers panel, or switch Target to “Panel under pen”.';
+      if (!a) return 'Open Layers to choose a layer or switch to “Panel under pen”.';
       if (a.layer.locked || a.group.locked) return `“${a.layer.name}” is locked.`;
       if (!a.layer.visible || !a.group.visible) return `“${a.layer.name}” is hidden.`;
       if (!!a.layer.vector !== vector) return a.layer.vector ? `“${a.layer.name}” is a vector layer: draw on it with the Vector pen.` : `“${a.layer.name}” is not a vector layer: the Vector pen draws on vector layers.`;
@@ -244,6 +337,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const erase = tool === 'eraser';
     const vector = mode.tool === 'vpen';
     const type: LayerType = erase ? eraseType() : tool;
+    const { guide, snapGuide } = prefs();
+    const snap = !erase && snapGuide ? nearestGuide(guide, page.widthIn, page.heightIn, p, 8 / ctx.scale()) : undefined;
+    if (snap) p = snap.point;
     const target = resolve(p, type, !erase, vector);
     if (typeof target === 'string') {
       toast(target);
@@ -270,7 +366,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       record,
       walker: new DabWalker(record.brush, seed),
       smoother: new Smoother(erase ? 0 : stabilizeOf(tool as LinePass), true, ctx.scale() / dpi),
-      assist: new AssistLock<StrokePoint>(erase ? { ...ink.ruler, kind: 'off' } : rulerInPx(), { x: p.x * dpi, y: p.y * dpi }, 0.06 * dpi),
+      assist: new AssistLock<StrokePoint>(
+        snap ? { ...ink.ruler, kind: 'parallel', angle: snap.angle } : erase ? { ...ink.ruler, kind: 'off' } : rulerInPx(),
+        { x: p.x * dpi, y: p.y * dpi },
+        0.06 * dpi,
+      ),
       stroke,
       last: { x: 0, y: 0, pressure: 1, tiltX: 0, tiltY: 0, t: 0 },
       raw: [],
@@ -678,7 +778,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       return;
     }
     const group = groupAt(page, ctx.panels(), p);
-    const layer = state.target === 'layer' ? active()?.layer : layerOfType(group, 'colour');
+    const layer = target === 'layer' ? active()?.layer : layerOfType(group, 'colour');
     if (!layer) {
       // no colour layer yet: preview against a throwaway kit of this group's lines
       preview = null;
@@ -900,7 +1000,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   /** Vector layers the edit tools may touch: the selected one, or every visible, unlocked one. */
   function editableVectors(): Layer[] {
-    if (state.target === 'layer') {
+    if (target === 'layer') {
       const a = active();
       return a?.layer.vector && !a.layer.locked && a.layer.visible && !a.group.locked && a.group.visible ? [a.layer] : [];
     }
@@ -1171,7 +1271,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         }
         bar.append(h('span', { class: 'hint' }, `Uses ${currentBrush('ink').name} at the ink size.`));
       }
-      if (mode.tool === 'eraser' && state.target === 'auto') bar.append(seg([{ id: 'ink', label: 'Ink' }, { id: 'pencil', label: 'Pencil' }, { id: 'vector', label: 'Vector' }], variantOf(mode, 'eraser') || 'ink', (v) => ctx.setVariant('eraser', v), 'Erase on'));
+      if (mode.tool === 'eraser' && target === 'auto') bar.append(seg([{ id: 'ink', label: 'Ink' }, { id: 'pencil', label: 'Pencil' }, { id: 'vector', label: 'Vector' }], variantOf(mode, 'eraser') || 'ink', (v) => ctx.setVariant('eraser', v), 'Erase on'));
       if (vectorErase()) {
         bar.append(seg<VectorErase>([{ id: 'intersection', label: 'Touched part' }, { id: 'crossing', label: 'To crossings' }, { id: 'whole', label: 'Whole line' }], vstate.erase, (v) => { vstate.erase = v; ctx.chrome(); }, 'Vector erase'),
           h('span', { class: 'hint' }, vstate.erase === 'crossing' ? 'Cleans overshoots: removes the piece up to the nearest crossing lines.' : vstate.erase === 'whole' ? 'Removes every line the eraser touches.' : 'Cuts only where the eraser crosses a line.'));
@@ -1219,40 +1319,27 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         bar.append(h('label', { class: 'mini', title: 'Show open line ends, and what a tap would fill (C)' }, chk, 'Check gaps (C)'));
         bar.append(h('span', { class: 'hint' }, FILL_HINT[fv]));
       }
-      const a = active();
-      bar.append(
-        h('span', { class: 'mini' }, 'Target',
-          seg<Target>([{ id: 'auto', label: 'Panel under pen' }, { id: 'layer', label: a ? `Layer: ${a.layer.name}` : 'Selected layer' }], state.target, (v) => { state.target = v; ctx.chrome(); }, 'Target')),
-      );
+      updateLayerButton(contextLayers);
+      bar.prepend(contextLayers);
+      refreshPicker();
       const show = h('input', { type: 'checkbox', checked: state.showPencil });
       show.addEventListener('change', () => { state.showPencil = show.checked; ctx.request(); });
       bar.append(h('label', { class: 'mini' }, show, 'Show pencil'));
     },
     inspector(el) {
+      updateLayerButton(inspectorLayers);
       el.append(
-        layersPanel({
-          studio,
-          page,
-          panels: ctx.panels(),
-          active: activeLayer.get(page.id) ?? null,
-          onSelect: (id) => {
-            if (id) activeLayer.set(page.id, id);
-            else activeLayer.delete(page.id);
-            state.target = id ? 'layer' : 'auto';
-            ctx.chrome();
-            ctx.request();
-          },
-          refresh: () => {
-            ctx.chrome();
-            ctx.request();
-          },
-        }),
+        h('div', { class: 'sec' }, inspectorLayers),
         h('div', { class: 'sec' }, h('h4', {}, 'Strokes are data'),
           h('p', { class: 'note' }, 'Every stroke and fill is stored on its layer, so a page can be redrawn at any resolution.'),
           h('button', { class: 'btn', type: 'button', style: 'margin-top:8px', onclick: rebuild }, 'Rebuild from strokes')),
       );
     },
     down(p, e) {
+      if (target === 'auto') {
+        lastCanvasGroupId = groupAt(page, ctx.panels(), p).id;
+        contextGroupId = null;
+      }
       if (mode.tool === 'fill') {
         preview = null;
         fillDown(p, e);

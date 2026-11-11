@@ -29,6 +29,8 @@ export interface RenderOptions {
   balloons?: boolean;
   /** Panel paper and gutters. Off = art only on a transparent page. */
   frame?: boolean;
+  /** Use unprinted white paper for tonal separation. */
+  whitePaper?: boolean;
   /** A replacement canvas for a layer (the live stroke while drawing), by layer id. */
   live?: Record<string, HTMLCanvasElement>;
   /** Pre-derived panels, when the caller already has them. */
@@ -74,7 +76,7 @@ function openPath(pts: readonly { x: number; y: number }[], s: number): Path2D {
 }
 
 /** Gutter bands and trim border, on top of the panel art. */
-export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean } = {}): void {
+export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean; whitePaper?: boolean } = {}): void {
   const { gutter, border } = layoutOf(page);
   const paths = page.cuts.map((c) => openPath(cutPath(c, page), s));
   g.save();
@@ -89,7 +91,7 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   if (opts.paper === false) {
     g.globalCompositeOperation = 'destination-out';
     g.strokeStyle = '#000';
-  } else g.strokeStyle = COLORS.gutter;
+  } else g.strokeStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
   g.lineWidth = gutter * s;
   for (const p of paths) g.stroke(p);
   g.globalCompositeOperation = 'source-over';
@@ -137,9 +139,9 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   g.save();
   g.clearRect(0, 0, W, H);
   if (frame) {
-    g.fillStyle = COLORS.gutter;
+    g.fillStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
     g.fillRect(0, 0, W, H);
-    g.fillStyle = COLORS.panel;
+    g.fillStyle = opts.whitePaper ? '#FFFFFF' : COLORS.panel;
     for (const p of panels) g.fill(panelPath(p.pts, s));
   }
   g.imageSmoothingQuality = 'high';
@@ -162,7 +164,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
     drawLayers(g, grp, art, opts, W, H, 'framed');
     g.restore();
   }
-  if (frame) drawGutters(g, page, s);
+  if (frame) drawGutters(g, page, s, { whitePaper: opts.whitePaper });
   // the Gutters group: art in the gutters and margins (borderless pages), over the gutter paper
   for (const grp of page.groups.filter((x) => x.kind === 'gutter')) {
     if (!grp.layers.some((l) => shows(l, grp, opts))) continue;

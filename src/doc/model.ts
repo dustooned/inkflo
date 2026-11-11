@@ -40,6 +40,8 @@ export interface Beat {
   id: string;
   desc: string;
   lines: string[];
+  reveal?: { pageId: string; beatId: string };
+  card?: { ratio: number; strokes: Pt[][] };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -223,6 +225,12 @@ export interface PageLayout {
   curve: number;
 }
 
+export interface ModularGrid {
+  columns: number[];
+  rows: number[];
+  gutter: number;
+}
+
 export interface Page {
   id: string;
   /** Trim size in inches. */
@@ -230,6 +238,9 @@ export interface Page {
   heightIn: number;
   cuts: Cut[];
   layout?: PageLayout;
+  grid?: ModularGrid;
+  /** Relative position within the trim so the mark survives resizing. */
+  downbeat?: Pt;
   beats: Beat[];
   /** Top of the stack first: Over panels, then panel groups, then Background. */
   groups: LayerGroup[];
@@ -269,6 +280,7 @@ export interface Book {
   lettering?: LetterSheet;
   /** Print kind, bleed, safe area, binding (absent = US comic book defaults). */
   print?: PrintSpec;
+  fixedGrid?: ModularGrid;
   /** Exact settings of every brush strokes in this book use, by `<brush id>~<hash>` (draw/brushes.ts). */
   brushes?: Record<string, BrushSettings>;
   pages: Page[];

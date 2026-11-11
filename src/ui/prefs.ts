@@ -1,4 +1,5 @@
 import type { Stage } from '../doc/model';
+import { GUIDES, type Guide } from '../geom/composition';
 
 /**
  * Device preferences: how the app looks, never what the book is. Stored in localStorage (with
@@ -24,11 +25,13 @@ export interface Prefs {
   gridOpacity: number;
   vignette: boolean;
   layout: Layout;
+  guide: Guide;
+  snapGuide: boolean;
   tools: Partial<Record<Stage, ToolPrefs>>;
 }
 
 const KEY = 'inkflo.prefs.v1';
-const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, vignette: true, layout: 'studio', tools: {} };
+const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, vignette: true, layout: 'studio', guide: 'off', snapGuide: false, tools: {} };
 
 function read(): Prefs {
   try {
@@ -41,6 +44,8 @@ function read(): Prefs {
       gridOpacity: typeof v.gridOpacity === 'number' && v.gridOpacity >= 0 && v.gridOpacity <= 1 ? v.gridOpacity : 1,
       vignette: v.vignette !== false,
       layout: v.layout === 'focus' ? 'focus' : 'studio',
+      guide: GUIDES.find((g) => g.id === v.guide)?.id ?? 'off',
+      snapGuide: v.snapGuide === true,
       tools: v.tools && typeof v.tools === 'object' ? v.tools : {},
     };
   } catch {

@@ -29,6 +29,23 @@ describe('book.json', () => {
     expect(assetsOf(f)).toEqual(new Set(['assets/a.png', 'assets/b.png']));
   });
 
+  it('round-trips book and page grids, downbeat anchors, reveal links and card sketches', () => {
+    const f = file();
+    const page = f.book.pages[0]!;
+    f.book.fixedGrid = { columns: [1, 2], rows: [1, 1, 3], gutter: 0.16 };
+    page.grid = { columns: [1], rows: [3, 1], gutter: 0.2 };
+    page.downbeat = { x: 0.9, y: 0.9 };
+    page.beats.push({ id: 'b2', desc: 'The reveal', lines: [], reveal: { pageId: page.id, beatId: 'b1' }, card: { ratio: 1.25, strokes: [[{ x: 0.2, y: 0.3 }]] } });
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    page.grid.gutter = 5;
+    expect(() => parseBookFile(JSON.stringify(f))).toThrow(/grid.gutter/);
+  });
+
+  it('opens schema 3 books with their original art and lettering', () => {
+    const f = { ...file(), schema: 3 };
+    expect(parseBookFile(JSON.stringify(f))).toEqual({ ...f, schema: SCHEMA });
+  });
+
   it('refuses a file from a newer schema instead of half-reading it', () => {
     const f = { ...file(), schema: SCHEMA + 1 };
     expect(() => parseBookFile(JSON.stringify(f))).toThrow(/newer inkflo/);

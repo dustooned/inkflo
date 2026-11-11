@@ -6,6 +6,7 @@ import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
 import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
+import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
 import { download, h, seg, slug } from './dom';
 
@@ -96,6 +97,61 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   const fo: FilesOptions = { format: 'png', seps: ['all'], background: 'white', colour: 'colour', borders: true, range: { from: 1, to: book.pages.length } };
   let dpi = book.dpi;
   const motion: MotionOptions = { ...DEFAULT_MOTION };
+  const inks: InkPair = ['#d49a55', '#243755'];
+  function twoInkOptions(from: HTMLInputElement, to: HTMLInputElement): HTMLElement {
+    const chart = h('div', { class: 'ink-chart', 'aria-label': 'Ink tint chart' });
+    const preview = h('div', { class: 'ink-proof' });
+    const levels = [0, 0.25, 0.5, 0.75, 1];
+    let revision = 0;
+    let timer = 0;
+    const fields = inks.map((value, i) => {
+      const colour = h('input', { type: 'color', value });
+      colour.addEventListener('input', () => { inks[i] = colour.value; update(); });
+      return h('label', { class: 'mini' }, colour, i === 0 ? 'Ink 1 · midtones' : 'Ink 2 · shadows');
+    });
+    const details = h('details', { class: 'option two-ink' },
+      h('summary', {}, 'Two-ink print'),
+      h('p', {}, 'Convert finished art to two ink densities. The ZIP includes both grayscale plates and an overprint proof at the page range and resolution above.'),
+      h('div', { class: 'spread-links' }, fields),
+      h('div', { class: 'two-ink-preview' }, h('div', {},
+        h('p', {}, 'Tint chart · Ink 1 across, Ink 2 down'), chart), preview),
+      btn('Export two-ink plates', () => {
+        const pair: InkPair = [...inks];
+        const resolution = dpi;
+        const range = { ...fo.range! };
+        void run('Two-ink plates', () => exportTwoInks(studio, pair, resolution, range, (m) => (progress.textContent = m)), `${name}-two-ink.zip`);
+      }));
+    function update(): void {
+      chart.replaceChildren(h('span', {}),
+        ...levels.map((n) => h('span', {}, Math.round(n * 100) + '%')),
+        ...levels.flatMap((b) => [h('span', {}, Math.round(b * 100) + '%'), ...levels.map((a) => {
+          const label = 'Ink 1 ' + Math.round(a * 100) + '%, ink 2 ' + Math.round(b * 100) + '%';
+          return h('span', { class: 'ink-swatch', title: label, 'aria-label': label, style: 'background:rgb(' + inkMix(inks, a, b).join(',') + ')' });
+        })]));
+      clearTimeout(timer);
+      const id = ++revision;
+      if (!details.open) return;
+      timer = window.setTimeout(async () => {
+        const first = Math.min(fo.range!.from, fo.range!.to);
+        const index = Math.max(0, Math.min(book!.pages.length - 1, Math.floor(first) - 1));
+        const page = book!.pages[index]!;
+        try {
+          const canvas = await twoInkProof(studio, page, [...inks]);
+          if (id !== revision || !details.isConnected) return;
+          canvas.setAttribute('role', 'img');
+          canvas.setAttribute('aria-label', 'Two-ink proof of page ' + (index + 1));
+          preview.replaceChildren(canvas, h('p', {}, 'Page ' + (index + 1) + ' · overprint proof'));
+        } catch (error) {
+          if (id === revision) preview.textContent = error instanceof Error ? error.message : String(error);
+        }
+      }, 120);
+    }
+    details.addEventListener('toggle', update);
+    from.addEventListener('change', update);
+    to.addEventListener('change', update);
+    return details;
+  }
+
   function filesTab(): HTMLElement {
     const sepBoxes = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' },
       (Object.keys(SEPARATION_LABEL) as Separation[]).map((s) => check(SEPARATION_LABEL[s], fo.seps.includes(s), (on) => {
@@ -130,6 +186,7 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),
         btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),
+      twoInkOptions(from, to),
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Reader spreads (.pdf)'), h('p', {}, `Pages side by side as the reader sees them${printOf(book!).rtl ? ' (right to left)' : ''}, the cover alone. For proofing.`)),
         btn('Export', () => void run('Spreads', () => exportSpreadsPdf(studio, (m) => (progress.textContent = m)), `${name}-spreads.pdf`))),

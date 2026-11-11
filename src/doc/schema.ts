@@ -3,6 +3,7 @@ import { readStyle, type CaptionStyle } from '../engine/lettering/styles';
 import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
+import type { ModularGrid } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -15,7 +16,7 @@ import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, 
  */
 
 export const FORMAT = 'inkflo-book';
-export const SCHEMA = 3;
+export const SCHEMA = 4;
 
 /** Asset keys of one page's layer bitmaps, by layer id (`null` = blank, nothing stored). */
 export type PageArtKeys = Record<string, string | null>;
@@ -98,7 +99,40 @@ function cut(v: unknown, path: string): Cut {
 
 function beat(v: unknown, path: string): Beat {
   const o = obj(v, path);
-  return { id: str(o.id, `${path}.id`), desc: str(o.desc, `${path}.desc`), lines: arr(o.lines, `${path}.lines`).map((l, i) => str(l, `${path}.lines[${i}]`)) };
+  const b: Beat = { id: str(o.id, `${path}.id`), desc: str(o.desc, `${path}.desc`), lines: arr(o.lines, `${path}.lines`).map((l, i) => str(l, `${path}.lines[${i}]`)) };
+  if (o.reveal !== undefined) {
+    const r = obj(o.reveal, `${path}.reveal`);
+    b.reveal = { pageId: str(r.pageId, `${path}.reveal.pageId`), beatId: str(r.beatId, `${path}.reveal.beatId`) };
+  }
+  if (o.card !== undefined) {
+    const c = obj(o.card, `${path}.card`);
+    const ratio = pos(c.ratio, `${path}.card.ratio`);
+    if (ratio < 0.25 || ratio > 4) fail(`${path}.card.ratio`, 'should be between 0.25 and 4');
+    const strokes = arr(c.strokes, `${path}.card.strokes`);
+    if (strokes.length > 100) fail(`${path}.card.strokes`, 'has more than 100 strokes');
+    b.card = { ratio, strokes: strokes.map((s, i) => {
+      const points = pts(s, `${path}.card.strokes[${i}]`);
+      if (points.length > 512 || points.some(({ x, y }) => x < 0 || x > 1 || y < 0 || y > 1)) fail(`${path}.card.strokes[${i}]`, 'needs at most 512 points within the card');
+      return points;
+    }) };
+  }
+  return b;
+}
+
+function modularGrid(v: unknown, path: string): ModularGrid {
+  const o = obj(v, path);
+  const weights = (value: unknown, key: string) => {
+    const a = arr(value, key);
+    if (!a.length || a.length > 12) fail(key, 'needs 1–12 weights');
+    return a.map((w, i) => {
+      const n = pos(w, `${key}[${i}]`);
+      if (n < 0.01 || n > 100) fail(key, 'weights should be between 0.01 and 100');
+      return n;
+    });
+  };
+  const gutter = num(o.gutter, `${path}.gutter`);
+  if (gutter < 0 || gutter > 0.6) fail(`${path}.gutter`, 'should be from 0 to 0.6 inch');
+  return { columns: weights(o.columns, `${path}.columns`), rows: weights(o.rows, `${path}.rows`), gutter };
 }
 
 function stroke(v: unknown, path: string): Stroke {
@@ -366,6 +400,12 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
     updatedAt: num(o.updatedAt, `${path}.updatedAt`),
   };
   if (lay) pg.layout = lay;
+  if (o.grid !== undefined) pg.grid = modularGrid(o.grid, `${path}.grid`);
+  if (o.downbeat !== undefined) {
+    const p = pt(o.downbeat, `${path}.downbeat`);
+    if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) fail(`${path}.downbeat`, 'should be within the trim');
+    pg.downbeat = p;
+  }
   groupOf(pg, 'over');
   groupOf(pg, 'background');
   return pg;
@@ -409,6 +449,7 @@ function book(v: unknown, v1Art?: Obj): Book {
     };
   }
   const lettering = sheet(o.lettering, 'book.lettering');
+  if (o.fixedGrid !== undefined) b.fixedGrid = modularGrid(o.fixedGrid, 'book.fixedGrid');
   if (lettering) b.lettering = lettering;
   if (o.brushes !== undefined) {
     const brushes: Record<string, BrushSettings> = {};

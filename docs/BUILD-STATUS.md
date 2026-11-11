@@ -293,6 +293,28 @@ Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-ch
 - **Reference notes:** `docs/SANTORO-NOTES.md` covers ideas from the Santoro handbook and a
   layout template set (clean-room: ideas only, nothing shipped).
 
+## Composition and two-ink tools
+
+- **Display → Composition guides** offers centre and diagonals, rabatment squares, full
+  construction, thirds, and golden section in Layout, Draw and Caption. Draw can snap a
+  stroke started near a straight guide line. Guides stay on screen.
+- **Spread** on the Book screen and desks shows the finished reader view, with the cover
+  alone, manga direction, and optional composition guides across both pages. Open either
+  page directly from the preview.
+- **Layout → Grid settings** saves weighted rows and columns as page guides, carves every
+  cell, or sets a recurring book grid for empty and new pages. The Knife can snap to a
+  guide. Mark a downbeat panel and check centre crossings, with a stagger fix for a simple
+  four-panel cross.
+- **Script** links a reveal to its setup. Layout and print preflight surface pacing warnings.
+  Moving a reveal from Script is available before either page has layout, lettering or art.
+  The Webtoon warning estimates one phone screen from panel positions.
+- **Script → Show notecards** provides sketchable beat cards that can be reordered by drag
+  or with arrow buttons. Sketch proportions can be checked against the assigned panel.
+- **Export files → Two-ink print** includes a tint chart and overprint proof. It produces
+  two continuous-tone grayscale plates, a color proof and print notes in a ZIP. Plates
+  carry the selected PNG resolution. Physical press calibration and screening are external.
+- Books saved with these tools use schema 4. Older book files open in the current build.
+
 ## Files
 
 ```

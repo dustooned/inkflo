@@ -3,6 +3,9 @@ import { DEFAULT_LAYOUT, K, evenOut, layoutOf, makeCut, nearestCut, presetCuts, 
 import { panelPath } from '../../render/page';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { confirmDialog, h, seg, slider } from '../dom';
+import { centreCrossing, DEFAULT_GRID, downbeatPanel, revealIssues, snapGridCut, staggerCentre } from '../../geom/composition';
+import { drawModularGrid } from '../composition';
+import { openGrid } from '../grid';
 
 type Side = 'n' | 's' | 'e' | 'w';
 interface Handle {
@@ -23,7 +26,8 @@ const PRESETS: { id: Preset; label: string }[] = [
 
 /** Layout: carve panels with a knife; drag a panel's edge to move the cut under it. */
 export function layoutDesk(ctx: DeskCtx): DeskMode {
-  const { studio, page } = ctx;
+  const { studio, book, page } = ctx;
+  let showGrid = true;
   let trail: Pt[] | null = null;
   let straight = false;
   let sel: number | null = null;
@@ -87,6 +91,13 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   }
 
   const cutMode = (): CutMode => (variantOf(mode, 'knife') === 'across' ? 'across' : 'panel');
+  function markDownbeat(panel: Panel, clear = false): void {
+    studio.editPage(page, clear ? 'Clear downbeat' : 'Mark downbeat', ['downbeat'], (pg) => {
+      if (clear) delete pg.downbeat;
+      else pg.downbeat = { x: panel.centroid.x / pg.widthIn, y: panel.centroid.y / pg.heightIn };
+    });
+    ctx.chrome();
+  }
 
   const mode: DeskMode = {
     id: 'layout',
@@ -114,6 +125,9 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     inspector(el) {
       const ps = ctx.panels();
       const p = selected();
+      const downbeat = downbeatPanel(page, ps);
+      const crossing = centreCrossing(page);
+      const staggered = crossing ? staggerCentre(page) : undefined;
       el.append(
         h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, `${ps.length} panel${ps.length === 1 ? '' : 's'}`)),
         h('div', { class: 'sec' }, h('h4', {}, 'Presets'),
@@ -125,12 +139,20 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
               ctx.chrome();
             } }, pr.label)))),
       );
+      const grid = page.grid ?? book.fixedGrid;
+      const show = h('input', { type: 'checkbox', checked: showGrid, disabled: !grid });
+      show.addEventListener('change', () => { showGrid = show.checked; ctx.request(); });
+      el.append(h('div', { class: 'sec' }, h('h4', {}, 'Modular grid'),
+        h('label', { class: 'mini' }, show, 'Show guides and snap Knife'),
+        grid ? h('p', { class: 'note' }, grid.columns.length + ' columns × ' + grid.rows.length + ' rows' + (book.fixedGrid ? ' · book grid enabled' : '')) : null,
+        h('button', { class: 'btn', type: 'button', onclick: () => openGrid(ctx, grid ?? DEFAULT_GRID) }, 'Grid settings')));
       if (p) {
         const beat = page.beats[p.index];
         el.append(
           h('div', { class: 'sec' }, h('h4', {}, `Panel ${p.index + 1}`),
             h('div', { class: 'rows' }, 'Size', h('b', {}, `${(p.bbox.x1 - p.bbox.x0).toFixed(2)} × ${(p.bbox.y1 - p.bbox.y0).toFixed(2)} in`)),
             h('div', { class: 'rows' }, 'Reading order', h('b', {}, String(p.index + 1))),
+            h('button', { class: 'btn', type: 'button', onclick: () => markDownbeat(p, p === downbeat) }, p === downbeat ? 'Clear downbeat' : 'Mark downbeat'),
             beat ? h('p', { class: 'note' }, h('strong', {}, 'Beat: '), beat.desc || '(no description)') : h('p', { class: 'note' }, 'No beat for this panel yet.')),
         );
       }
@@ -138,6 +160,14 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         h('div', { class: 'sec' }, h('h4', {}, 'Page'),
           h('div', { class: 'rows' }, 'Cuts', h('b', {}, String(page.cuts.length))),
           h('div', { class: 'rows' }, 'Beats', h('b', {}, String(page.beats.length))),
+          downbeat ? h('div', { class: 'rows' }, 'Downbeat', h('b', {}, 'Panel ' + (downbeat.index + 1))) : null,
+          !downbeat && ps.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => markDownbeat(ps.at(-1)!) }, 'Mark last panel as downbeat') : null,
+          crossing ? h('p', { class: 'note' }, 'A gutter crossing sits at the centre. Stagger the cuts to move attention away from the crossing.') : null,
+          staggered ? h('button', { class: 'btn', type: 'button', onclick: () => {
+            studio.editPage(page, 'Stagger centre crossing', ['cuts'], (pg) => (pg.cuts = staggered));
+            ctx.chrome();
+          } }, 'Stagger centre') : null,
+          ...revealIssues(book, page, ps).map(({ text }) => h('p', { class: 'warnline' }, text)),
           page.beats.length && ps.length !== page.beats.length ? h('p', { class: 'note' }, h('strong', {}, 'Count differs: '), `${page.beats.length} beats, ${ps.length} panels.`) : null,
           h('p', { class: 'note' }, 'Panels are what the cuts leave. Panel-only cuts stop at the panel they start in; To-edges cuts run trim to trim.')),
       );
@@ -192,12 +222,18 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     up() {
       if (trail) {
-        const stroke = trail;
+        const grid = page.grid ?? book.fixedGrid;
+        const stroke = showGrid && grid ? snapGridCut(page, grid, trail, 10 / ctx.scale()) : trail;
+        const snapped = stroke !== trail;
         trail = null;
         const cut = makeCut(page, stroke, cutMode(), straight);
         sel = null; // reading-order indices shift when panels split
         if (cut) {
-          studio.editPage(page, cutMode() === 'panel' ? 'Cut panel' : 'Cut across', ['cuts'], (pg) => pg.cuts.push(cut));
+          const useGridGutter = snapped && grid && !page.cuts.length;
+          studio.editPage(page, cutMode() === 'panel' ? 'Cut panel' : 'Cut across', useGridGutter ? ['cuts', 'layout'] : ['cuts'], (pg) => {
+            if (useGridGutter) pg.layout = { ...layoutOf(pg), gutter: grid.gutter };
+            pg.cuts.push(cut);
+          });
           studio.markStage(page, 'layout', 1);
           ctx.chrome();
         }
@@ -216,12 +252,18 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     overlay(g, s) {
       const ps = ctx.panels();
+      const grid = page.grid ?? book.fixedGrid;
+      if (showGrid && grid) drawModularGrid(g, page, grid, s);
+      const downbeat = downbeatPanel(page, ps);
       // panel numbers
       g.save();
       g.font = `600 ${Math.max(9, 0.11 * s)}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
       g.textAlign = 'center';
       g.fillStyle = 'rgba(25,26,31,.32)';
-      for (const p of ps) g.fillText(String(p.index + 1).padStart(2, '0'), p.centroid.x * s, (p.bbox.y0 + 0.22) * s);
+      for (const p of ps) {
+        g.fillStyle = p === downbeat ? '#8F4723' : 'rgba(25,26,31,.42)';
+        g.fillText((p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0'), p.centroid.x * s, (p.bbox.y0 + 0.22) * s);
+      }
       const p = selected();
       if (p) {
         g.fillStyle = 'rgba(47,111,126,.10)';
@@ -258,7 +300,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         g.lineCap = 'round';
         g.setLineDash([8, 7]);
         g.beginPath();
-        trail.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
+        const preview = showGrid && grid ? snapGridCut(page, grid, trail, 10 / s) : trail;
+        preview.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
         g.stroke();
       }
       g.restore();

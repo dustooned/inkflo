@@ -10,6 +10,8 @@ import { loadBookFile } from '../io/load';
 import { metaFromFile, openStore, requestPersistence, type BookMeta, type Store } from '../io/persist';
 import { renderThumb } from '../render/page';
 import { readUserBrushes, setBookBrushes, setUserBrushes, snapshotId, type BrushEntry } from '../draw/brushes';
+import { gridCuts } from '../geom/composition';
+import { layoutOf } from '../geom/carve';
 
 /**
  * The app's one piece of state: the library, the open book, its page art, ONE undo stack per
@@ -249,6 +251,15 @@ export class Studio {
   addPage(after?: Page): Page {
     const b = this.requireBook();
     const page = newPage();
+    const size = after ?? b.pages.at(-1);
+    if (size) {
+      page.widthIn = size.widthIn;
+      page.heightIn = size.heightIn;
+    }
+    if (b.fixedGrid) {
+      page.cuts = gridCuts(page, b.fixedGrid);
+      page.layout = { ...layoutOf(page), gutter: b.fixedGrid.gutter };
+    }
     const at = after ? b.pages.indexOf(after) + 1 : b.pages.length;
     this.ensureArt(page);
     this.run({
