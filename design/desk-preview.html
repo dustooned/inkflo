@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>inkflo — desk preview</title>
+<style>
+  :root{
+    --paper:#EDE6D8; --paper-lift:#F8F3E9; --ink:#191A1F; --ink-soft:#4A4C55;
+    --rule:#CFC4AC; --rule-soft:#E2D8C4;
+    --accent:#2F6F7E;
+    --ui:"Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+    --shadow-page:0 1px 0 rgba(25,26,31,.10),0 14px 32px -18px rgba(25,26,31,.55);
+    --shadow-card:0 1px 2px rgba(25,26,31,.14),0 6px 14px -8px rgba(25,26,31,.35);
+  }
+  [data-stage="script"]{--accent:#A8762A}
+  [data-stage="layout"]{--accent:#2F6F7E}
+  [data-stage="draw"]{--accent:#5E5F68}
+  [data-stage="caption"]{--accent:#B8432F}
+  [data-stage="print"]{--accent:#3E6B3A}
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;font-family:var(--ui);color:var(--ink);background:var(--paper);
+    font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;overflow:hidden;
+    background-image:
+      radial-gradient(circle at 20% -10%,rgba(255,255,255,.55),transparent 55%),
+      repeating-linear-gradient(0deg,rgba(25,26,31,.016) 0 1px,transparent 1px 3px);
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  .glyph{font-size:15px;line-height:1}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;gap:18px;height:52px;padding:0 16px 0 20px;
+    background:linear-gradient(180deg,var(--paper-lift),rgba(248,243,233,.72));
+    border-bottom:1px solid var(--rule);position:relative;z-index:5;
+  }
+  .topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:linear-gradient(90deg,var(--accent),transparent 55%);opacity:.75}
+  .mark{display:flex;align-items:baseline;gap:8px}
+  .wordmark{font-family:var(--serif);font-style:italic;font-size:22px;letter-spacing:-.3px}
+  .nib{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;
+    transform:translateY(-6px)}
+  .book{font-weight:600;letter-spacing:.01em}
+  .crumb{color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .spacer{flex:1}
+  .seg{display:flex;border:1px solid var(--rule);border-radius:7px;overflow:hidden;background:rgba(255,255,255,.4)}
+  .seg button{padding:5px 11px;font-size:12px;color:var(--ink-soft)}
+  .seg button[aria-selected="true"]{background:var(--paper-lift);color:var(--ink);font-weight:600;
+    box-shadow:inset 0 -2px 0 var(--accent)}
+  .passes{display:none;margin-right:4px}
+  [data-stage="draw"] .passes{display:flex}
+  .passes button::before{content:"";width:6px;height:6px;border-radius:50%;margin-right:6px;
+    display:inline-block;background:currentColor}
+  .passes button[data-p="pencil"]{color:#3C6E8A}
+  .passes button[data-p="ink"]{color:#1B1C22}
+  .passes button[data-p="color"]{color:#B8432F}
+  .passes button:not([aria-selected="true"]){opacity:.5}
+  .passes button[aria-selected="true"]{background:var(--paper-lift);font-weight:650;
+    box-shadow:inset 0 -2px 0 currentColor}
+  .btn{border:1px solid var(--rule);border-radius:7px;padding:6px 11px;background:rgba(255,255,255,.5);
+    font-weight:550;font-size:12px}
+  .btn.primary{background:var(--ink);color:#F7F2E8;border-color:var(--ink)}
+
+  /* ---------- stage ---------- */
+  .stage{flex:1;display:grid;grid-template-columns:132px minmax(0,1fr) 292px;min-height:0}
+
+  /* pages strip */
+  .pages{border-right:1px solid var(--rule);background:rgba(232,224,209,.55);
+    padding:12px 10px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .pages h2{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);
+    margin:2px 0 2px 2px;font-weight:650}
+  .thumb{position:relative;padding:5px 5px 4px;border-radius:5px;background:rgba(255,255,255,.35);
+    border:1px solid transparent;display:block;width:100%;text-align:left}
+  .thumb[aria-current="true"]{background:var(--paper-lift);border-color:var(--rule);
+    box-shadow:var(--shadow-card)}
+  .thumb .sheet{position:relative;aspect-ratio:6.625/10.187;background:#fff;border:1px solid #D9CEB8;
+    border-radius:2px;overflow:hidden}
+  .thumb .bar{position:absolute;background:#E6DCC8;border:1px solid #D2C6AE}
+  .thumb .foot{display:flex;justify-content:space-between;align-items:center;margin-top:3px}
+  .thumb .num{font-size:10px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+  .dots{display:flex;gap:2px}
+  .dots i{width:4px;height:4px;border-radius:50%;background:#D5C9B0;display:block}
+  .dots i.done{background:#9E9377}
+  .dots i.now{background:var(--accent)}
+  .dots i.todo{background:#DDD2BC}
+
+  /* board */
+  .board{position:relative;display:flex;align-items:center;justify-content:center;
+    padding:22px 26px 34px;min-width:0;background:
+      radial-gradient(ellipse at 50% 0%,rgba(255,255,255,.6),transparent 62%);}
+  .board::before{content:"";position:absolute;inset:0;
+    background-image:
+      linear-gradient(rgba(25,26,31,.045) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(25,26,31,.045) 1px,transparent 1px);
+    background-size:26px 26px;mask-image:radial-gradient(ellipse at 50% 45%,#000 35%,transparent 78%)}
+  .page-wrap{position:relative;height:100%;display:flex;align-items:center;gap:0;max-width:100%}
+  .page-wrap{position:relative}
+  .page{
+    position:relative;height:min(100%,760px);aspect-ratio:6.625/10.187;background:var(--paper-lift);
+    box-shadow:var(--shadow-page);border-radius:2px;overflow:hidden;
+  }
+  .page::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(115deg,rgba(255,255,255,.5),transparent 30%,transparent 72%,rgba(25,26,31,.05))}
+  .art{position:absolute;inset:0;width:100%;height:100%}
+  .art .ink,.art .rough,.art .flat,.art .letter{display:none}
+  .art .marks{display:none}
+  [data-stage="draw"][data-pass="pencil"] .art .rough{display:block}
+  [data-stage="draw"][data-pass="ink"] .art .ink{display:block}
+  [data-stage="draw"][data-pass="color"] .art .flat,
+  [data-stage="draw"][data-pass="color"] .art .ink{display:block}
+  [data-stage="caption"] .art .flat,
+  [data-stage="caption"] .art .ink,
+  [data-stage="caption"] .art .letter{display:block}
+  [data-stage="print"] .art .flat,
+  [data-stage="print"] .art .ink,
+  [data-stage="print"] .art .marks{display:block}
+  [data-view="publish"] .art .flat,[data-view="publish"] .art .ink{display:block}
+
+  .panelbox{position:absolute;border:2px solid rgba(25,26,31,.82);border-radius:1px}
+  [data-stage="layout"] .panelbox{border:1.5px solid rgba(47,111,126,.55);border-radius:1px}
+  [data-stage="layout"] .panelbox{border-color:rgba(47,111,126,.55)}
+  [data-stage="layout"] .panelbox:hover{border-color:var(--accent)}
+  [data-stage="layout"] .panelbox.sel{border-color:var(--accent);border-width:2px;
+    box-shadow:0 0 0 3px rgba(47,111,126,.14)}
+  .panelbox .h{display:none}
+  [data-stage="layout"] .panelbox.sel .h{display:block;position:absolute;width:9px;height:9px;
+    background:var(--paper-lift);border:2px solid var(--accent);border-radius:2px}
+  .h.tl{left:-5px;top:-5px}.h.tr{right:-5px;top:-5px}.h.bl{left:-5px;bottom:-5px}.h.br{right:-5px;bottom:-5px}
+  .pnum{position:absolute;top:-1px;left:-1px;transform:translateY(-100%);font:600 10px/1 var(--ui);
+    letter-spacing:.08em;color:var(--accent);padding-bottom:3px}
+  [data-stage="layout"] .panelbox .pnum{display:block}
+  .pnum{display:none}
+
+  /* script card */
+  .script-card{
+    position:absolute;left:-206px;top:96px;width:186px;background:#FBF7EE;
+    box-shadow:var(--shadow-card);border-radius:3px;padding:14px 14px 12px;transform:rotate(-1.1deg);
+    font-family:var(--serif);font-size:12.5px;line-height:1.5;color:#26262B;
+  }
+  .script-card::before{content:"";position:absolute;left:50%;top:-8px;transform:translateX(-50%) rotate(2deg);
+    width:64px;height:17px;background:rgba(216,203,176,.85);border-left:1px solid rgba(0,0,0,.05);
+    border-right:1px solid rgba(0,0,0,.05)}
+  .script-card h3{margin:0 0 6px;font:650 9.5px/1 var(--ui);letter-spacing:.16em;color:#8A7A5C;text-transform:uppercase}
+  .script-card .slug{font-weight:600;margin-bottom:4px}
+  .script-card .dlg{margin:5px 0 0;padding-left:10px;border-left:2px solid #D8CBB0}
+  .script-card .beat{margin-top:8px;font-style:italic;color:#6D6656;font-size:11.5px}
+  @media (max-width:1250px){.script-card{display:none}}
+
+  .panelbox .beat{display:none;position:absolute;left:7px;bottom:5px;right:7px;
+    font-family:var(--serif);font-style:italic;font-size:10.5px;line-height:1.25;color:#9A8F76}
+  [data-stage="layout"] .panelbox .beat,[data-stage="script"] .panelbox .beat{display:block}
+
+  .board-label{position:absolute;bottom:9px;right:26px;max-width:32%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;font:500 10px/1 var(--mono);letter-spacing:.06em;color:#8D8471}
+
+  /* inspector */
+  .inspector{border-left:1px solid var(--rule);background:rgba(245,239,228,.75);
+    display:flex;flex-direction:column;min-height:0}
+  .insp-head{padding:14px 16px 10px;border-bottom:1px solid var(--rule-soft)}
+  .insp-kicker{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  .insp-title{font-size:15px;font-weight:620;margin-top:5px}
+  .insp-body{overflow:auto;padding:6px 16px 16px;flex:1}
+  .sec{padding:12px 0 10px;border-bottom:1px solid var(--rule-soft)}
+  .sec:last-child{border-bottom:0}
+  .sec h4{margin:0 0 8px;font:650 10px/1 var(--ui);letter-spacing:.14em;text-transform:uppercase;color:#8A8069}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:12px}
+  .row span:first-child{color:var(--ink-soft)}
+  .row span:last-child{font-variant-numeric:tabular-nums;font-weight:550;text-align:right}
+  .field{display:flex;gap:6px;margin-top:6px}
+  .field div{flex:1;border:1px solid var(--rule);border-radius:5px;background:rgba(255,255,255,.55);
+    padding:4px 6px;font:550 11px/1.3 var(--mono);white-space:nowrap}
+  .field div small{display:block;font:500 8.5px/1 var(--ui);letter-spacing:.12em;color:#9A8F76;
+    text-transform:uppercase;margin-bottom:2px}
+  .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+  .chip{border:1px solid var(--rule);background:rgba(255,255,255,.5);border-radius:99px;
+    padding:2px 8px;font:600 11px/1.5 var(--ui);color:var(--ink-soft)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .note{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin-top:8px}
+  .check{display:flex;align-items:center;gap:7px;font-size:12px;padding:3px 0}
+  .check .dot{width:7px;height:7px;border-radius:50%;background:#9E9377;flex:none}
+  .check.warn .dot{background:#B8432F}
+  .check.warn{color:#8E3323}
+
+  /* rail */
+  .rail{height:86px;border-top:1px solid var(--rule);background:
+      linear-gradient(180deg,rgba(248,243,233,.9),var(--paper));
+    display:flex;align-items:stretch;padding:0 14px;position:relative;z-index:6}
+  .rail::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;
+    background:linear-gradient(90deg,transparent,var(--accent) 22%,var(--accent) 78%,transparent);opacity:.35}
+  .stop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    position:relative;color:#8C8268;border-right:1px solid rgba(207,196,172,.55)}
+  .stop:last-child{border-right:0}
+  .stop .g{font-size:16px;opacity:.8}
+  .stop .n{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase}
+  .stop .c{font:500 9.5px/1 var(--mono);opacity:.75}
+  .stop[aria-current="true"]{color:var(--ink)}
+  .stop[aria-current="true"] .n{color:var(--accent)}
+  .stop[aria-current="true"]::after{content:"";position:absolute;left:14px;right:14px;bottom:7px;height:2px;
+    background:var(--accent);border-radius:2px}
+  .docket{position:absolute;top:-13px;width:52px;height:26px;background:#FBF7EE;border:1px solid var(--rule);
+    border-radius:3px;box-shadow:var(--shadow-card);display:flex;align-items:center;justify-content:center;
+    font:600 10px/1 var(--mono);color:var(--ink);transition:left .28s cubic-bezier(.2,.7,.2,1)}
+  .docket::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:14px;height:7px;border:1.5px solid #A79C82;border-bottom:0;border-radius:3px 3px 0 0}
+
+  /* publish view */
+  .publish{flex:1;display:none;grid-template-columns:250px minmax(0,1fr) 290px;min-height:0;
+    background:linear-gradient(180deg,#E7DFCF,#EDE6D8)}
+  [data-view="publish"] .stage{display:none}
+  [data-view="publish"] .rail{display:none}
+  [data-view="publish"] .publish{display:grid}
+  .kit{border-right:1px solid var(--rule);padding:14px 12px;overflow:auto}
+  .kit h2,.themes h2{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;
+    color:#8A8069;margin:0 0 10px}
+  .tree{font:500 11.5px/1.75 var(--mono);color:var(--ink-soft);white-space:pre}
+  .tree b{color:var(--ink);font-weight:600}
+  .tree em{color:#A8762A;font-style:normal}
+  .preview{padding:20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+  .browser{border:1px solid #C8BCA3;border-radius:9px;background:#fff;overflow:hidden;
+    box-shadow:0 18px 40px -26px rgba(25,26,31,.6);flex:1;display:flex;flex-direction:column;min-height:0}
+  .chrome{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#EFE9DC;border-bottom:1px solid #DFD5C1}
+  .chrome i{width:8px;height:8px;border-radius:50%;background:#D3C7AF}
+  .url{flex:1;background:#fff;border:1px solid #E0D7C5;border-radius:5px;padding:3px 8px;
+    font:500 10.5px/1.4 var(--mono);color:#6E6653}
+  .site{flex:1;overflow:auto;padding:20px 22px;background:
+    linear-gradient(180deg,#FFFDF8,#FBF7EE)}
+  .site h1{font-family:var(--serif);font-size:24px;margin:0;letter-spacing:-.2px}
+  .site .byline{font-size:11px;color:#8A8069;margin-top:2px}
+  .site nav{display:flex;gap:12px;margin:12px 0 14px;font-size:11.5px;color:#6E6653;
+    border-bottom:1px solid #E8DFCC;padding-bottom:8px}
+  .site nav b{color:#191A1F}
+  .strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .mini{aspect-ratio:6.625/10.187;background:#fff;border:1px solid #E2D8C4;border-radius:2px;
+    position:relative;overflow:hidden}
+  .mini span{position:absolute;background:#E3D9C5;border:1px solid #D6C9AF}
+  .support{margin-top:16px;border-top:1px solid #E8DFCC;padding-top:12px}
+  .support h3{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;color:#8A8069;margin:0 0 8px}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+  .card{border:1px solid #E4DAC6;border-radius:6px;padding:8px 9px;background:#FFFDF8}
+  .card b{display:block;font-size:11.5px}
+  .card span{font-size:10px;color:#8A8069}
+  .themes{border-left:1px solid var(--rule);padding:14px 14px;overflow:auto}
+  .theme{display:flex;justify-content:space-between;align-items:center;width:100%;
+    padding:7px 9px;border:1px solid var(--rule);border-radius:6px;margin-bottom:6px;
+    background:rgba(255,255,255,.45);font-size:12px}
+  .theme.on{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+  .theme small{color:#8A8069;font-size:10.5px}
+  .code{font:500 10.5px/1.6 var(--mono);background:rgba(255,255,255,.55);border:1px solid var(--rule);
+    border-radius:6px;padding:9px 10px;color:#4A4C55;white-space:pre;overflow:auto}
+  .hint{position:fixed;right:12px;bottom:94px;font:500 10px/1.4 var(--mono);color:#9A8F76;
+    background:rgba(248,243,233,.8);border:1px solid var(--rule);border-radius:4px;padding:4px 7px}
+  @media (max-width:1100px){
+    .stage{grid-template-columns:104px minmax(0,1fr) 252px}
+    .publish{grid-template-columns:210px minmax(0,1fr) 250px}
+  }
+</style>
+</head>
+<body data-stage="layout" data-view="desk" data-pass="ink">
+
+<header class="topbar">
+  <div class="mark">
+    <span class="wordmark">inkflo</span><span class="nib"></span>
+  </div>
+  <div class="book">The Long Way Home</div>
+  <div class="crumb">Ch. 01 &nbsp;·&nbsp; p. 07 / 24</div>
+  <div class="seg passes" id="passes" role="tablist" aria-label="Draw pass">
+    <button role="tab" data-p="pencil" aria-selected="false">Pencil</button>
+    <button role="tab" data-p="ink" aria-selected="true">Ink</button>
+    <button role="tab" data-p="color" aria-selected="false">Colour</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" role="tablist" aria-label="View">
+    <button role="tab" id="tab-desk" aria-selected="true">Desk</button>
+    <button role="tab" id="tab-publish" aria-selected="false">Publish</button>
+  </div>
+  <button class="btn">Export…</button>
+  <button class="btn primary">Publish</button>
+</header>
+
+<main class="stage">
+  <aside class="pages">
+    <h2>Book</h2>
+    <button class="thumb" aria-current="false">
+      <div class="sheet"></div>
+      <div class="foot"><span class="num">05</span><span class="dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i></i></span></div>
+    </button>
+    <button class="thumb" aria-current="false">
+      <div class="sheet"></div>
+      <div class="foot"><span class="num">06</span><span class="dots"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="now"></i><i></i></span></div>
+    </button>
+    <button class="thumb" aria-current="true">
+      <div class="sheet" id="thumb07"></div>
+      <div class="foot"><span class="num">07</span><span class="dots"><i class="done"></i><i class="now"></i><i></i><i></i><i></i><i></i></span></div>
+    </button>
+    <button class="thumb" aria-current="false">
+      <div class="sheet"></div>
+      <div class="foot"><span class="num">08</span><span class="dots"><i class="done"></i><i class="done"></i><i></i><i></i><i></i><i></i></span></div>
+    </button>
+    <button class="thumb" aria-current="false">
+      <div class="sheet"></div>
+      <div class="foot"><span class="num">09</span><span class="dots"><i class="done"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+    </button>
+    <button class="thumb" aria-current="false">
+      <div class="sheet"></div>
+      <div class="foot"><span class="num">10</span><span class="dots"><i class="done"></i><i></i><i></i><i></i><i></i><i></i></span></div>
+    </button>
+  </aside>
+
+  <section class="board">
+    <div class="page-wrap">
+      <div class="page">
+
+        <svg class="art" viewBox="0 0 520 800" preserveAspectRatio="none" aria-label="Page 7 artwork">
+          <defs>
+            <clipPath id="c1"><rect x="31" y="30" width="458" height="176"/></clipPath>
+            <clipPath id="c2"><rect x="31" y="224" width="218" height="160"/></clipPath>
+            <clipPath id="c3"><rect x="271" y="224" width="218" height="160"/></clipPath>
+            <clipPath id="c4"><rect x="31" y="400" width="218" height="240"/></clipPath>
+            <clipPath id="c5"><rect x="271" y="400" width="218" height="240"/></clipPath>
+            <clipPath id="c6"><rect x="31" y="656" width="458" height="112"/></clipPath>
+          </defs>
+
+          <!-- flats -->
+          <g class="flat">
+            <rect clip-path="url(#c1)" x="31" y="30" width="458" height="176" fill="#C7D7DB"/>
+            <rect clip-path="url(#c1)" x="60" y="96" width="430" height="110" fill="#E2D2BF"/>
+            <rect clip-path="url(#c2)" x="31" y="224" width="218" height="160" fill="#F1E4D2"/>
+            <rect clip-path="url(#c3)" x="271" y="224" width="218" height="160" fill="#7E6C5B"/>
+            <rect clip-path="url(#c3)" x="331" y="261" width="84" height="122" fill="#F7E6BE"/>
+            <rect clip-path="url(#c4)" x="31" y="400" width="218" height="240" fill="#DCD3C4"/>
+            <rect clip-path="url(#c5)" x="271" y="400" width="218" height="240" fill="#AFBEC4"/>
+            <rect clip-path="url(#c6)" x="31" y="656" width="458" height="112" fill="#EFE3CC"/>
+            <rect clip-path="url(#c6)" x="31" y="700" width="458" height="68" fill="#D6CBB6"/>
+          </g>
+
+          <!-- rough (blue pencil) -->
+          <g class="rough" fill="none" stroke="#4E7EA8" stroke-width="1.6" stroke-linecap="round" opacity=".55"
+             stroke-dasharray="7 6">
+            <path clip-path="url(#c1)" d="M38 184 H482"/>
+            <path clip-path="url(#c1)" d="M74 108 L74 184 M120 84 L120 184 M170 126 L170 184 M304 98 L304 184 M352 122 L352 184"/>
+            <circle clip-path="url(#c1)" cx="440" cy="64" r="17"/>
+            <path clip-path="url(#c1)" d="M250 132 q-8 0 -8 10 q0 12 8 12"/>
+            <path clip-path="url(#c2)" d="M92 372 q6 -96 84 -110 q34 -6 46 22 q10 24 -14 38 q22 10 12 30 q-8 14 -30 12"/>
+            <path clip-path="url(#c3)" d="M306 254 L306 380 M418 254 L418 380 M306 254 L418 254"/>
+            <path clip-path="url(#c4)" d="M46 626 L46 596 H118 V566 H190 V536 H238"/>
+            <path clip-path="url(#c5)" d="M300 486 q44 -46 98 0 q-8 30 -49 30 q-41 0 -49 -30 z"/>
+            <path clip-path="url(#c6)" d="M40 706 Q260 660 480 706"/>
+            <path clip-path="url(#c1)" d="M72 100 h44 M72 122 h30 M126 76 h28 M170 120 h42"/>
+            <path clip-path="url(#c1)" d="M244 176 v-16 M240 150 l8 10 M248 150 l-8 10"/>
+            <path clip-path="url(#c2)" d="M108 330 l14 18 M118 342 l12 16 M96 300 q10 -6 18 2"/>
+            <path clip-path="url(#c4)" d="M52 640 h150 M52 610 h120 M52 580 h90"/>
+            <path clip-path="url(#c5)" d="M300 500 q48 -40 100 0"/>
+            <path clip-path="url(#c6)" d="M60 770 L250 706 M440 770 L270 706"/>
+          </g>
+
+          <!-- ink -->
+          <g class="ink" fill="none" stroke="#1B1C22" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <!-- p1 city -->
+            <g clip-path="url(#c1)">
+              <path d="M31 184 H489"/>
+              <rect x="66" y="104" width="48" height="80"/>
+              <rect x="122" y="80" width="34" height="104"/>
+              <rect x="164" y="124" width="54" height="60"/>
+              <rect x="298" y="96" width="42" height="88"/>
+              <rect x="348" y="120" width="62" height="64"/>
+              <rect x="418" y="138" width="42" height="46"/>
+              <circle cx="442" cy="62" r="16"/>
+              <path d="M76 120 h28 M76 140 h28 M132 100 h14 M132 122 h14 M308 114 h22 M308 138 h22"/>
+              <circle cx="244" cy="146" r="6"/>
+              <path d="M244 152 v16 M244 158 l-8 7 M244 158 l8 7 M244 168 l-6 8 M244 168 l6 8"/>
+              <path d="M190 184 h10 M214 184 h6 M262 184 h10"/>
+            </g>
+            <!-- p2 profile -->
+            <g clip-path="url(#c2)">
+              <path d="M64 384 C 70 356, 92 342, 116 340 L 154 340 C 178 342, 198 356, 204 384"/>
+              <path d="M120 340 v-14 M150 340 v-14"/>
+              <ellipse cx="135" cy="292" rx="42" ry="48"/>
+              <path d="M95 286 C 92 254, 112 236, 136 236 C 160 236, 178 254, 176 286
+                       C 168 268, 152 258, 136 258 C 118 258, 103 268, 95 286"/>
+              <path d="M96 300 C 88 294, 88 312, 96 314"/>
+              <path d="M112 282 C 118 277, 126 277, 131 281"/>
+              <path d="M146 281 C 151 277, 159 277, 164 282"/>
+              <path d="M113 292 C 118 286, 126 286, 130 292"/>
+              <path d="M147 292 C 151 286, 159 286, 163 292"/>
+              <path d="M138 296 C 138 306, 136 310, 132 312"/>
+              <path d="M124 322 C 132 326, 142 326, 148 322"/>
+              <path d="M100 330 l10 14 M110 334 l10 14" stroke-width="1.1" opacity=".5"/>
+            </g>
+            <!-- p3 door -->
+            <g clip-path="url(#c3)">
+              <path d="M316 384 V246 h114 v138"/>
+              <path d="M330 384 V260 h86 v124"/>
+              <path d="M316 246 h114"/>
+              <path d="M330 300 h86 M330 330 h86" stroke-width="1.1" opacity=".45"/>
+              <circle cx="404" cy="322" r="4"/>
+              <path d="M330 384 h-34 M416 384 h36" stroke-width="1.1" opacity=".5"/>
+              <path d="M342 384 h12 M366 384 h12 M390 384 h12" stroke-width="1.1" opacity=".4"/>
+            </g>
+            <!-- p4 stairs -->
+            <g clip-path="url(#c4)">
+              <path d="M40 640 V596 h68 v-30 h68 v-30 h60 v-30"/>
+              <path d="M40 640 v-20 h68 v-20 h68 v-20 h60"/>
+              <path d="M148 512 q6 -14 20 -14 q16 0 18 16 q2 12 -10 18"/>
+              <circle cx="166" cy="490" r="7"/>
+              <path d="M166 497 v18 M166 505 l-9 8 M166 505 l9 8 M166 515 l-7 12 M166 515 l7 12"/>
+              <path d="M56 620 h18 M96 590 h18 M136 560 h18"/>
+            </g>
+            <!-- p5 rain -->
+            <g clip-path="url(#c5)">
+              <path d="M298 412 l-10 26 M326 404 l-10 26 M354 414 l-10 26 M382 402 l-10 26 M410 412 l-10 26 M438 404 l-10 26 M466 414 l-10 26"/>
+              <path d="M298 470 l-10 26 M326 462 l-10 26 M354 472 l-10 26 M382 460 l-10 26 M410 470 l-10 26 M438 462 l-10 26 M466 472 l-10 26"/>
+              <path d="M296 500 q48 -44 108 0"/>
+              <path d="M296 500 q10 16 20 2 q10 14 20 2 q10 14 20 2 q10 14 20 2 q10 14 20 2 q8 -6 8 -12"/>
+              <path d="M350 520 v34 q0 12 10 12"/>
+              <path d="M340 640 v-30 M362 640 v-30"/>
+              <path d="M338 610 q12 -10 24 0"/>
+            </g>
+            <!-- p6 road -->
+            <g clip-path="url(#c6)">
+              <path d="M31 706 Q260 664 489 706"/>
+              <path d="M64 768 L238 706 M456 768 L282 706"/>
+              <path d="M170 744 h12 M226 730 h10 M284 730 h10 M338 744 h10"/>
+              <path d="M258 700 v-10 M258 690 q-6 -2 -6 -7 M258 690 q6 -2 6 -7"/>
+              <circle cx="258" cy="678" r="4"/>
+              <path d="M92 700 q10 -8 20 0 M400 700 q10 -8 20 0"/>
+            </g>
+          </g>
+
+          <!-- caption -->
+          <g class="letter" font-family="Georgia,'Times New Roman',serif" font-size="10.5"
+             font-weight="600" fill="#1B1C22" letter-spacing=".3">
+            <rect x="44" y="42" width="182" height="25" fill="#FFFDF7" stroke="#1B1C22" stroke-width="1.5"/>
+            <text x="52" y="59">DUSK. THE OLD STREET.</text>
+
+            <path d="M106 324 L96 352 L124 326" fill="#FFFDF7" stroke="#1B1C22" stroke-width="1.8" stroke-linejoin="round"/>
+            <ellipse cx="132" cy="300" rx="55" ry="27" fill="#FFFDF7" stroke="#1B1C22" stroke-width="1.8"/>
+            <text x="132" y="297" text-anchor="middle">YOU CAME</text>
+            <text x="132" y="310" text-anchor="middle">BACK.</text>
+
+            <path d="M362 318 L350 346 L376 320" fill="#FFFDF7" stroke="#1B1C22" stroke-width="1.8" stroke-linejoin="round"/>
+            <ellipse cx="392" cy="292" rx="56" ry="28" fill="#FFFDF7" stroke="#1B1C22" stroke-width="1.8"/>
+            <text x="392" y="289" text-anchor="middle">I NEVER</text>
+            <text x="392" y="302" text-anchor="middle">LEFT.</text>
+          </g>
+
+          <!-- print marks -->
+          <g class="marks" fill="none" stroke="#3E6B3A" stroke-width="1" opacity=".85">
+            <rect x="18" y="17" width="484" height="766" stroke-dasharray="6 5"/>
+            <path d="M0 30 h14 M0 770 h14 M520 30 h-14 M520 770 h-14"/>
+            <path d="M30 0 v14 M30 800 v-14 M490 0 v14 M490 800 v-14"/>
+          </g>
+        </svg>
+
+        <div class="panelbox" style="left:5.96%;top:3.75%;width:88.1%;height:22%">
+          <span class="pnum">01</span>
+          <em class="beat">Establishing. Street, dusk; she waits under the awning.</em>
+        </div>
+        <div class="panelbox" style="left:5.96%;top:28%;width:41.9%;height:20%">
+          <span class="pnum">02</span>
+          <em class="beat">Close on Maya, listening.</em>
+        </div>
+        <div class="panelbox sel" style="left:52.1%;top:28%;width:41.9%;height:20%">
+          <span class="pnum">03</span>
+          <em class="beat">The door, from inside; light spills.</em>
+          <i class="h tl"></i><i class="h tr"></i><i class="h bl"></i><i class="h br"></i>
+        </div>
+        <div class="panelbox" style="left:5.96%;top:50%;width:41.9%;height:30%">
+          <span class="pnum">04</span>
+          <em class="beat">Stairs; she climbs, heavy.</em>
+        </div>
+        <div class="panelbox" style="left:52.1%;top:50%;width:41.9%;height:30%">
+          <span class="pnum">05</span>
+          <em class="beat">Rain. Umbrella, one figure.</em>
+        </div>
+        <div class="panelbox" style="left:5.96%;top:82%;width:88.1%;height:14%">
+          <span class="pnum">06</span>
+          <em class="beat">The road out of town, long.</em>
+        </div>
+
+      </div>
+      <div class="script-card">
+          <h3>Panel 03 — script</h3>
+          <div class="slug">The door, from inside.</div>
+          <p class="dlg"><b>MAYA:</b> You came back.</p>
+          <p class="dlg"><b>ILAN:</b> I never left.</p>
+          <div class="beat">Beat: hold on the light. Don’t cut until she breathes.</div>
+        </div>
+    </div>
+    <div class="board-label">6.625 × 10.187 in · 300 dpi</div>
+  </section>
+
+  <aside class="inspector">
+    <div class="insp-head">
+      <div class="insp-kicker" id="insp-kicker">Layout</div>
+      <div class="insp-title" id="insp-title">Page 07 — six panels</div>
+    </div>
+    <div class="insp-body" id="insp-body"></div>
+  </aside>
+</main>
+
+<section class="publish">
+  <aside class="kit">
+    <h2>Publish kit</h2>
+    <div class="tree"><b>inkflo-long-way-home/</b>
+├ <b>index.html</b>
+├ motion.html
+├ support.html
+├ <b>data/</b>
+│  ├ comic.json
+│  └ chapters.json
+├ <b>assets/</b>
+│  ├ pages/001-<em>a91f</em>.webp
+│  ├ thumbs/…
+│  └ og/001.png
+├ <b>theme/</b>
+│  ├ theme.css
+│  └ theme.json
+├ .github/workflows/
+│  └ pages.yml
+├ <b>README-PUBLISH.md</b>
+├ UPDATE.md
+└ CREDITS.md</div>
+    <div class="sec" style="margin-top:14px">
+      <h4>Size</h4>
+      <div class="row"><span>24 pages</span><span>18.4 MB</span></div>
+      <div class="row"><span>Under GitHub limit</span><span>✓</span></div>
+      <div class="row"><span>Build step</span><span>none</span></div>
+    </div>
+  </aside>
+
+  <div class="preview">
+    <div class="browser">
+      <div class="chrome"><i></i><i></i><i></i><div class="url">maya.github.io/the-long-way-home</div></div>
+      <div class="site">
+        <h1>The Long Way Home</h1>
+        <div class="byline">by Maya Okonkwo · updated 7 Nov · 24 pages</div>
+        <nav><b>Read</b><span>Chapters</span><span>About</span><span>Support</span><span>RSS</span></nav>
+        <div class="strip">
+          <div class="mini"><span style="left:6%;top:4%;width:88%;height:22%"></span><span style="left:6%;top:28%;width:42%;height:20%"></span><span style="left:52%;top:28%;width:42%;height:20%"></span><span style="left:6%;top:50%;width:88%;height:44%"></span></div>
+          <div class="mini"><span style="left:6%;top:4%;width:88%;height:30%"></span><span style="left:6%;top:36%;width:88%;height:24%"></span><span style="left:6%;top:62%;width:88%;height:32%"></span></div>
+          <div class="mini"><span style="left:6%;top:4%;width:42%;height:44%"></span><span style="left:52%;top:4%;width:42%;height:44%"></span><span style="left:6%;top:50%;width:88%;height:20%"></span><span style="left:6%;top:72%;width:88%;height:22%"></span></div>
+        </div>
+        <div class="support">
+          <h3>Support the comic</h3>
+          <div class="cards">
+            <div class="card"><b>Patreon</b><span>3 tiers · early pages</span></div>
+            <div class="card"><b>Ko-fi</b><span>one-off tip</span></div>
+            <div class="card"><b>Newsletter</b><span>chapter alerts</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="themes">
+    <h2>Site theme</h2>
+    <button class="theme on"><span>Newsprint</span><small>page-flip</small></button>
+    <button class="theme"><span>Tankōbon</span><small>RTL</small></button>
+    <button class="theme"><span>Webtoon</span><small>vertical</small></button>
+    <button class="theme"><span>Sunday</span><small>strip</small></button>
+    <button class="theme"><span>Zine</span><small>riso</small></button>
+    <button class="theme"><span>Noir</span><small>dark</small></button>
+
+    <div class="sec">
+      <h4>support.json</h4>
+      <div class="code">{
+  "cards": [
+    { "kind": "patreon",
+      "label": "Early pages",
+      "tiers": 3 },
+    { "kind": "kofi" },
+    { "kind": "newsletter" }
+  ]
+}</div>
+      <p class="note">Cards render in order. Tier tables and copy presets live in the app; the site only reads this file.</p>
+    </div>
+  </aside>
+</section>
+
+<footer class="rail" id="rail">
+  <div class="docket" id="docket">p.07</div>
+  <button class="stop" data-s="script"><span class="g">✎</span><span class="n">Script</span><span class="c">24 panels</span></button>
+  <button class="stop" data-s="layout"><span class="g">▦</span><span class="n">Layout</span><span class="c">6 panels</span></button>
+  <button class="stop" data-s="draw" aria-current="true"><span class="g">✒</span><span class="n">Draw</span><span class="c">ink</span></button>
+  <button class="stop" data-s="caption"><span class="g">“”</span><span class="n">Caption</span><span class="c">3 balloons</span></button>
+  <button class="stop" data-s="print"><span class="g">▤</span><span class="n">Print</span><span class="c">24 pp</span></button>
+</footer>
+
+<div class="hint">click the rail · try a Draw pass · Publish</div>
+
+<script>
+const DESKS = {
+  script: {kicker:"Script", title:"Page 07 — 6 beats", rows:[
+    ["Panels","6"],["Dialogue lines","9"],["Captions","2"],["Source","script.fountain"],
+    ["Locked","no (skeleton)"]],
+    note:"The script owns the text. Layout only places it; Caption only sets it."},
+  layout: {kicker:"Layout", title:"Page 07 — six panels", rows:[
+    ["Template","Grid · 2×3 + splash"],["Trim","6.625 × 10.187 in"],["Gutter","0.25 in"],
+    ["Reading","LTR · 1→6"],["Shot","wide → close → wide"],["Beat","establish · react · reveal"]],
+    note:"Layout directs: shot, beat, flow and balloon space. The panel is the mask everything else inherits."},
+  draw: {kicker:"Draw", byPass:{
+    pencil:{title:"Pencil — panel 03", rows:[
+      ["Pass","rough (non-printing)"],["Opacity","18%"],["Onion","panel 02 / 04"],["Time on page","00:14"]],
+      note:"Rough is disposable. It exists so the inker can see intent, and it never reaches print."},
+    ink:{title:"Ink — panel 03", rows:[
+      ["Pass","ink"],["Line","G-pen · 2.1 px"],["Closure","1 gap · 3 px"],["Regions","4 closed"]],
+      checks:[["Gap at (612, 402)","warn"],["Region fills prepared","ok"],["Panel mask matches layout","ok"]],
+      note:"The closure check runs before you leave the pass. A leaking page is cheaper to fix now."},
+    color:{title:"Colour — panel 03", rows:[
+      ["Pass","colour"],["Palette","Ch.01 · 7 inks"],["Regions flatted","4 of 4"],
+      ["Tone","Letratone 15% · 45°"],["Re-derive","ink changed 2m ago"]],
+      note:"Flats are derived from ink cuts, not traced. Re-derive shows exactly what moved."}}},
+  caption: {kicker:"Caption", title:"Caption — 3 balloons", rows:[
+    ["Speech balloons","2"],["Captions","1"],["SFX","—"],["Type","Balloon sans · 9.5 pt"],
+    ["Copyfit","auto · 2 lines"]],
+    checks:[["Reading order matches layout","ok"],["Balloon 02 near art edge","warn"]],
+    note:"The words already exist in the script. Caption is placement, tail and type."},
+  print: {kicker:"Print", title:"Imposition — 24 pages", rows:[
+    ["Sheet","Saddle-stitch · 2×2"],["Bleed / trim / safe","0.125 / 0 / 0.25 in"],
+    ["Output","RGB PDF + preflight"],["Resolution","600 dpi line art"],["Ink coverage","ok"]],
+    checks:[["All pages have bleed","ok"],["No art on trim","ok"],["Fonts embedded","ok"],["Page 9 under 300 dpi","warn"]],
+    note:"Preflight reads as a checklist, not a warning wall. Fix in the desk, not in the export dialog."}
+};
+
+const body = document.body;
+const rail = document.getElementById("rail");
+const docket = document.getElementById("docket");
+const bodyEl = document.getElementById("insp-body");
+const kicker = document.getElementById("insp-kicker");
+const title = document.getElementById("insp-title");
+
+function renderStage(id){
+  body.dataset.stage = id;
+  [...rail.querySelectorAll(".stop")].forEach(b => b.setAttribute("aria-current", String(b.dataset.s === id)));
+  const stop = rail.querySelector(`.stop[data-s="${id}"]`);
+  const railBox = rail.getBoundingClientRect(), box = stop.getBoundingClientRect();
+  docket.style.left = (box.left - railBox.left + box.width/2 - 26) + "px";
+
+  const desk = DESKS[id];
+  const s = desk.byPass ? (desk.byPass[body.dataset.pass] || desk.byPass.ink) : desk;
+  kicker.textContent = desk.kicker;
+  title.textContent = s.title || desk.title;
+  let html = '<div class="sec"><h4>Document</h4>';
+  s.rows.forEach(([k,v]) => html += `<div class="row"><span>${k}</span><span>${v}</span></div>`);
+  html += "</div>";
+  if (s.checks){
+    html += '<div class="sec"><h4>Check</h4>';
+    s.checks.forEach(([t,cls]) => html += `<div class="check ${cls==='warn'?'warn':''}"><i class="dot"></i>${t}</div>`);
+    html += "</div>";
+  }
+  if (id === "layout"){
+    html += '<div class="sec"><h4>Selected panel</h4><div class="field">'
+      + '<div><small>X</small>1.42 in</div><div><small>Y</small>2.06 in</div>'
+      + '<div><small>W</small>2.61 in</div><div><small>H</small>2.42 in</div></div>'
+      + '<div class="chips"><span class="chip on">LTR 3</span><span class="chip">shot: close</span>'
+      + '<span class="chip">beat: reveal</span></div></div>';
+  }
+  html += `<p class="note">${s.note}</p>`;
+  bodyEl.innerHTML = html;
+}
+
+const passes = document.getElementById("passes");
+function setPass(p){
+  body.dataset.pass = p;
+  [...passes.querySelectorAll("button")].forEach(b => b.setAttribute("aria-selected", String(b.dataset.p === p)));
+  const lbl = document.querySelector('.stop[data-s="draw"] .c');
+  if (lbl) lbl.textContent = {pencil:"rough", ink:"ink", color:"flats"}[p] || "ink";
+  if (body.dataset.stage === "draw") renderStage("draw");
+}
+passes.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b) setPass(b.dataset.p);
+});
+
+rail.addEventListener("click", e => {
+  const b = e.target.closest(".stop");
+  if (b) renderStage(b.dataset.s);
+});
+
+document.getElementById("tab-desk").addEventListener("click", () => setView("desk"));
+document.getElementById("tab-publish").addEventListener("click", () => setView("publish"));
+function setView(v){
+  body.dataset.view = v;
+  document.getElementById("tab-desk").setAttribute("aria-selected", String(v==="desk"));
+  document.getElementById("tab-publish").setAttribute("aria-selected", String(v==="publish"));
+}
+
+// thumbnails: draw panel bars from the same geometry
+document.querySelectorAll(".thumb .sheet").forEach((sheet, i) => {
+  if (sheet.id === "thumb07") return;
+  const rects = i % 2
+    ? [[6,4,88,26],[6,34,88,22],[6,60,88,34]]
+    : [[6,4,42,20],[52,4,42,20],[6,28,42,24],[52,28,42,24],[6,56,88,38]];
+  rects.forEach(([x,y,w,h]) => {
+    const d = document.createElement("span");
+    d.style.cssText = `left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
+    d.className = "bar";
+    sheet.appendChild(d);
+  });
+});
+// page 7 thumb mirrors the real layout
+const t7 = document.getElementById("thumb07");
+[[6,4,88,22],[6,28,42,20],[52,28,42,20],[6,50,42,30],[52,50,42,30],[6,82,88,14]].forEach(([x,y,w,h])=>{
+  const d=document.createElement("span");
+  d.style.cssText=`left:${x}%;top:${y}%;width:${w}%;height:${h}%`;
+  d.className="bar"; t7.appendChild(d);
+});
+
+// five desk dots per page
+const DOTS = {5:"ddddd",6:"dddnd",7:"dnttt",8:"dtttt",9:"dtttt",10:"dtttt"};
+document.querySelectorAll(".thumb").forEach(t => {
+  const nEl = t.querySelector(".num");
+  const state = DOTS[(nEl ? nEl.textContent : "").trim()] || "ttttt";
+  const dots = t.querySelector(".dots");
+  dots.innerHTML = [...state].map(c =>
+    `<i class="${c==='d'?'done':c==='n'?'now':'todo'}"></i>`).join("");
+});
+
+setView("desk");
+body.dataset.pass = "ink";
+renderStage("layout");
+
+const hash = location.hash.replace("#","");
+const PASS_LINK = {pencil:"pencil", ink:"ink", color:"color"};
+if (PASS_LINK[hash]) { setPass(PASS_LINK[hash]); renderStage("draw"); }
+else if (["script","layout","draw","caption","print"].includes(hash)) renderStage(hash);
+if (hash === "publish") setView("publish");
+window.addEventListener("resize", () => renderStage(body.dataset.stage));
+</script>
+</body>
+</html>

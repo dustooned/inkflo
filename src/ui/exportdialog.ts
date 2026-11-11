@@ -1,0 +1,175 @@
+import type { Studio } from '../app/studio';
+import { sheetOf } from '../doc/model';
+import { derivePanels } from '../geom/carve';
+import { preflightPage } from '../geom/preflight';
+import { kindById, printOf } from '../geom/printkinds';
+import { exportCbz, exportMotionComic } from '../io/exports';
+import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
+import { letterBox } from '../render/caption';
+import { download, h, seg, slug } from './dom';
+
+type Tab = 'print' | 'files';
+
+const PRINT_MODES: { id: PrintMode; title: string; body: string }[] = [
+  { id: 'shop', title: 'Print shop', body: 'A PDF of single pages with bleed and crop marks, trim and bleed boxes set. Blank pages are added if the binding needs them.' },
+  { id: 'pod', title: 'Print-on-demand', body: 'An interior PDF: single pages with bleed, no marks (what KDP, IngramSpark and Lulu ask for).' },
+  { id: 'booklet', title: 'Home printer booklet', body: 'Pages already in booklet order on Letter or A4, two to a side. Print double-sided, fold, staple. Comes with an instruction page.' },
+  { id: 'minizine', title: 'Mini-zine (one sheet)', body: 'All 8 pages on one sheet with fold and cut lines, and how to fold it.' },
+];
+
+/** The Export center: Print it (guided) and Export files (everything, by hand). */
+export function openExport(studio: Studio, start: Tab = 'files'): void {
+  const book = studio.book;
+  if (!book) return;
+  const name = slug(book.title);
+  const progress = h('div', { class: 'progress', role: 'status', 'aria-live': 'polite' });
+  const buttons: HTMLButtonElement[] = [];
+  const busy = (on: boolean) => buttons.forEach((b) => (b.disabled = on));
+  let tab: Tab = start;
+
+  const run = async (label: string, make: () => Promise<Blob>, file: string) => {
+    busy(true);
+    progress.textContent = `${label}…`;
+    try {
+      await studio.saver.flush();
+      const t0 = performance.now();
+      const blob = await make();
+      download(blob, file);
+      progress.textContent = `${label}: ${(blob.size / 1024 / 1024).toFixed(1)} MB in ${((performance.now() - t0) / 1000).toFixed(1)} s. Saved to your downloads as ${file}.`;
+    } catch (e) {
+      progress.textContent = `${label} failed: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      busy(false);
+    }
+  };
+  const btn = (label: string, onclick: () => void, primary = false) => {
+    const b = h('button', { class: `btn${primary ? ' primary' : ''}`, type: 'button', onclick }, label);
+    buttons.push(b);
+    return b;
+  };
+  const select = <T extends string | number>(label: string, options: [T, string][], value: T, set: (v: T) => void) => {
+    const s = h('select', { 'aria-label': label }, options.map(([v, l]) => h('option', { value: String(v), selected: v === value }, l)));
+    s.addEventListener('change', () => set((typeof value === 'number' ? Number(s.value) : s.value) as T));
+    return h('label', { class: 'field' }, label, s);
+  };
+  const check = (label: string, value: boolean, set: (v: boolean) => void) => {
+    const c = h('input', { type: 'checkbox', checked: value });
+    c.addEventListener('change', () => set(c.checked));
+    return h('label', { class: 'mini' }, c, label);
+  };
+
+  // ---- Print it
+
+  const pr = { mode: 'shop' as PrintMode, paper: 'letter' as Paper, marks: true };
+  function printTab(): HTMLElement {
+    const spec = printOf(book!);
+    const kind = kindById(spec.kind);
+    const plan = planPrint(book!, pr.mode);
+    const sheet = sheetOf(book!);
+    const issues = book!.pages.flatMap((p, i) => preflightPage(book!, p, derivePanels(p), (l) => letterBox(l, sheet, p.widthIn, p.heightIn))
+      .filter((c) => c.level === 'warn' && !/No ink/.test(c.text)).map((c) => `Page ${i + 1}: ${c.text}`));
+    const cards = h('div', { class: 'modes', role: 'radiogroup', 'aria-label': 'How it is printed' },
+      PRINT_MODES.map((m) => h('button', { type: 'button', role: 'radio', class: 'option modecard', 'aria-checked': String(m.id === pr.mode), onclick: () => { pr.mode = m.id; render(); } },
+        h('div', {}, h('b', {}, m.title), h('p', {}, m.body)))));
+    const settings = h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;align-items:end' });
+    if (pr.mode === 'booklet' || pr.mode === 'minizine') settings.append(select('Paper', [['letter', 'Letter'], ['a4', 'A4']], pr.paper, (v) => (pr.paper = v)));
+    if (pr.mode === 'shop') settings.append(check('Crop marks', pr.marks, (v) => (pr.marks = v)));
+    const order = h('div', { class: 'order', 'aria-label': 'Page order' },
+      plan.order.map((s) => h('span', { class: `chip${s === null ? ' blank' : ''}`, title: s === null ? 'Blank page, added' : `Page ${s + 1}` }, s === null ? 'blank' : String(s + 1))));
+    const file = `${name}-${pr.mode === 'shop' ? 'print' : pr.mode === 'pod' ? 'interior' : pr.mode}.pdf`;
+    return h('div', { class: 'stack' },
+      h('p', { class: 'note', style: 'margin:0' }, `${kind ? kind.label : 'Custom'}: ${book!.pages[0]!.widthIn}″ × ${book!.pages[0]!.heightIn}″, ${spec.bleed}″ bleed. Change it in the Print desk.`),
+      cards, settings,
+      h('div', {}, h('h4', { class: 'label' }, 'Page order'), order),
+      plan.message ? h('p', { class: 'warnline' }, plan.message) : null,
+      issues.length
+        ? h('details', {}, h('summary', {}, `${issues.length} preflight warning${issues.length === 1 ? '' : 's'} (you can still print)`), h('ul', { class: 'check' }, issues.slice(0, 12).map((t) => h('li', { class: 'warn' }, t))))
+        : h('p', { class: 'note', style: 'margin:0' }, 'Preflight: nothing to fix.'),
+      h('div', { style: 'display:flex;justify-content:flex-end' },
+        btn('Make the PDF', () => void run('Print PDF', () => exportPrintPdf(studio, { ...pr }, (m) => (progress.textContent = m)), file), true)),
+    );
+  }
+
+  // ---- Export files
+
+  const fo: FilesOptions = { format: 'png', seps: ['all'], background: 'white', colour: 'colour', borders: true, range: { from: 1, to: book.pages.length } };
+  let dpi = book.dpi;
+  const motion: MotionOptions = { ...DEFAULT_MOTION };
+  function filesTab(): HTMLElement {
+    const sepBoxes = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' },
+      (Object.keys(SEPARATION_LABEL) as Separation[]).map((s) => check(SEPARATION_LABEL[s], fo.seps.includes(s), (on) => {
+        fo.seps = on ? [...fo.seps, s] : fo.seps.filter((x) => x !== s);
+      })));
+    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.from, 'aria-label': 'From page', style: 'width:60px' });
+    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.to, 'aria-label': 'To page', style: 'width:60px' });
+    from.addEventListener('change', () => (fo.range = { from: Number(from.value) || 1, to: fo.range!.to }));
+    to.addEventListener('change', () => (fo.range = { from: fo.range!.from, to: Number(to.value) || book!.pages.length }));
+    const range = h('label', { class: 'field' }, 'Pages', h('span', {}, from, ' to ', to));
+    return h('div', { class: 'stack' },
+      h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+        h('b', {}, 'Page images'),
+        h('p', {}, 'Finished pages, or separations for colourists, inkers and letterers: inks only, colours only, pencils only, lettering only. Each kind goes in its own folder.'),
+        sepBoxes,
+        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px' },
+          select('Format', [['png', 'PNG'], ['jpg', 'JPG'], ['webp', 'WebP']], fo.format, (v) => (fo.format = v)),
+          select('Resolution', [[book!.dpi, `${book!.dpi} dpi (book)`], ...([150, 72] as const).filter((d) => d !== book!.dpi).map((d): [number, string] => [d, `${d} dpi (screen)`])], dpi, (v) => (dpi = v)),
+          select('Separations on', [['white', 'White'], ['transparent', 'Transparent']], fo.background, (v) => (fo.background = v)),
+          select('Colour', [['colour', 'Colour'], ['grey', 'Greyscale'], ['hard', 'Inks: hard black']], fo.colour, (v) => (fo.colour = v)),
+          range),
+        h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:8px' },
+          check('Panel borders on inks', fo.borders, (v) => (fo.borders = v)),
+          h('span', { style: 'flex:1' }),
+          btn('Export', () => {
+            if (!fo.seps.length) {
+              progress.textContent = 'Tick at least one kind of page.';
+              return;
+            }
+            void run('Page images', () => exportPageFiles(studio, { ...fo, dpi }, (m) => (progress.textContent = m)), `${name}-pages.zip`);
+          }, true))),
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),
+        btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Reader spreads (.pdf)'), h('p', {}, `Pages side by side as the reader sees them${printOf(book!).rtl ? ' (right to left)' : ''}, the cover alone. For proofing.`)),
+        btn('Export', () => void run('Spreads', () => exportSpreadsPdf(studio, (m) => (progress.textContent = m)), `${name}-spreads.pdf`))),
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Comic archive (.cbz)'), h('p', {}, `Every page at ${book!.dpi} dpi with ComicInfo.xml, for comic readers.`)),
+        btn('Export', () => void run('Comic archive', () => exportCbz(studio, (m) => (progress.textContent = m)), `${name}.cbz`))),
+      h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+        h('div', { style: 'display:flex;gap:12px;align-items:flex-start' },
+          h('div', {}, h('b', {}, 'Motion comic for 2Dope (.2dope)'),
+            h('p', {}, 'A 2Dope project: each page a comp with one layer per panel and balloon, and a camera that reads the book panel by panel.')),
+          btn('Export', () => void run('Motion comic', () => exportMotionComic(studio, motion, (m) => (progress.textContent = m)), `${name}-motion.2dope`))),
+        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px' },
+          select('Frame', [['wide', '16:9 video'], ['page', 'Page shape']], motion.frame, (v) => (motion.frame = v)),
+          select('Resolution', [[100, '100 dpi'], [150, '150 dpi'], [200, '200 dpi']], motion.dpi, (v) => (motion.dpi = v)),
+          select('Per panel', [[1.2, '1.2 s'], [2, '2 s'], [3, '3 s'], [4, '4 s']], motion.panelHold, (v) => (motion.panelHold = v)),
+          select('Frame rate', [[12, '12 fps'], [24, '24 fps'], [30, '30 fps']], motion.fps, (v) => (motion.fps = v)),
+          select('Balloons', [['live', 'Live captions'], ['image', 'Images']], motion.captions, (v) => (motion.captions = v)))),
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Book file (.inkflo)'), h('p', {}, 'The whole book with every stroke, to back up or open on another device.')),
+        btn('Export', () => void run('Book file', () => studio.exportInkflo(), `${name}.inkflo`))),
+    );
+  }
+
+  const body = h('div', { class: 'content' });
+  function render(): void {
+    buttons.length = 0;
+    body.replaceChildren(
+      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }], tab, (v) => { tab = v; render(); }, 'Export center'),
+      tab === 'print' ? printTab() : filesTab(),
+      progress,
+    );
+  }
+
+  const d = h('dialog', { class: 'exportcenter', 'aria-label': 'Export center' },
+    h('header', {}, h('h2', {}, `Export “${book.title}”`)),
+    body,
+    h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')),
+  );
+  d.addEventListener('close', () => d.remove());
+  document.body.append(d);
+  render();
+  d.showModal();
+}

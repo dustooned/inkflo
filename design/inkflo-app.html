@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>inkflo</title>
+<style>
+  :root{
+    --paper:#EDE6D8; --paper-2:#F7F2E8; --paper-3:#EFE7D6; --panel:#FFFDF7;
+    --ink:#191A1F; --ink-soft:#4A4C55; --rule:#CFC4AC; --rule-2:#E2D8C4;
+    --ochre:#A8762A; --teal:#2F6F7E; --graphite:#5E5F68; --red:#B8432F; --green:#3E6B3A;
+    --accent:var(--teal);
+    --ui:"Inter","Segoe UI Variable","Segoe UI",system-ui,-apple-system,sans-serif;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+    --shadow:0 1px 2px rgba(25,26,31,.10),0 18px 40px -22px rgba(25,26,31,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font:13px/1.45 var(--ui);
+    overflow:hidden;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(ellipse at 50% -10%,rgba(255,255,255,.5),transparent 60%),
+      repeating-linear-gradient(0deg,rgba(25,26,31,.014) 0 1px,transparent 1px 3px)}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,textarea{font:inherit;color:inherit}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column}
+  .screen.on{display:flex}
+  .btn{border:1px solid var(--rule);border-radius:8px;padding:7px 12px;background:rgba(255,255,255,.55);
+    font-weight:600;font-size:12px}
+  .btn:hover{border-color:#B9AC8E}
+  .btn.primary{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
+  .icon{width:32px;height:32px;border-radius:8px;border:1px solid var(--rule);
+    background:rgba(255,255,255,.5);display:grid;place-items:center;font-size:14px}
+  .spacer{flex:1}
+
+  /* ============ HOME ============ */
+  .homebar{display:flex;align-items:center;gap:16px;height:64px;padding:0 28px;
+    border-bottom:1px solid var(--rule);background:linear-gradient(180deg,var(--paper-2),rgba(247,242,232,.6))}
+  .brand{font-family:var(--serif);font-style:italic;font-size:25px;letter-spacing:-.4px}
+  .brand i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--teal);
+    transform:translateY(-7px);margin-left:8px}
+  .search{flex:1;max-width:360px}
+  .search input{width:100%;border:1px solid var(--rule);background:rgba(255,255,255,.55);
+    border-radius:9px;padding:8px 12px;font-size:12.5px;outline:0}
+  .homebody{flex:1;overflow:auto;padding:22px 28px 40px}
+  .rowlabel{display:flex;align-items:baseline;gap:10px;margin:6px 0 12px;
+    font:650 10px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;color:#8A8069}
+  .rowlabel span{font:500 11px/1 var(--mono);color:#A2977C;letter-spacing:0}
+  .folders{display:flex;gap:14px;margin-bottom:30px;flex-wrap:wrap}
+  .folder{display:flex;align-items:center;gap:12px;padding:12px 16px;min-width:220px;
+    border:1px solid var(--rule);border-radius:12px;background:rgba(255,255,255,.42);cursor:pointer}
+  .folder:hover{border-color:#B9AC8E;background:rgba(255,255,255,.6)}
+  .fico{width:38px;height:30px;border-radius:5px;background:#E2D3B4;border:1px solid #CDBB95;
+    position:relative;flex:none}
+  .fico::before{content:"";position:absolute;left:3px;top:-6px;width:16px;height:7px;
+    background:#E2D3B4;border:1px solid #CDBB95;border-bottom:0;border-radius:4px 4px 0 0}
+  .folder b{display:block;font-size:13px}
+  .folder small{color:var(--ink-soft);font-size:11px}
+  .books{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:22px}
+  .book{cursor:pointer;border:0;padding:0;text-align:left;background:none}
+  .cover{position:relative;aspect-ratio:6.625/10.187;background:#F3ECDF;border-radius:4px;
+    box-shadow:var(--shadow);overflow:hidden;border:1px solid #E6DAC4;transition:transform .18s}
+  .book:hover .cover{transform:translateY(-3px)}
+  .cover .p{position:absolute;background:#FFFDF7;border:1.5px solid #1B1C22}
+  .cover .gut{position:absolute;background:#EFE7D6}
+  .book h3{margin:10px 0 2px;font-size:13px;font-weight:620}
+  .book meta,.book small{display:block;color:var(--ink-soft);font-size:11px}
+  .book .dots{display:flex;gap:3px;margin-top:7px}
+  .book .dots i{width:5px;height:5px;border-radius:50%;background:#D8CCB3}
+  .book .dots i.on{background:var(--teal)}
+  .book .dots i.cur{background:var(--ink)}
+
+  /* ============ BOOK ============ */
+  .bookbar{display:flex;align-items:center;gap:14px;height:60px;padding:0 24px;
+    border-bottom:1px solid var(--rule);background:linear-gradient(180deg,var(--paper-2),rgba(247,242,232,.55))}
+  .bTitle{font-family:var(--serif);font-size:20px}
+  .bMeta{color:var(--ink-soft);font-size:11.5px}
+  .pages{flex:1;overflow:auto;padding:26px 30px 60px;display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px;align-content:start}
+  .pagecard{cursor:pointer;background:none;border:0;padding:0;text-align:left}
+  .pagecard .sheet{position:relative;aspect-ratio:6.625/10.187;background:#F3ECDF;
+    border-radius:3px;box-shadow:0 1px 2px rgba(25,26,31,.12),0 10px 22px -14px rgba(25,26,31,.5);
+    overflow:hidden;border:1px solid #E6DAC4}
+  .pagecard:hover .sheet{outline:2px solid var(--teal);outline-offset:2px}
+  .pagecard .sheet .p{position:absolute;background:#FFFDF7;border:1.2px solid #1B1C22}
+  .pagecard .foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px}
+  .pagecard .num{font:600 11px/1 var(--mono);color:var(--ink-soft)}
+  .pagecard .dots{display:flex;gap:2.5px}
+  .pagecard .dots i{width:4.5px;height:4.5px;border-radius:50%;background:#D8CCB3}
+  .pagecard .dots i.on{background:#9E9377}
+  .pagecard .dots i.cur{background:var(--teal)}
+
+  /* ============ DESK ============ */
+  .deskbar{display:flex;align-items:center;gap:12px;height:52px;padding:0 18px;
+    border-bottom:1px solid var(--rule);background:linear-gradient(180deg,var(--paper-2),rgba(247,242,232,.6))}
+  .crumb{font-size:12.5px;color:var(--ink-soft)}
+  .crumb b{color:#B3A78A;font-weight:400;margin:0 6px}
+  .crumb strong{color:var(--ink);font-weight:600}
+  .pager{display:flex;align-items:center;gap:6px;font:600 12px/1 var(--mono)}
+  .pager button{width:26px;height:26px;border:1px solid var(--rule);border-radius:7px;
+    background:rgba(255,255,255,.5)}
+  .ctx{display:flex;align-items:center;gap:16px;height:44px;padding:0 18px;
+    border-bottom:1px solid var(--rule);background:linear-gradient(180deg,#F8F3E9,rgba(248,243,233,.55))}
+  .ctx-name{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);min-width:66px}
+  .ctx-opts{display:none;align-items:center;gap:16px;flex:1;min-width:0}
+  [data-desk="layout"] [data-opts="layout"],
+  [data-desk="draw"] [data-opts="draw"],
+  [data-desk="caption"] [data-opts="caption"],
+  [data-desk="print"] [data-opts="print"],
+  [data-desk="script"] [data-opts="script"]{display:flex}
+  .mini{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--ink-soft);
+    white-space:nowrap;flex:none}
+  .mini input[type=range]{width:86px}
+  .mini b{font:600 11px/1 var(--mono);color:var(--ink);min-width:24px}
+  .seg{display:flex;border:1px solid var(--rule);border-radius:7px;overflow:hidden;
+    background:rgba(255,255,255,.5);flex:none}
+  .seg button{padding:4px 9px;font-size:11px;color:var(--ink-soft);white-space:nowrap}
+  .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper-2)}
+  .hint{font-size:11.5px;color:#8A8069;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .work{flex:1;display:grid;grid-template-columns:62px minmax(0,1fr) 292px;min-height:0}
+  [data-desk="script"] .work,[data-desk="print"] .work{grid-template-columns:minmax(0,1fr) 292px}
+  [data-desk="script"] .rail,[data-desk="print"] .rail{display:none}
+  .rail{display:flex;flex-direction:column;gap:4px;padding:9px 6px;border-right:1px solid var(--rule);
+    background:rgba(243,237,226,.6)}
+  .rail button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;
+    border-radius:9px;border:1px solid transparent;color:var(--ink-soft)}
+  .rail button span{font-size:15px;line-height:1}
+  .rail button em{font-style:normal;font-weight:600;font-size:8.5px;letter-spacing:.05em;text-transform:uppercase}
+  .rail button[aria-pressed="true"]{background:var(--ink);color:var(--paper-2)}
+  .rail button[disabled]{opacity:.32}
+
+  .stagearea{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;
+    overflow:hidden}
+  .stagearea::before{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(25,26,31,.04) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(25,26,31,.04) 1px,transparent 1px);
+    background-size:28px 28px;
+    mask-image:radial-gradient(ellipse at 50% 45%,#000 30%,transparent 75%)}
+  .pageShell{position:relative;height:min(94%,780px);aspect-ratio:6.625/10.187;
+    filter:drop-shadow(0 18px 26px rgba(25,26,31,.22))}
+  .pageShell svg{width:100%;height:100%;display:block;touch-action:none}
+  .panel{fill:var(--panel);stroke:var(--ink);stroke-linejoin:round}
+  .panel.sel{fill:#FAF2DF}
+  .panel.target{stroke:var(--accent);stroke-dasharray:7 5;fill:#F7F1E1}
+  #bandFill path,#bandRing path{stroke-linecap:butt}
+  .num{font:600 10px/1 var(--mono);fill:rgba(25,26,31,.28);letter-spacing:.06em}
+  .lbl{font-family:var(--serif);font-size:30px;fill:rgba(25,26,31,.13)}
+  .balloon{fill:#FFFDF7;stroke:#1B1C22;stroke-width:1.8;cursor:grab}
+  .balloon.sel{stroke:var(--red);stroke-width:2.6}
+  .btxt{font-family:var(--serif);font-size:11px;fill:#191A1F;pointer-events:none}
+  .handle{fill:#FFFDF7;stroke:var(--accent);stroke-width:1.8;cursor:ew-resize}
+  .mark{fill:none;stroke:var(--green);stroke-width:1}
+  .trail{fill:none;stroke:var(--red);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:8 7}
+
+  .pane{position:absolute;inset:0;display:none;overflow:auto;padding:26px 30px;z-index:3;
+    background:linear-gradient(180deg,rgba(237,230,216,.97),rgba(237,230,216,.99))}
+  [data-desk="script"] .pane.script{display:block}
+
+  .beats{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .beat{border:1px solid var(--rule);border-radius:10px;background:rgba(255,255,255,.5);padding:12px 14px}
+  .beat h4{margin:0 0 8px;font:650 9.5px/1 var(--ui);letter-spacing:.14em;text-transform:uppercase;color:#8A8069}
+  .beat input,.beat textarea{width:100%;border:1px solid var(--rule-2);border-radius:7px;
+    background:#FFFDF7;padding:7px 9px;font-size:12.5px;outline:0;font-family:var(--serif)}
+  .beat textarea{min-height:58px;resize:vertical;margin-top:7px;font-family:var(--ui);font-size:12px}
+  .beat .del{float:right;color:#A2977C;font-size:16px;line-height:1}
+
+  /* inspector */
+  .insp{border-left:1px solid var(--rule);background:rgba(245,239,228,.78);overflow:auto}
+  .insp-head{padding:14px 16px 11px;border-bottom:1px solid var(--rule-2)}
+  .kick{font:650 9.5px/1 var(--ui);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  .ins-title{font-size:14.5px;font-weight:620;margin-top:5px}
+  .sec{padding:12px 16px 13px;border-bottom:1px solid var(--rule-2)}
+  .sec h4{margin:0 0 8px;font:650 10px/1 var(--ui);letter-spacing:.14em;text-transform:uppercase;color:#8A8069}
+  .rows{display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:var(--ink-soft)}
+  .rows b{font:600 11.5px/1.3 var(--mono);color:var(--ink)}
+  .note{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin:8px 0 0}
+  .note strong{color:var(--ink)}
+
+  /* stage rail */
+  .stagerail{height:78px;border-top:1px solid var(--rule);display:flex;padding:0 12px;position:relative;
+    background:linear-gradient(180deg,rgba(248,243,233,.9),var(--paper))}
+  .stagerail .stop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    color:#8C8268;border-right:1px solid rgba(207,196,172,.55);position:relative}
+  .stagerail .stop:last-child{border-right:0}
+  .stagerail .stop span{font-size:15px}
+  .stagerail .stop b{font:650 9.5px/1 var(--ui);letter-spacing:.15em;text-transform:uppercase}
+  .stagerail .stop small{font:500 9.5px/1 var(--mono);opacity:.8}
+  .stagerail .stop[aria-current="true"]{color:var(--ink)}
+  .stagerail .stop[aria-current="true"] b{color:var(--accent)}
+  .stagerail .stop[aria-current="true"]::after{content:"";position:absolute;left:16px;right:16px;bottom:7px;
+    height:2px;background:var(--accent);border-radius:2px}
+  .docket{position:absolute;top:-12px;width:46px;height:24px;background:var(--paper-2);
+    border:1px solid var(--rule);border-radius:3px;box-shadow:var(--shadow);
+    display:flex;align-items:center;justify-content:center;font:600 10px/1 var(--mono);
+    transition:left .26s cubic-bezier(.2,.7,.2,1)}
+  .docket::before{content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:13px;height:7px;border:1.5px solid #A79C82;border-bottom:0;border-radius:3px 3px 0 0}
+
+  /* export modal */
+  .modal{position:fixed;inset:0;display:none;place-items:center;background:rgba(25,26,31,.35);z-index:40}
+  .modal.on{display:grid}
+  .sheetM{width:min(860px,92vw);background:var(--paper-2);border-radius:14px;box-shadow:var(--shadow);
+    border:1px solid var(--rule);overflow:hidden}
+  .sheetM header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--rule-2)}
+  .sheetM header h2{margin:0;font-family:var(--serif);font-size:20px}
+  .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:18px 20px}
+  .card{border:1px solid var(--rule);border-radius:10px;padding:14px;background:rgba(255,255,255,.5);cursor:pointer}
+  .card:hover{border-color:var(--ink)}
+  .card b{display:block;font-size:13px}
+  .card small{display:block;color:var(--ink-soft);font-size:11.5px;margin-top:3px}
+  .card .tag{display:inline-block;margin-top:9px;font:600 9.5px/1 var(--mono);letter-spacing:.08em;
+    text-transform:uppercase;color:var(--teal)}
+  .build{padding:0 20px 20px;display:none}
+  .build.on{display:block}
+  .bar{height:6px;border-radius:6px;background:#E1D6BF;overflow:hidden;margin:10px 0}
+  .bar i{display:block;height:100%;width:0;background:var(--teal);transition:width .3s}
+  .files{font:500 11px/1.7 var(--mono);color:var(--ink-soft);margin-top:8px}
+
+  .toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(8px);
+    background:var(--ink);color:var(--paper-2);border-radius:8px;padding:8px 14px;font-size:12px;
+    opacity:0;pointer-events:none;transition:.22s}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  .seqWrap{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .seqSheet{position:relative;height:78vh;aspect-ratio:6.625/10.187;background:#F3ECDF;
+    border-radius:4px;box-shadow:0 30px 60px -20px rgba(0,0,0,.6);overflow:hidden;
+    border:1px solid #E6DAC4}
+  .seqSheet .p{position:absolute;background:#FFFDF7;border:1.5px solid #1B1C22}
+  .seqNum{font:600 11px/1 var(--mono);letter-spacing:.2em;color:rgba(247,242,232,.8)}
+</style>
+</head>
+<body>
+
+<!-- ================= HOME ================= -->
+<section class="screen on" id="home">
+  <header class="homebar">
+    <div class="brand">inkflo<i></i></div>
+    <div class="search"><input placeholder="Search books, folders, pages"></div>
+    <div class="spacer"></div>
+    <button class="btn">Import</button>
+    <button class="btn primary" id="newBook">+ New book</button>
+  </header>
+  <div class="homebody">
+    <div class="rowlabel">Folders <span id="folderCount"></span></div>
+    <div class="folders" id="folders"></div>
+    <div class="rowlabel">Books <span id="bookCount"></span></div>
+    <div class="books" id="books"></div>
+  </div>
+</section>
+
+<!-- ================= BOOK ================= -->
+<section class="screen" id="book">
+  <header class="bookbar">
+    <button class="icon" id="bookBack">←</button>
+    <div>
+      <div class="bTitle" id="bTitle">The Long Way Home</div>
+      <div class="bMeta" id="bMeta">24 pages · Ch. 01 · last edited 2h ago</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnPreview">Preview</button>
+    <button class="btn" id="btnExportBook">Export…</button>
+    <button class="btn primary" id="btnContinue">Continue · Layout</button>
+  </header>
+  <div class="pages" id="pageGrid"></div>
+</section>
+
+<!-- ================= DESK ================= -->
+<section class="screen" id="desk">
+  <header class="deskbar">
+    <button class="icon" id="deskBack">←</button>
+    <div class="crumb" id="crumb"><strong>The Long Way Home</strong><b>›</b>p. 07</div>
+    <div class="spacer"></div>
+    <div class="pager">
+      <button id="prevPage">‹</button><span id="pageNum">07</span><button id="nextPage">›</button>
+    </div>
+    <button class="btn" id="btnExport">Export…</button>
+  </header>
+
+  <div class="ctx">
+    <div class="ctx-name" id="ctxName">Layout</div>
+    <div class="ctx-opts" data-opts="script">
+      <span class="hint">Write the beats. Each beat becomes a panel placeholder in Layout.</span>
+    </div>
+    <div class="ctx-opts" data-opts="layout">
+      <label class="mini">Gutter <input id="gutter" type="range" min="0" max="44" step="1" value="22"><b><span id="gv">22</span></b></label>
+      <label class="mini">Outline <input id="border" type="range" min="0" max="10" step="0.5" value="2.5"><b><span id="bv">2.5</span></b></label>
+      <label class="mini">Curve <input id="curve" type="range" min="0" max="5" step="1" value="2"><b><span id="cv">2</span></b></label>
+      <div class="seg" id="cutMode">
+        <button data-mode="across" aria-pressed="true">To edges</button>
+        <button data-mode="panel">Panel only</button>
+      </div>
+    </div>
+    <div class="ctx-opts" data-opts="draw">
+      <label class="mini">Size <input id="brush" type="range" min="1" max="14" step="1" value="3"><b><span id="brv">3</span></b></label>
+      <span class="hint">Pencil is blue and never prints · Ink is the print truth · Colour fills a panel</span>
+    </div>
+    <div class="ctx-opts" data-opts="caption">
+      <span class="hint">Click a panel to place a balloon · drag to move · double-click to pull the next line</span>
+    </div>
+    <div class="ctx-opts" data-opts="print">
+      <span class="hint">Trim, bleed and safe area · preflight runs as you go</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="btnUndo">↶ Undo</button>
+  </div>
+
+  <main class="work">
+    <nav class="rail" id="toolrail"></nav>
+
+    <section class="stagearea" id="stagearea">
+      <div class="pageShell">
+        <svg id="page" viewBox="0 0 520 800" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <clipPath id="clipPage"><rect x="0" y="0" width="520" height="800"/></clipPath>
+            <filter id="gutterRing" x="-5%" y="-5%" width="110%" height="110%">
+              <feMorphology in="SourceAlpha" operator="dilate" radius="2.4" result="d"/>
+              <feComposite in="d" in2="SourceAlpha" operator="out"/>
+            </filter>
+          </defs>
+          <rect x="0" y="0" width="520" height="800" fill="#F7F2E8"/>
+          <g id="gPanels"></g>
+          <g id="gArt"></g>
+          <g id="gBands"><g id="bandFill"></g><g id="bandRing" filter="url(#gutterRing)"></g></g>
+          <g id="gNums"></g>
+          <g id="gBalloons"></g>
+          <g id="gHandles"></g>
+          <g id="gPrint"></g>
+          <polyline id="trail" class="trail" points=""></polyline>
+        </svg>
+      </div>
+      <div class="pane script" id="scriptPane"><div class="beats" id="beats"></div></div>
+    </section>
+
+    <aside class="insp" id="inspector"></aside>
+  </main>
+
+  <footer class="stagerail" id="stagerail">
+    <div class="docket" id="docket">p.07</div>
+  </footer>
+</section>
+
+<!-- export -->
+<div class="modal" id="exportModal">
+  <div class="sheetM">
+    <header>
+      <h2>Export</h2>
+      <div class="spacer"></div>
+      <button class="icon" id="closeExport">×</button>
+    </header>
+    <div class="cards" id="exportCards">
+      <div class="card" data-kind="print"><b>Print PDF</b><small>Pages, bleed, crop marks and a preflight sheet.</small><span class="tag">6.625 × 10.187 in</span></div>
+      <div class="card" data-kind="web"><b>Publish Kit</b><small>A zip that is already a comic website. GitHub Pages ready.</small><span class="tag">zip · 18 MB</span></div>
+      <div class="card" data-kind="cbz"><b>CBZ + ComicInfo</b><small>The reader standard, for every comic app.</small><span class="tag">cbz</span></div>
+      <div class="card" data-kind="motion"><b>Motion comic</b><small>Panel cues to MP4, or hand off to 2Dope as a scene.</small><span class="tag">mp4</span></div>
+    </div>
+    <div class="build" id="buildPane">
+      <div class="bar"><i id="buildBar"></i></div>
+      <div class="files" id="buildFiles"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="seqModal" style="background:rgba(20,21,26,.9)">
+  <div class="seqWrap"><div id="seqPage"></div><span class="seqNum" id="seqHint">click to close</span></div>
+</div>
+
+<script>
+/* ---------------- data ---------------- */
+const STAGES = [
+  {id:"script",  name:"Script",  glyph:"✎"},
+  {id:"layout",  name:"Layout",  glyph:"▦"},
+  {id:"draw",    name:"Draw",    glyph:"✒"},
+  {id:"caption", name:"Caption", glyph:"“”"},
+  {id:"print",   name:"Print",   glyph:"▤"}
+];
+
+const FOLDERS = [
+  {id:"f1", name:"Client work", note:"2 books"},
+  {id:"f2", name:"Class — Spring", note:"3 books"}
+];
+
+let BOOKS = [
+  {id:"b1", title:"The Long Way Home", author:"Maya Okonkwo", folder:"f1", note:"Ch. 01 · 24 pages", stage:"layout"},
+  {id:"b2", title:"Night Bus", author:"Maya Okonkwo", folder:"f1", note:"One-shot · 12 pages", stage:"draw"},
+  {id:"b3", title:"Study: McCloud", author:"Maya Okonkwo", folder:"f2", note:"Breakdowns · 8 pages", stage:"script"},
+  {id:"b4", title:"The Tide Clock", author:"Sam Ito", folder:null, note:"Ch. 02 · 18 pages", stage:"caption"}
+];
+
+function bookPages(n){
+  const cuts = [
+    {mode:"across", pts:[{x:10,y:262},{x:140,y:256},{x:280,y:264},{x:420,y:258},{x:516,y:262}]},
+    {mode:"across", pts:[{x:262,y:10},{x:258,y:220},{x:266,y:420},{x:260,y:620},{x:264,y:796}]},
+    {mode:"across", pts:[{x:10,y:542},{x:140,y:536},{x:280,y:544},{x:420,y:538},{x:516,y:542}]}
+  ];
+  return Array.from({length:n}, (_,i)=>({
+    id:i+1,
+    cuts: i===0 ? [] : JSON.parse(JSON.stringify(cuts)),
+    beats: i===0 ? [] : [
+      {d:"Establishing. Street, dusk; she waits under the awning.", lines:["DUSK. THE OLD STREET."]},
+      {d:"Close on Maya, listening.", lines:["MAYA: You came back."]},
+      {d:"The door, from inside; light spills.", lines:["ILAN: I never left."]}
+    ],
+    strokes:{pencil:[], ink:[]},
+    fills:{},
+    balloons:[]
+  }));
+}
+
+BOOKS = BOOKS.map(b => ({...b, pages: bookPages(b.id==="b3"?4:6)}));
+
+/* ---------------- state ---------------- */
+const state = {
+  screen:"home", book:null, pageIndex:0, desk:"layout", tool:"knife", pass:"ink",
+  sel:null, selBalloon:null, drawing:null, drag:null, history:[], cutMode:"across"
+};
+let gutter = 22, border = 2.5, curve = 2, brush = 3;
+
+const $ = id => document.getElementById(id);
+const page = () => state.book.pages[state.pageIndex];
+
+/* ---------------- geometry ---------------- */
+const PAGE = {x:0,y:0,w:520,h:800};
+const RECT = [{x:0,y:0},{x:520,y:0},{x:520,y:800},{x:0,y:800}];
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y});
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+function area(p){let a=0;for(let i=0;i<p.length;i++){const q=p[i],r=p[(i+1)%p.length];a+=q.x*r.y-r.x*q.y}return a/2}
+function centroid(p){let x=0,y=0,a=0;for(let i=0;i<p.length;i++){const q=p[i],r=p[(i+1)%p.length];
+  const f=q.x*r.y-r.x*q.y;a+=f;x+=(q.x+r.x)*f;y+=(q.y+r.y)*f}a*=.5;
+  return Math.abs(a)<1e-6?{x:p[0].x,y:p[0].y}:{x:x/(6*a),y:y/(6*a)}}
+
+function segInt(a,b,c,d){
+  const r=sub(b,a),s=sub(d,c),den=r.x*s.y-r.y*s.x;
+  if(Math.abs(den)<1e-9)return null;
+  const tp=((c.x-a.x)*s.y-(c.y-a.y)*s.x)/den, tu=((c.x-a.x)*r.y-(c.y-a.y)*r.x)/den;
+  if(tp<0||tp>1||tu<0||tu>1)return null;
+  return {x:a.x+tp*r.x,y:a.y+tp*r.y,tp,tu};
+}
+
+function chaikin(pts,it){let p=pts;
+  for(let k=0;k<it;k++){if(p.length<3)break;const o=[p[0]];
+    for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];
+      o.push({x:a.x*.75+b.x*.25,y:a.y*.75+b.y*.25},{x:a.x*.25+b.x*.75,y:a.y*.25+b.y*.75})}
+    o.push(p[p.length-1]);p=o}
+  return p}
+
+function outward(pts,start){
+  const seq = start?pts:[...pts].reverse(); const p0=seq[0];
+  let ref=seq[seq.length-1],acc=0;
+  for(let i=1;i<seq.length;i++){acc+=dist(seq[i],seq[i-1]);if(acc>=12){ref=seq[i];break}}
+  let dx=p0.x-ref.x,dy=p0.y-ref.y,l=Math.hypot(dx,dy);
+  if(l<1e-3){dx=0;dy=-1;l=1}
+  return {x:dx/l,y:dy/l};
+}
+function extendEnds(pts){
+  if(pts.length<2)return pts;
+  const L=2400, a=outward(pts,true), b=outward(pts,false);
+  return [{x:pts[0].x+a.x*L,y:pts[0].y+a.y*L},...pts,
+          {x:pts[pts.length-1].x+b.x*L,y:pts[pts.length-1].y+b.y*L}];
+}
+
+function subPath(path,s0,s1){
+  const n=path.length-1, cl=v=>Math.max(0,Math.min(n-1e-6,v));
+  s0=cl(s0);s1=cl(s1);
+  const i0=Math.floor(s0),i1=Math.floor(s1),t0=s0-i0,t1=s1-i1;
+  const pA={x:path[i0].x+(path[i0+1].x-path[i0].x)*t0,y:path[i0].y+(path[i0+1].y-path[i0].y)*t0};
+  const pB={x:path[i1].x+(path[i1+1].x-path[i1].x)*t1,y:path[i1].y+(path[i1+1].y-path[i1].y)*t1};
+  if(i0===i1)return[pA,pB];
+  const out=[pA];
+  for(let i=i0+1;i<=i1;i++)out.push(path[i]);
+  if(dist(out[out.length-1],pB)>.01)out.push(pB);
+  return out;
+}
+
+function walk(poly,from,to){
+  const n=poly.length, out=[{x:from.pt.x,y:from.pt.y}];
+  let i=(from.edge+1)%n,g=0;
+  while(g++<=n+1){out.push(poly[i]);if(i===to.edge)break;i=(i+1)%n}
+  out.push({x:to.pt.x,y:to.pt.y});
+  return out;
+}
+
+function splitPoly(poly,path){
+  const ins=[];
+  for(let j=0;j<path.length-1;j++)for(let i=0;i<poly.length;i++){
+    const r=segInt(path[j],path[j+1],poly[i],poly[(i+1)%poly.length]);
+    if(!r)continue;
+    const pt={x:r.x,y:r.y};
+    if(ins.some(q=>dist(q.pt,pt)<1))continue;
+    ins.push({pt,edge:i,s:j+r.tp});
+  }
+  if(ins.length<2)return[poly];
+  ins.sort((a,b)=>a.s-b.s);
+  const A=ins[0],B=ins[ins.length-1];
+  if(dist(A.pt,B.pt)<1)return[poly];
+  const chain=subPath(path,A.s,B.s);
+  const c1=walk(poly,A,B), c2=walk(poly,B,A);
+  const clean=p=>{const o=[];for(const q of p){if(!o.length||dist(o[o.length-1],q)>.6)o.push(q)}
+    if(o.length>2&&dist(o[0],o[o.length-1])<.6)o.pop();return o};
+  return [c1.concat([...chain].reverse()), c2.concat(chain)]
+    .map(clean).filter(p=>p.length>=3&&Math.abs(area(p))>2);
+}
+
+function derivePanels(cuts){
+  let ps=[RECT.map(p=>({...p}))];
+  for(const c of cuts){
+    const path = cutPath(c);
+    const next=[];
+    for(const p of ps) for(const q of splitPoly(p,path)) next.push(q);
+    ps=next;
+  }
+  ps.sort((a,b)=>{const ca=centroid(a),cb=centroid(b);
+    return Math.round(ca.y/70)-Math.round(cb.y/70)||ca.x-cb.x});
+  return ps;
+}
+
+/* a cut is {pts, mode}. "across" runs to the trim; "panel" stops at the panels it touches */
+function cutPath(c){
+  if (c.mode === "panel" && c.extended) return c.extended;
+  return extendEnds(chaikin(c.pts || c, curve));
+}
+
+function rayExit(poly, origin, dir){
+  const far = {x:origin.x + dir.x*4000, y:origin.y + dir.y*4000};
+  let best = null, bt = 1e9;
+  for (let i=0;i<poly.length;i++){
+    const r = segInt(origin, far, poly[i], poly[(i+1)%poly.length]);
+    if (!r) continue;
+    const t = (r.x-origin.x)*dir.x + (r.y-origin.y)*dir.y;
+    if (t > 0.5 && t < bt){ bt = t; best = {x:r.x, y:r.y}; }
+  }
+  return best;
+}
+
+function panelCut(pts, basePanels){
+  const first = pts[0], last = pts[pts.length-1];
+  const p0 = basePanels.find(p=>pointInPoly(first,p));
+  const p1 = basePanels.find(p=>pointInPoly(last,p));
+  const dS = outward(pts,true), dE = outward(pts,false);
+  const s = p0 ? rayExit(p0, first, dS) : null;
+  const e = p1 ? rayExit(p1, last, dE) : null;
+  const start = s || {x:first.x + dS.x*2400, y:first.y + dS.y*2400};
+  const end   = e || {x:last.x  + dE.x*2400, y:last.y  + dE.y*2400};
+  return [start, ...pts, end];
+}
+
+const dPath = p => "M" + p.map(q=>`${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join("L") + "Z";
+
+/* ---------------- navigation ---------------- */
+function show(screen){
+  state.screen = screen;
+  document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("on", s.id===screen));
+}
+
+function coverHTML(pages){
+  const p = pages[Math.min(1, pages.length-1)] || pages[0];
+  const panels = derivePanels(p.cuts);
+  return panels.slice(0,8).map(pl=>{
+    const xs=pl.map(q=>q.x), ys=pl.map(q=>q.y);
+    const x=Math.min(...xs),y=Math.min(...ys),w=Math.max(...xs)-x,h=Math.max(...ys)-y;
+    const ix=0.9, iy=0.9;
+    return `<div class="p" style="left:${(x/520*100+ix).toFixed(2)}%;top:${(y/800*100+iy).toFixed(2)}%;
+      width:${Math.max(2,w/520*100-ix*2).toFixed(2)}%;height:${Math.max(2,h/800*100-iy*2).toFixed(2)}%"></div>`;
+  }).join("");
+}
+
+let folderFilter = null;
+function renderHome(){
+  $("folderCount").textContent = FOLDERS.length;
+  const list = folderFilter ? BOOKS.filter(b=>b.folder===folderFilter) : BOOKS;
+  $("bookCount").textContent = list.length;
+  $("folders").innerHTML = FOLDERS.map(f=>`
+    <div class="folder" data-f="${f.id}" style="${folderFilter===f.id?"border-color:#B9AC8E;background:rgba(255,255,255,.6)":""}">
+      <div class="fico"></div>
+      <div><b>${f.name}</b><small>${f.note}</small></div></div>`).join("");
+  document.querySelectorAll(".folder").forEach(el=>el.addEventListener("click",()=>{
+    folderFilter = folderFilter===el.dataset.f ? null : el.dataset.f;
+    renderHome();
+  }));
+  $("books").innerHTML = list.map(b=>{
+    const idx = STAGES.findIndex(s=>s.id===b.stage);
+    return `<button class="book" data-book="${b.id}">
+      <div class="cover">${coverHTML(b.pages)}</div>
+      <h3>${b.title}</h3>
+      <small>${b.author} · ${b.note}</small>
+      <div class="dots">${STAGES.map((s,i)=>`<i class="${i<idx?'on':i===idx?'cur':''}"></i>`).join("")}</div>
+    </button>`;
+  }).join("");
+  document.querySelectorAll(".book").forEach(el=>el.addEventListener("click",()=>openBook(el.dataset.book)));
+}
+
+function openBook(id){
+  state.book = BOOKS.find(b=>b.id===id);
+  state.pageIndex = 0;
+  $("bTitle").textContent = state.book.title;
+  $("bMeta").textContent = `${state.book.pages.length} pages · ${state.book.note}`;
+  $("btnContinue").textContent = `Continue · ${STAGES.find(s=>s.id===state.book.stage).name}`;
+  renderBook();
+  show("book");
+}
+
+function renderBook(){
+  const b = state.book;
+  $("pageGrid").innerHTML = b.pages.map((p,i)=>{
+    const idx = STAGES.findIndex(s=>s.id===b.stage);
+    return `<button class="pagecard" data-page="${i}">
+      <div class="sheet">${coverHTML([p])}</div>
+      <div class="foot"><span class="num">${String(i+1).padStart(2,"0")}</span>
+      <span class="dots">${STAGES.map((s,k)=>`<i class="${k<idx?'on':k===idx?'cur':''}"></i>`).join("")}</span></div>
+    </button>`;
+  }).join("");
+  document.querySelectorAll(".pagecard").forEach(el=>el.addEventListener("click",()=>openDesk(Number(el.dataset.page), b.stage)));
+  const add = document.createElement("button");
+  add.className = "pagecard";
+  add.innerHTML = `<div class="sheet" style="display:grid;place-items:center;background:rgba(255,255,255,.25);
+    border:1.5px dashed var(--rule);box-shadow:none"><span style="font-size:26px;color:#A2977C">+</span></div>
+    <div class="foot"><span class="num">New page</span></div>`;
+  add.addEventListener("click", ()=>{
+    b.pages.push({id:b.pages.length+1, cuts:[], beats:[{d:"", lines:[]}],
+      strokes:{pencil:[],ink:[]}, fills:{}, balloons:[]});
+    renderBook(); toast("Page added");
+  });
+  $("pageGrid").appendChild(add);
+}
+
+function openDesk(index, desk){
+  state.pageIndex = index;
+  state.desk = desk || "layout";
+  state.sel = null; state.selBalloon = null;
+  $("pageNum").textContent = String(index+1).padStart(2,"0");
+  $("docket").textContent = "p." + String(index+1).padStart(2,"0");
+  $("crumb").innerHTML = `<strong>${state.book.title}</strong><b>›</b>p. ${String(index+1).padStart(2,"0")}`;
+  show("desk");
+  setDesk(state.desk);
+}
+
+/* ---------------- desk shell ---------------- */
+const DESK_META = {
+  script:{name:"Script", tools:[], title:"Script", kicker:"Script"},
+  layout:{name:"Layout", tools:[["knife","✂","Knife"],["move","✥","Move"],["resize","⤡","Resize"]], title:"Panels", kicker:"Layout"},
+  draw:{name:"Draw", tools:[["pencil","✎","Pencil"],["ink","✒","Ink"],["colour","◐","Colour"],["eraser","⌫","Erase"]], title:"Draw", kicker:"Draw"},
+  caption:{name:"Caption", tools:[["balloon","“","Balloon"],["select","✥","Select"]], title:"Caption", kicker:"Caption"},
+  print:{name:"Print", tools:[], title:"Print prep", kicker:"Print"}
+};
+
+function setDesk(id){
+  const meta = DESK_META[id];
+  if (!meta) return;
+  state.desk = id;
+  const tools = meta.tools;
+  if (tools.length && !tools.some(t=>t[0]===state.tool)) state.tool = tools[0][0];
+  document.body.dataset.desk = id;
+  document.documentElement.style.setProperty("--accent", {
+    script:"var(--ochre)", layout:"var(--teal)", draw:"var(--graphite)",
+    caption:"var(--red)", print:"var(--green)"
+  }[id] || "var(--teal)");
+  $("ctxName").textContent = DESK_META[id].name;
+
+  // rail
+  $("toolrail").innerHTML = DESK_META[id].tools.map(([t,g,n])=>`
+    <button data-tool="${t}" aria-pressed="${state.tool===t}"><span>${g}</span><em>${n}</em></button>`).join("");
+  document.querySelectorAll("#toolrail button").forEach(b=>{
+    b.addEventListener("click",()=>{ state.tool=b.dataset.tool; setDesk(id); });
+  });
+
+  // stage rail
+  $("stagerail").innerHTML = `<div class="docket" id="docket">p.${String(state.pageIndex+1).padStart(2,"0")}</div>` +
+    STAGES.map(s=>`<button class="stop" data-stage="${s.id}" aria-current="${s.id===id}">
+      <span>${s.glyph}</span><b>${s.name}</b><small>${stageNote(s.id)}</small></button>`).join("");
+  document.querySelectorAll("#stagerail .stop").forEach(b=>{
+    b.addEventListener("click",()=>setDesk(b.dataset.stage));
+  });
+  requestAnimationFrame(placeDocket);
+
+  if (id === "draw") state.pass = state.tool === "pencil" ? "pencil" : "ink";
+  renderPage();
+  renderInspector();
+  if (id === "script") renderScript();
+}
+
+function stageNote(id){
+  const p = page();
+  if (id==="script") return p.beats.length ? p.beats.length + " beats" : "empty";
+  if (id==="layout") return (p.cuts.length || 1) + " cuts";
+  if (id==="draw") return (p.strokes.ink.length||0) + " ink";
+  if (id==="caption") return p.balloons.length + " balloons";
+  return "6.6 × 10.2";
+}
+
+function placeDocket(){
+  const active = document.querySelector('#stagerail .stop[aria-current="true"]');
+  const d = document.getElementById("docket");
+  if (!active || !d) return;
+  const rail = $("stagerail").getBoundingClientRect();
+  const b = active.getBoundingClientRect();
+  d.style.left = (b.left - rail.left + b.width/2 - 23) + "px";
+}
+
+/* ---------------- page render ---------------- */
+function renderPage(){
+  const p = page();
+  const panels = derivePanels(p.cuts);
+  p._panels = panels;
+
+  $("gPanels").innerHTML = panels.map((pl,i)=>{
+    const cls = "panel" + (state.desk==="layout" && i===state.sel ? " sel" : "");
+    return `<path class="${cls}" d="${dPath(pl)}" stroke-width="${border}"/>`;
+  }).join("");
+
+  // fills (colour pass)
+  const fills = Object.entries(p.fills||{}).map(([k,c])=>{
+    const pl = panels[Number(k)]; if(!pl) return "";
+    return `<path d="${dPath(pl)}" fill="${c}" stroke="none" opacity=".55"/>`;
+  }).join("");
+
+  // strokes
+  const art = (list, colour, w) => list.map(s=>{
+    const pts = s.pts.map(q=>`${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" ");
+    return `<polyline points="${pts}" fill="none" stroke="${colour}" stroke-width="${s.w||w}"
+      stroke-linecap="round" stroke-linejoin="round" opacity="${colour==="#4E7EA8"?0.55:1}"/>`;
+  }).join("");
+
+  $("gArt").innerHTML = fills
+    + art(p.strokes.pencil, "#4E7EA8", brush)
+    + art(p.strokes.ink, "#1B1C22", brush);
+
+  // bands
+  const ds = p.cuts.map(c=>dPath(cutPath(c)).replace("Z",""));
+  $("bandFill").innerHTML = ds.map(d=>`<path d="${d}" fill="none" stroke="#F7F2E8" stroke-width="${gutter}"/>`).join("");
+  $("bandRing").innerHTML = ds.map(d=>`<path d="${d}" fill="none" stroke="#191A1F" stroke-width="${gutter}"/>`).join("");
+  const morph = document.querySelector("#gutterRing feMorphology");
+  if (morph) morph.setAttribute("radius", border.toFixed(1));
+
+  // numbers
+  $("gNums").innerHTML = panels.map((pl,i)=>{
+    const c = centroid(pl);
+    return `<text class="num" x="${c.x}" y="${c.y+4}" text-anchor="middle">${String(i+1).padStart(2,"0")}</text>`;
+  }).join("");
+
+  // balloons
+  $("gBalloons").innerHTML = p.balloons.map((b,i)=>{
+    const sel = state.selBalloon===i ? " sel" : "";
+    return `<g class="balloon${sel}" data-b="${i}">
+      <ellipse cx="${b.x}" cy="${b.y}" rx="${b.w}" ry="${b.h}"/>
+      <text class="btxt" x="${b.x}" y="${b.y+4}" text-anchor="middle">${escapeHTML(b.text)}</text>
+    </g>`;
+  }).join("");
+  document.querySelectorAll("#gBalloons .balloon").forEach(el=>{
+    el.addEventListener("pointerdown", e=>startBalloonDrag(e, Number(el.dataset.b)));
+    el.addEventListener("dblclick", ()=>nextLine(Number(el.dataset.b)));
+  });
+
+  // print overlay
+  $("gPrint").innerHTML = state.desk==="print" ? `
+    <rect x="6" y="6" width="508" height="788" class="mark" stroke-dasharray="6 5"/>
+    <rect x="16" y="16" width="488" height="768" class="mark" stroke-opacity=".5"/>
+    <path d="M0 22 h12 M0 778 h12 M520 22 h-12 M520 778 h-12" class="mark"/>
+    <path d="M22 0 v12 M498 0 v12 M22 800 v-12 M498 800 v-12" class="mark"/>` : "";
+
+  renderHandles();
+}
+
+function renderHandles(){
+  const p = page(), panels = p._panels || [];
+  if (state.desk !== "layout" || state.tool !== "resize" || state.sel==null || !panels[state.sel]){
+    $("gHandles").innerHTML = ""; return;
+  }
+  const pl = panels[state.sel];
+  const xs=pl.map(q=>q.x), ys=pl.map(q=>q.y);
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const mx=(x0+x1)/2,my=(y0+y1)/2;
+  $("gHandles").innerHTML =
+    `<rect class="handle" data-h="w" data-x="${x0}" data-y="${my}" x="${x0-5}" y="${my-5}" width="10" height="10" rx="2"/>
+     <rect class="handle" data-h="e" data-x="${x1}" data-y="${my}" x="${x1-5}" y="${my-5}" width="10" height="10" rx="2"/>
+     <rect class="handle" data-h="n" data-x="${mx}" data-y="${y0}" x="${mx-5}" y="${y0-5}" width="10" height="10" rx="2"/>
+     <rect class="handle" data-h="s" data-x="${mx}" data-y="${y1}" x="${mx-5}" y="${y1-5}" width="10" height="10" rx="2"/>`;
+}
+
+const escapeHTML = s => String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------------- inspector ---------------- */
+function renderInspector(){
+  const p = page();
+  const desk = state.desk;
+  let html = `<div class="insp-head"><div class="kick">${DESK_META[desk].kicker}</div>
+    <div class="ins-title">${DESK_META[desk].title}</div></div>`;
+
+  if (desk === "script"){
+    html += `<div class="sec"><h4>Page</h4>
+      <div class="rows"><span>Beats</span><b>${p.beats.length}</b></div>
+      <div class="rows"><span>Panels</span><b>${p._panels ? p._panels.length : 0}</b></div>
+      <p class="note">Each beat becomes a panel placeholder when you move to Layout.</p></div>`;
+  }
+  if (desk === "layout"){
+    const sel = state.sel!=null && p._panels ? p._panels[state.sel] : null;
+    html += `<div class="sec"><h4>Page</h4>
+      <div class="rows"><span>Panels</span><b>${p._panels ? p._panels.length : 0}</b></div>
+      <div class="rows"><span>Cuts</span><b>${p.cuts.length}</b></div>
+      <div class="rows"><span>Trim</span><b>6.625 × 10.187 in</b></div></div>`;
+    if (sel){
+      const xs=sel.map(q=>q.x), ys=sel.map(q=>q.y);
+      const w=((Math.max(...xs)-Math.min(...xs))/78.5).toFixed(2);
+      const h=((Math.max(...ys)-Math.min(...ys))/78.5).toFixed(2);
+      html += `<div class="sec"><h4>Panel ${state.sel+1}</h4>
+        <div class="rows"><span>Size</span><b>${w} × ${h} in</b></div>
+        <p class="note">Drag a handle to move the cut under this panel — the rest of the page follows.</p></div>`;
+    }
+  }
+  if (desk === "draw"){
+    html += `<div class="sec"><h4>Pass</h4>
+      <div class="rows"><span>Pencil</span><b>${p.strokes.pencil.length} strokes</b></div>
+      <div class="rows"><span>Ink</span><b>${p.strokes.ink.length} strokes</b></div>
+      <div class="rows"><span>Fills</span><b>${Object.keys(p.fills).length}</b></div>
+      <p class="note">Pencil never prints. Ink is what Print and Export see.</p></div>`;
+  }
+  if (desk === "caption"){
+    html += `<div class="sec"><h4>Balloons</h4>
+      <div class="rows"><span>Placed</span><b>${p.balloons.length}</b></div>
+      <div class="rows"><span>Script lines</span><b>${p.beats.reduce((s,b)=>s+b.lines.length,0)}</b></div>
+      <p class="note">Click a panel to place a balloon; double-click one to pull the next line from the script.</p></div>`;
+  }
+  if (desk === "print"){
+    const checks = [
+      ["Trim 6.625 × 10.187 in", "ok"],
+      ["Bleed 0.125 in on every side", "ok"],
+      ["All panels inside the safe area", p._panels && p._panels.length ? "ok" : "warn"],
+      ["Line art at 600 dpi", p.strokes.ink.length ? "ok" : "warn"],
+      ["Fonts embedded", "ok"],
+      ["Ink coverage under 300%", "ok"]
+    ];
+    html += `<div class="sec"><h4>Preflight</h4>
+      ${checks.map(([t,c])=>`<div class="rows"><span>${t}</span><b style="color:${c==="ok"?"var(--green)":"var(--red)"}">${c==="ok"?"✓":"!"}</b></div>`).join("")}
+      </div>`;
+  }
+  $("inspector").innerHTML = html;
+}
+
+/* ---------------- stage buttons ---------------- */
+document.querySelectorAll("#stagerail .stop").forEach(()=>{});
+
+/* ---------------- layout interactions ---------------- */
+const svg = $("page");
+function toSvg(e){
+  const pt = svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function pointInPoly(pt, poly){
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const a=poly[i],b=poly[j];
+    if(((a.y>pt.y)!==(b.y>pt.y)) && (pt.x < (b.x-a.x)*(pt.y-a.y)/(b.y-a.y)+a.x)) inside=!inside;
+  }
+  return inside;
+}
+function panelAt(pt){
+  const ps = page()._panels || [];
+  for(let i=ps.length-1;i>=0;i--) if(pointInPoly(pt,ps[i])) return i;
+  return -1;
+}
+function nearestCut(pt){
+  let best={d:1e9,cut:null};
+  page().cuts.forEach((c,idx)=>{
+    const path = cutPath(c);
+    for(let i=0;i<path.length-1;i++){
+      const a=path[i],b=path[i+1],abx=b.x-a.x,aby=b.y-a.y,L=abx*abx+aby*aby||1;
+      const t=Math.max(0,Math.min(1,((pt.x-a.x)*abx+(pt.y-a.y)*aby)/L));
+      const d=Math.hypot(pt.x-(a.x+abx*t),pt.y-(a.y+aby*t));
+      if(d<best.d) best={d,cut:idx};
+    }
+  });
+  return best;
+}
+
+function pushHistory(){
+  const p = page();
+  state.history.push({cuts:JSON.parse(JSON.stringify(p.cuts)),
+    strokes:JSON.parse(JSON.stringify(p.strokes)),fills:{...p.fills},
+    balloons:JSON.parse(JSON.stringify(p.balloons))});
+  if(state.history.length>30) state.history.shift();
+}
+
+svg.addEventListener("pointerdown", e=>{
+  if (e.button!==0) return;
+  e.preventDefault(); svg.setPointerCapture(e.pointerId);
+  const p = toSvg(e);
+
+  if (state.desk==="layout"){
+    const hEl = e.target.closest && e.target.closest(".handle");
+    if (hEl && state.sel!=null){
+      pushHistory();
+      const ci = nearestCut({x:+hEl.dataset.x,y:+hEl.dataset.y}).cut;
+      state.drag = {kind:"handle", axis:(hEl.dataset.h==="w"||hEl.dataset.h==="e")?"x":"y",
+        start:p, cut:ci, raw:JSON.parse(JSON.stringify(page().cuts[ci].pts))};
+      return;
+    }
+    const hit = panelAt(p);
+    if (state.tool==="knife"){
+      state.sel = hit>=0?hit:null;
+      state.drawing = [p]; $("trail").setAttribute("points",""); 
+      return;
+    }
+    if (state.tool==="move" && hit>=0){
+      state.sel = hit; renderPage(); renderInspector(); return;
+    }
+    if (state.tool==="resize" && hit>=0){
+      state.sel = hit; renderPage(); renderInspector(); return;
+    }
+    state.sel = null; renderPage(); renderInspector(); return;
+  }
+
+  if (state.desk==="draw"){
+    if (state.tool==="colour"){
+      const hit = panelAt(p);
+      if (hit>=0){
+        pushHistory();
+        const cols = ["#C4462E","#2F6F7E","#C08A2E","#5E5F68","#7E9A6B"];
+        page().fills[hit] = cols[Object.keys(page().fills).length % cols.length];
+        renderPage(); renderInspector();
+      }
+      return;
+    }
+    if (state.tool==="eraser"){
+      const pass = state.tool==="pencil" ? "pencil" : "ink";
+      const st = page().strokes;
+      if (st.pencil.length || st.ink.length){
+        pushHistory();
+        if (state.pass==="pencil" && st.pencil.length) st.pencil.pop();
+        else if (st.ink.length) st.ink.pop();
+        else st.pencil.pop();
+        renderPage(); renderInspector();
+      }
+      return;
+    }
+    pushHistory();
+    const pass = state.tool==="pencil" ? "pencil" : "ink";
+    const stroke = {pts:[p], w:brush};
+    page().strokes[pass].push(stroke);
+    state.drawing = stroke;
+    renderPage();
+    return;
+  }
+
+  if (state.desk==="caption"){
+    const hit = panelAt(p);
+    if (hit>=0){
+      pushHistory();
+      const lines = page().beats.flatMap(b=>b.lines);
+      const text = lines[page().balloons.length % Math.max(1,lines.length)] || "…";
+      page().balloons.push({x:p.x, y:p.y, w:64, h:26, text:text.slice(0,22)});
+      state.selBalloon = page().balloons.length-1;
+      renderPage(); renderInspector();
+    }
+  }
+});
+
+svg.addEventListener("pointermove", e=>{
+  const p = toSvg(e);
+  if (state.drag && state.drag.kind==="handle"){
+    const d = state.drag;
+    const delta = d.axis==="x" ? p.x-d.start.x : p.y-d.start.y;
+    const c = page().cuts[d.cut];
+    if (c){
+      c.pts = d.raw.map(q => d.axis==="x" ? {x:q.x+delta,y:q.y} : {x:q.x,y:q.y+delta});
+      c.extended = null;
+    }
+    renderPage();
+    return;
+  }
+  if (state.drawing){
+    if (state.desk==="draw"){
+      const s = state.drawing;
+      if (dist(s.pts[s.pts.length-1], p) > 1.6) s.pts.push(p);
+      renderPage();
+      return;
+    }
+    const arr = state.drawing;
+    if (dist(arr[arr.length-1],p)>1.6) arr.push(p);
+    $("trail").setAttribute("points", arr.map(q=>`${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "));
+  }
+});
+
+svg.addEventListener("pointerup", ()=>{
+  if (state.drag){ state.drag=null; renderInspector(); return; }
+  if (!state.drawing) return;
+
+  if (state.desk==="draw"){
+    state.drawing = null;
+    renderPage(); renderInspector();
+    return;
+  }
+
+  const arr = state.drawing; state.drawing=null;
+  $("trail").setAttribute("points","");
+  if (arr.length<2) return;
+  const pts = [arr[0]];
+  for (const q of arr.slice(1)) if (dist(pts[pts.length-1],q)>3) pts.push(q);
+  if (pts.length<2) return;
+  if (Math.hypot(pts[pts.length-1].x-pts[0].x, pts[pts.length-1].y-pts[0].y)<8) return;
+  pushHistory();
+  const base = derivePanels(page().cuts);
+  const cut = {mode: state.cutMode, pts};
+  if (state.cutMode === "panel") cut.extended = panelCut(pts, base);
+  page().cuts.push(cut);
+  renderPage(); renderInspector(); setDesk(state.desk);
+  toast((state.cutMode === "panel" ? "Panel cut — " : "Cut made — ") + (page()._panels||[]).length + " panels");
+});
+
+svg.addEventListener("pointercancel", ()=>{ state.drawing=null; state.drag=null; $("trail").setAttribute("points",""); });
+
+/* balloons */
+function startBalloonDrag(e, i){
+  if (state.desk!=="caption") return;
+  e.stopPropagation();
+  state.selBalloon = i;
+  const p = toSvg(e), b = page().balloons[i];
+  state.drag = {kind:"balloon", i, start:p, ox:b.x, oy:b.y};
+  renderPage();
+}
+document.addEventListener("pointermove", e=>{
+  if (!state.drag || state.drag.kind!=="balloon") return;
+  const p = toSvg(e), b = page().balloons[state.drag.i];
+  b.x = state.drag.ox + (p.x-state.drag.start.x);
+  b.y = state.drag.oy + (p.y-state.drag.start.y);
+  renderPage();
+});
+document.addEventListener("pointerup", ()=>{ if(state.drag && state.drag.kind==="balloon"){ state.drag=null; renderInspector(); } });
+
+function nextLine(i){
+  const b = page().balloons[i]; if(!b) return;
+  const lines = page().beats.flatMap(x=>x.lines);
+  const cur = lines.indexOf(b.text);
+  b.text = lines[(cur+1) % Math.max(1,lines.length)] || b.text;
+  renderPage();
+}
+
+/* ---------------- script ---------------- */
+function renderScript(){
+  $("beats").innerHTML = page().beats.map((b,i)=>`
+    <div class="beat" data-beat="${i}">
+      <button class="del" data-del="${i}">×</button>
+      <h4>Beat ${i+1}</h4>
+      <input value="${escapeHTML(b.d)}" data-desc="${i}" placeholder="What happens in this panel">
+      <textarea data-lines="${i}" placeholder="One line per row — MAYA: You came back.">${escapeHTML(b.lines.join("\n"))}</textarea>
+    </div>`).join("") + `<button class="btn" id="addBeat" style="align-self:flex-start">+ Add beat</button>`;
+
+  document.querySelectorAll("[data-desc]").forEach(el=>el.addEventListener("input",()=>{
+    page().beats[Number(el.dataset.desc)].d = el.value;
+  }));
+  document.querySelectorAll("[data-lines]").forEach(el=>el.addEventListener("input",()=>{
+    page().beats[Number(el.dataset.lines)].lines = el.value.split("\n").filter(Boolean);
+    renderInspector();
+  }));
+  document.querySelectorAll("[data-del]").forEach(el=>el.addEventListener("click",()=>{
+    pushHistory(); page().beats.splice(Number(el.dataset.del),1);
+    renderScript(); renderInspector();
+  }));
+  const add = $("addBeat");
+  if (add) add.addEventListener("click",()=>{
+    pushHistory(); page().beats.push({d:"", lines:[]});
+    renderScript(); renderInspector();
+  });
+}
+
+/* ---------------- presets, undo ---------------- */
+document.getElementById("btnUndo").addEventListener("click", ()=>{
+  const h = state.history.pop();
+  if (!h) return;
+  const p = page();
+  p.cuts = h.cuts; p.strokes = h.strokes; p.fills = h.fills; p.balloons = h.balloons;
+  renderPage(); renderInspector(); renderScript();
+});
+
+$("gutter").addEventListener("input", e=>{ gutter=+e.target.value; $("gv").textContent=gutter; renderPage(); });
+$("border").addEventListener("input", e=>{ border=+e.target.value; $("bv").textContent=border.toFixed(1).replace(".0",""); renderPage(); });
+$("curve").addEventListener("input", e=>{ curve=+e.target.value; $("cv").textContent=curve; renderPage(); });
+$("brush").addEventListener("input", e=>{ brush=+e.target.value; $("brv").textContent=brush; });
+
+document.querySelectorAll("#cutMode button").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    state.cutMode = b.dataset.mode;
+    document.querySelectorAll("#cutMode button").forEach(x =>
+      x.setAttribute("aria-pressed", String(x.dataset.mode === state.cutMode)));
+    toast(state.cutMode === "panel"
+      ? "Cuts stop at the panels they touch"
+      : "Cuts run to the page edges");
+  });
+});
+
+/* ---------------- export ---------------- */
+$("btnExport").addEventListener("click", ()=>$("exportModal").classList.add("on"));
+$("btnExportBook").addEventListener("click", ()=>$("exportModal").classList.add("on"));
+$("closeExport").addEventListener("click", ()=>$("exportModal").classList.remove("on"));
+$("exportModal").addEventListener("click", e=>{ if(e.target.id==="exportModal") $("exportModal").classList.remove("on"); });
+
+document.querySelectorAll("#exportCards .card").forEach(card=>{
+  card.addEventListener("click", ()=>{
+    const kind = card.dataset.kind;
+    $("buildPane").classList.add("on");
+    $("buildBar").style.width = "0%";
+    const files = {
+      print:["inkflo-long-way-home-print.pdf  ·  24 pp  ·  86 MB","preflight.txt","printer-handoff.md"],
+      web:["inkflo-long-way-home-site.zip  ·  18 MB","data/comic.json","theme/theme.css","README-PUBLISH.md"],
+      cbz:["The Long Way Home.cbz  ·  64 MB","ComicInfo.xml"],
+      motion:["motion.mp4  ·  42 MB","motion.html","cues.json — opens in 2Dope"]
+    }[kind] || [];
+    $("buildFiles").textContent = "";
+    let pct = 0;
+    const t = setInterval(()=>{
+      pct = Math.min(100, pct + 12 + Math.random()*14);
+      $("buildBar").style.width = pct + "%";
+      $("buildFiles").innerHTML = files.map(f=>`<div>${f}</div>`).join("");
+      if (pct >= 100){
+        clearInterval(t);
+        toast("Kit ready — drop it on Netlify, or push to GitHub Pages");
+      }
+    }, 190);
+  });
+});
+
+/* ---------------- toast ---------------- */
+let toastTimer;
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove("on"), 2200);
+}
+
+/* ---------------- wiring ---------------- */
+$("bookBack").addEventListener("click", ()=>{ show("home"); renderHome(); });
+$("deskBack").addEventListener("click", ()=>{ renderBook(); show("book"); });
+$("btnContinue").addEventListener("click", ()=>openDesk(0, state.book.stage));
+$("prevPage").addEventListener("click", ()=>openDesk(Math.max(0,state.pageIndex-1), state.desk));
+$("nextPage").addEventListener("click", ()=>openDesk(Math.min(state.book.pages.length-1,state.pageIndex+1), state.desk));
+$("newBook").addEventListener("click", ()=>{
+  const id = "b" + (BOOKS.length+1);
+  BOOKS.push({id, title:"Untitled book", author:"Maya Okonkwo", folder:null,
+    note:"New · 6 pages", stage:"script", pages:bookPages(6)});
+  renderHome(); toast("New book — start with the script");
+});
+
+/* sequence preview */
+let seqTimer = null, seqIndex = 0;
+$("btnPreview").addEventListener("click", ()=>{
+  seqIndex = 0; $("seqModal").classList.add("on"); stepSeq();
+});
+function stepSeq(){
+  const p = state.book.pages[seqIndex];
+  $("seqPage").innerHTML = `<div class="seqSheet">${coverHTML([p])}</div>`;
+  $("seqHint").textContent = `${String(seqIndex+1).padStart(2,"0")} / ${String(state.book.pages.length).padStart(2,"0")} · click to close`;
+  seqIndex = (seqIndex+1) % state.book.pages.length;
+  seqTimer = setTimeout(stepSeq, 950);
+}
+$("seqModal").addEventListener("click", ()=>{
+  clearTimeout(seqTimer); $("seqModal").classList.remove("on");
+});
+document.addEventListener("keydown", e=>{
+  if (state.screen!=="desk") return;
+  if (e.key==="1") setDesk("script");
+  if (e.key==="2") setDesk("layout");
+  if (e.key==="3") setDesk("draw");
+  if (e.key==="4") setDesk("caption");
+  if (e.key==="5") setDesk("print");
+  if ((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="z"){ e.preventDefault(); $("btnUndo").click(); }
+  if (e.key==="Escape"){ $("exportModal").classList.remove("on"); }
+});
+window.addEventListener("resize", placeDocket);
+
+renderHome();
+
+/* hash routes: #book/b1 · #desk/b1/2/layout */
+function route(){
+  const parts = location.hash.replace("#","").split("?")[0].split("/");
+  if (parts[0]==="book" && parts[1]){ openBook(parts[1]); }
+  else if (parts[0]==="desk" && parts[1]){
+    openBook(parts[1]);
+    const pi = Math.max(0, Math.min(state.book.pages.length-1, (Number(parts[2])||1)-1));
+    openDesk(pi, parts[3] || state.book.stage);
+  }
+}
+route();
+window.addEventListener("hashchange", route);
+if (location.search.includes("export")) setTimeout(()=>$("exportModal").classList.add("on"), 250);
+if (location.search.includes("preview")) setTimeout(()=>$("btnPreview").click(), 250);
+if (location.search.includes("panelcut")) setTimeout(()=>{
+  state.cutMode = "panel";
+  document.querySelectorAll("#cutMode button").forEach(x =>
+    x.setAttribute("aria-pressed", String(x.dataset.mode === "panel")));
+  const q = page();
+  const pts = [{x:40,y:96},{x:132,y:152},{x:226,y:206}];
+  const base = derivePanels(q.cuts);
+  const cut = {mode:"panel", pts};
+  cut.extended = panelCut(pts, base);
+  q.cuts.push(cut);
+  setDesk("layout");
+  $("ctxName").textContent = "Layout · " + derivePanels(q.cuts).length + "p";
+}, 200);
+</script>
+</body>
+</html>

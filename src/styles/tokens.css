@@ -1,0 +1,133 @@
+/*
+ * Design tokens (PLAN §4). Every UI colour comes from here; nothing in app.css hard-codes one.
+ * Light = the printer's desk. Dark = the "Night desk": warm graphite, ink-on-black, not inverted.
+ * The page itself always stays paper (render/page.ts) so art is judged on its real colour.
+ *
+ * Theme: <html data-theme="light|dark"> forces one; no attribute follows the system.
+ */
+:root {
+  color-scheme: light;
+  /* palette (PLAN §4) */
+  --paper: #ede6d8;
+  --paper-lift: #f7f2e8;
+  --ink: #191a1f;
+  --ink-soft: #4a4c55;
+  --rule: #c9bfa9;
+  --spot-red: #b8432f;
+  --spot-ochre: #a8762a;
+  --spot-teal: #2f6f7e;
+  --graphite: #5e5f68;
+  --spot-green: #3e6b3a;
+
+  /* semantic */
+  --bg: #ede6d8;
+  --surface: #f5efe3;
+  --surface-2: #f1ebdf;
+  --surface-float: rgba(247, 242, 232, 0.94);
+  --field: #fffdf7;
+  --text: #191a1f;
+  --text-soft: #4a4c55;
+  --text-faint: #8a8069;
+  --line: #c9bfa9;
+  --line-2: #e2d8c4;
+  --btn: rgba(255, 255, 255, 0.55);
+  --btn-hover: #b9ac8e;
+  --primary: #191a1f;
+  --primary-text: #f7f2e8;
+  --pressed: #191a1f;
+  --pressed-text: #f7f2e8;
+  --dot: #d8ccb3;
+  --dot-wip: #c5a361;
+  --focus: #2f5fa8;
+  --shadow: 0 1px 2px rgba(25, 26, 31, 0.1), 0 18px 40px -22px rgba(25, 26, 31, 0.55);
+
+  /* the board around the page */
+  --board: #e6dfd0;
+  --board-grid: rgba(25, 26, 31, 0.09);
+  --board-vignette: rgba(120, 104, 74, 0.18);
+  --page-shadow: rgba(25, 26, 31, 0.28);
+
+  /* desk accents */
+  --acc-script: #a8762a;
+  --acc-layout: #2f6f7e;
+  --acc-draw: #5e5f68;
+  --acc-caption: #b8432f;
+  --acc-print: #3e6b3a;
+
+  --ui: Inter, 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* the same dark values twice: once for "follow the system", once for "dark chosen" */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #19181b;
+    --surface: #222125;
+    --surface-2: #1e1d21;
+    --surface-float: rgba(34, 33, 37, 0.94);
+    --field: #2b2a2f;
+    --text: #ece6da;
+    --text-soft: #b4ad9f;
+    --text-faint: #8f887b;
+    --line: #3b3935;
+    --line-2: #2f2e2b;
+    --btn: rgba(255, 255, 255, 0.05);
+    --btn-hover: #6a655b;
+    --primary: #ece6da;
+    --primary-text: #19181b;
+    --pressed: #ece6da;
+    --pressed-text: #19181b;
+    --dot: #4a4741;
+    --dot-wip: #b08b45;
+    --focus: #7fa7e8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+    --board: #141316;
+    --board-grid: rgba(236, 230, 218, 0.07);
+    --board-vignette: rgba(0, 0, 0, 0.45);
+    --page-shadow: rgba(0, 0, 0, 0.6);
+    --acc-script: #d6a14e;
+    --acc-layout: #5bb0c2;
+    --acc-draw: #b3b4bd;
+    --acc-caption: #e6765f;
+    --acc-print: #79b86f;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #19181b;
+  --surface: #222125;
+  --surface-2: #1e1d21;
+  --surface-float: rgba(34, 33, 37, 0.94);
+  --field: #2b2a2f;
+  --text: #ece6da;
+  --text-soft: #b4ad9f;
+  --text-faint: #8f887b;
+  --line: #3b3935;
+  --line-2: #2f2e2b;
+  --btn: rgba(255, 255, 255, 0.05);
+  --btn-hover: #6a655b;
+  --primary: #ece6da;
+  --primary-text: #19181b;
+  --pressed: #ece6da;
+  --pressed-text: #19181b;
+  --dot: #4a4741;
+  --dot-wip: #b08b45;
+  --focus: #7fa7e8;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -22px rgba(0, 0, 0, 0.9);
+  --board: #141316;
+  --board-grid: rgba(236, 230, 218, 0.07);
+  --board-vignette: rgba(0, 0, 0, 0.45);
+  --page-shadow: rgba(0, 0, 0, 0.6);
+  --acc-script: #d6a14e;
+  --acc-layout: #5bb0c2;
+  --acc-draw: #b3b4bd;
+  --acc-caption: #e6765f;
+  --acc-print: #79b86f;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 var(--ui);
+}
