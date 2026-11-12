@@ -24,6 +24,12 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('retains coloured strokes and rotated captions in a saved book', () => {
+    const f = file();
+    ink(f).strokes[0]!.color = '#3f6c9e';
+    f.book.pages[0]!.balloons[0]!.rotation = -20;
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+  });
   it('round-trips a book exactly', () => {
     const f = file();
     expect(parseBookFile(stringifyBookFile(f))).toEqual(f);

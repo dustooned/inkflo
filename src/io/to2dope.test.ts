@@ -113,8 +113,10 @@ describe('live captions for 2Dope', () => {
     const cap = { ...defaultCaption(300, 200, 'speech'), text: 'Too late.' } as unknown as Record<string, unknown> & { size: string };
     p[0]!.balloons[0]!.caption = twoDopeCaption(cap, 20, H);
     p[0]!.balloons[0]!.art = { line: null, fill: null };
+    p[0]!.balloons[0]!.rotation = { degrees: 25, pivot: [300, 200] };
     const project = motionProject('Live', p, { width: W, height: H });
     expect(project.schema).toBe(CAPTION_SCHEMA);
+    expect(project.comps.page1!.layers[0]!.transform).toMatchObject({ anchor: { value: [300, 200] }, position: { value: [300, 200] }, rotation: { value: 25 } });
     const { validateProjectFile } = (await import(/* @vite-ignore */ TWO_DOPE_SCHEMA)) as { validateProjectFile: (v: unknown) => { comps: Record<string, { layers: { caption?: unknown }[] }> } };
     const parsed = validateProjectFile(JSON.parse(JSON.stringify(project)));
     expect(parsed.comps.page1!.layers.some((l) => l.caption)).toBe(true);

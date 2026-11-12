@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { area, cutsForCount, derivePanels, evenOut, makeCut, nearestCut, panelAt, presetCuts, shiftCut } from './carve';
+import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, presetCuts, shiftCut } from './carve';
+import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
 
 const W = 6.625;
@@ -87,6 +88,51 @@ describe('carving', () => {
     expect(bottom).toHaveLength(1);
     expect(bottom[0]!.bbox.x1 - bottom[0]!.bbox.x0).toBeCloseTo(W, 2);
     expect(total(p)).toBeCloseTo(PAGE_AREA, 2);
+  });
+
+  it('stops Panel only at the first gutter even when the pointer enters another panel', () => {
+    const p = page();
+    cut(p, [{ x: 0, y: 4 }, { x: W, y: 4 }]);
+    const knife = cut(p, [{ x: 3, y: 1 }, { x: 3, y: 8 }], 'panel', true)!;
+    expect(knife.extended!.at(-1)!.y).toBeCloseTo(4);
+    expect(derivePanels(p)).toHaveLength(3);
+    expect(inGutter(p, { x: 3, y: 2 })).toBe(true);
+    expect(inGutter(p, { x: 3, y: 6 })).toBe(false);
+  });
+
+  it('hides old gutter tails and unused cuts in the renderer, hit tests, and fill mask', () => {
+    const p = page();
+    cut(p, [{ x: 0, y: 4 }, { x: W, y: 4 }]);
+    const tail = [{ x: 2, y: 0 }, { x: 2.2, y: 3 }, { x: 2.4, y: 7 }];
+    const orphan = [{ x: 4, y: 6 }, { x: 4, y: 8 }];
+    p.cuts.push({ id: 'old-tail', mode: 'panel', pts: tail, extended: tail }, { id: 'old-orphan', mode: 'panel', pts: orphan, extended: orphan });
+    const paths = gutterPaths(p);
+    expect(paths).toHaveLength(2);
+    expect(paths.find(({ cut }) => cut.id === 'old-tail')!.points.at(-1)!.y).toBeCloseTo(4);
+    expect(nearestCut(p, { x: 4, y: 7 })!.d).toBeGreaterThan(2);
+    const dpi = 20;
+    const width = Math.ceil(W * dpi);
+    const mask = gutterMask(p, dpi, width, Math.ceil(H * dpi));
+    expect(mask[2 * dpi * width + 2.15 * dpi]).toBe(1);
+    expect(mask[6 * dpi * width + 2.35 * dpi]).toBe(0);
+    expect(mask[7 * dpi * width + 4 * dpi]).toBe(0);
+    expect(derivePanels(p)).toHaveLength(3);
+    expect(total(p)).toBeCloseTo(PAGE_AREA, 3);
+    expect(canEvenOut(p)).toBe(false);
+    expect(evenOut(p)).toBe(p.cuts);
+  });
+
+  it('splits separate interior spans without connecting them outside the panel', () => {
+    const p = page();
+    p.layout = { gutter: 0.2, border: 0.03, curve: 0 };
+    expect(cut(p, [{ x: 0, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }, { x: -1, y: 2 },
+      { x: -1, y: 4 }, { x: 2, y: 4 }, { x: 2, y: 5 }, { x: 0, y: 5 }])).not.toBeNull();
+    expect(gutterPaths(p)).toHaveLength(2);
+    const panels = derivePanels(p);
+    expect(panels).toHaveLength(3);
+    for (const panel of panels) expect(simple(panel.pts)).toBe(true);
+    expect(total(p)).toBeCloseTo(PAGE_AREA, 3);
+    expect(inGutter(p, { x: 0.05, y: 3 })).toBe(false);
   });
 
   it('the same stroke in across mode splits both panels', () => {

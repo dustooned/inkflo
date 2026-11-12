@@ -68,10 +68,12 @@ export interface DeskMode {
   down?(p: Pt, e: PointerEvent): void;
   move?(p: Pt, e: PointerEvent): void;
   up?(p: Pt, e: PointerEvent): void;
+  modifierTouch?(active: boolean): void;
   hover?(p: Pt | null): void;
   overlay?(g: CanvasRenderingContext2D, s: number): void;
   live?(): Partial<Record<Pass, HTMLCanvasElement>>;
   placement?(): { id: string; image: PlacedImage } | undefined;
+  layoutPreview?(): { page: Page; panels: Panel[] } | undefined;
   types?(): Partial<Record<LayerType, boolean>>;
   skipBalloon?(): string | undefined;
   key?(e: KeyboardEvent): boolean;
@@ -197,7 +199,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const p = prefs();
     drawBackdrop(g, { width: r.width, height: r.height, ox, oy, s, pageW: page.widthIn, pageH: page.heightIn }, { ...colors, kind: p.backdrop, strength: p.gridOpacity, vignette: p.vignette });
     g.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
-    renderPage(g, page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    const layout = mode.layoutPreview?.();
+    renderPage(g, layout?.page ?? page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
     if (composition) drawComposition(g, p.guide, page.widthIn, page.heightIn, s);
     mode.overlay?.(g, s);
     stageEl.dataset.cursor = mode.cursor?.() ?? '';
@@ -206,6 +209,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   // ---- input
   let panning: { x: number; y: number; px: number; py: number } | null = null;
   let spaceDown = false;
+  let primaryPointer: number | null = null;
+  let modifierPointer: number | null = null;
   // capture can fail for a pointer the browser no longer tracks; drawing still works without it
   const capture = (id: number) => {
     try {
@@ -216,19 +221,31 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   };
   stageEl.addEventListener('pointerdown', (e) => {
     if (mode.pane) return;
+    if (primaryPointer !== null) {
+      if (mode.modifierTouch && !panning && e.pointerType === 'touch' && modifierPointer === null) {
+        e.preventDefault();
+        modifierPointer = e.pointerId;
+        capture(e.pointerId);
+        mode.modifierTouch(true);
+      }
+      return;
+    }
     closePopover();
     if (e.button === 1 || (e.button === 0 && spaceDown)) {
+      primaryPointer = e.pointerId;
       panning = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
       capture(e.pointerId);
       return;
     }
     if (e.button !== 0) return;
+    primaryPointer = e.pointerId;
     e.preventDefault();
     capture(e.pointerId);
     mode.down?.(ctx.toPage(e), e);
     ctx.request();
   });
   stageEl.addEventListener('pointermove', (e) => {
+    if (primaryPointer !== null && e.pointerId !== primaryPointer) return;
     if (panning) {
       view.panX = panning.px + e.clientX - panning.x;
       view.panY = panning.py + e.clientY - panning.y;
@@ -236,7 +253,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       return;
     }
     const p = ctx.toPage(e);
-    if (e.buttons & 1) {
+    if (e.pointerId === primaryPointer && (e.buttons & 1)) {
       // coalesced events give the pen's full rate
       const events = e.getCoalescedEvents?.() ?? [e];
       for (const ev of events.length ? events : [e]) mode.move?.(ctx.toPage(ev), ev);
@@ -244,11 +261,22 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ctx.request();
   });
   const end = (e: PointerEvent) => {
+    if (e.pointerId === modifierPointer) {
+      modifierPointer = null;
+      mode.modifierTouch?.(false);
+      return;
+    }
+    if (e.pointerId !== primaryPointer) return;
+    primaryPointer = null;
     if (panning) {
       panning = null;
       return;
     }
     mode.up?.(ctx.toPage(e), e);
+    if (modifierPointer !== null) {
+      modifierPointer = null;
+      mode.modifierTouch?.(false);
+    }
     ctx.request();
   };
   stageEl.addEventListener('pointerup', end);
@@ -551,6 +579,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       e.preventDefault();
       return;
     }
+    if (primaryPointer !== null) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const n = Number(e.key);
     if (n >= 1 && n <= 5) {

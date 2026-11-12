@@ -9,6 +9,7 @@ import { alongPath, balloonOutline, balloonProfile, balloonShapes, fitCaption, i
 import { freshState, hasBold, runsOf, stripMarkup } from '../engine/lettering/markup';
 import { captionValue, type CaptionSpec } from '../engine/lettering/spec';
 import { letterFont, letterFontReady } from './fonts';
+import { rotateAround } from '../geom/resizebox';
 
 /** Type size in points (house size × the balloon's own scale). */
 export function sizePt(c: CaptionSpec, sheet: LetterSheet = DEFAULT_SHEET): number {
@@ -336,7 +337,25 @@ function drawOnPath(g: CanvasRenderingContext2D, c: CaptionSpec, lay: CaptionLay
 /** Draw a page's letter at `s` px per inch. */
 export function paintLetter(g: CanvasRenderingContext2D, l: Letter, sheet: LetterSheet, s: number, pageWIn: number, pageHIn: number): void {
   const k = s / PT;
-  paintCaption(g, toPx(l.cap, k), sizePt(l.cap, sheet) * k, pageWIn * s, pageHIn * s);
+  const c = toPx(l.cap, k);
+  if (!l.rotation) { paintCaption(g, c, sizePt(c, sheet) * k, pageWIn * s, pageHIn * s); return; }
+  g.save();
+  g.translate(c.x, c.y);
+  g.rotate(l.rotation * Math.PI / 180);
+  g.translate(-c.x, -c.y);
+  paintCaption(g, captionWithLocalTails(c, l.rotation), sizePt(c, sheet) * k, pageWIn * s, pageHIn * s);
+  g.restore();
+}
+
+/** Counter-rotate tail tips and bend controls before rotating the whole lettering layer. */
+export function captionWithLocalTails(c: CaptionSpec, rotation = 0): CaptionSpec {
+  if (!rotation) return c;
+  return { ...c, tails: c.tails.map((tail) => {
+    const p = rotateAround(tail, c, -rotation);
+    if (!tail.bend) return { ...tail, ...p };
+    const bend = rotateAround({ x: tail.bend[0], y: tail.bend[1] }, c, -rotation);
+    return { ...tail, ...p, bend: [bend.x, bend.y] };
+  }) };
 }
 
 /** A letter's outline in points (hit testing, safe area, selection boxes). */
@@ -344,7 +363,7 @@ export function letterOutline(l: Letter, sheet: LetterSheet, pageWIn: number, pa
   // laid out at 4 px per pt, then scaled back, so text is measured at a realistic size
   const k = 4;
   const { shapes } = captionBalloon(toPx(l.cap, k), sizePt(l.cap, sheet) * k, pageWIn * PT * k, pageHIn * PT * k);
-  return shapes.outline.map((p) => ({ x: p.x / k, y: p.y / k }));
+  return shapes.outline.map((p) => rotateAround({ x: p.x / k, y: p.y / k }, l.cap, l.rotation ?? 0));
 }
 
 export function letterBox(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): { x0: number; y0: number; x1: number; y1: number } {

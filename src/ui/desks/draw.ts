@@ -1,12 +1,13 @@
 import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
-import { DEFAULT_BRUSH, entry, type BrushEntry } from '../../draw/brushes';
+import { DEFAULT_BRUSH, entry, PASS_STYLE, type BrushEntry } from '../../draw/brushes';
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
 import { smoothStroke } from '../../engine/brush/smoothing';
-import { pressureProfile, recognizeShape, sampleProfile, shapeOutline, SHAPE_NAMES, type Shape } from '../../engine/core/quickshape';
+import { constrainShape, editShape, pressureProfile, recognizeShape, sampleProfile, shapeOutline, SHAPE_NAMES, type Shape } from '../../engine/core/quickshape';
 import { brushPicker, brushStudio } from '../brushui';
 import { brushControl, clampToolValue } from '../brushcontrols';
 import { imagePlacement } from '../imageplacement';
+import { vectorSelection } from '../vectorselection';
 import { popover } from '../popover';
 import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, type FillPaint, type LinePass } from '../../draw/replay';
 import { FILL_THRESHOLD, FillKit, flatColours, openEnds } from '../../draw/fillkit';
@@ -25,6 +26,7 @@ import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { confirmDialog, h, seg, slider, toast } from '../dom';
 import { layersPanel, type LayerScope, type LayerTarget, type LayerView } from '../layerspanel';
 import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
+import { renderPage } from '../../render/page';
 import { brushWidth, eraseStrokes, hitStroke, pointAt, reshape, scaleWidth, simplify, smooth, type VectorErase } from '../../draw/vectoredit';
 
 type SizedTool = 'pencil' | 'ink' | 'eraser';
@@ -37,6 +39,7 @@ interface InkPrefs {
   brush: Record<LinePass, string>;
   sizes: Record<string, number>;
   opacity: Record<string, number>;
+  color: string;
   /** Live stabilizer (pulled string) per tool, 0-1; missing = the brush's own. */
   stabilize: Partial<Record<LinePass, number>>;
   /** Post-correction after the pen lifts, 0-1. */
@@ -51,6 +54,7 @@ const INK_DEFAULTS: InkPrefs = {
   brush: { ...DEFAULT_BRUSH },
   sizes: {},
   opacity: {},
+  color: PASS_STYLE.ink.color,
   stabilize: {},
   correct: 0.3,
   quickShape: true,
@@ -67,6 +71,7 @@ function readInk(): InkPrefs {
       brush: { ...INK_DEFAULTS.brush, ...v.brush },
       sizes: v.sizes && typeof v.sizes === 'object' ? v.sizes : {},
       opacity: v.opacity && typeof v.opacity === 'object' ? v.opacity : {},
+      color: typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : INK_DEFAULTS.color,
       ruler: { ...structuredClone(DEFAULT_RULER), ...v.ruler },
       focus: { ...INK_DEFAULTS.focus, ...v.focus },
       speed: { ...INK_DEFAULTS.speed, ...v.speed },
@@ -157,7 +162,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     last: StrokePoint;
     /** Raw points as the pen moved (QuickShape reads these). */
     raw: StrokePoint[];
-    shape: Shape | null;
+    holdAt: Pt | null;
+    shape: { original: Shape; grab: Pt; at: Pt; pressure: number[]; shift: boolean } | null;
     /** Vector pen: no dabs; the outline is drawn in the overlay until it lands. */
     vector: boolean;
   } | null = null;
@@ -168,6 +174,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   /** The selected vector line (Edit lines). */
   let vsel: { layerId: string; index: number } | null = null;
   let holdTimer = 0;
+  let constrainTouch = false;
+  let pickingColor = false;
   /** A ruler handle being dragged. */
   let dragHandle: ((p: Pt) => void) | null = null;
   /** Speed lines: the drag that sets their angle. */
@@ -365,8 +373,31 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   function sample(p: Pt, e: PointerEvent): StrokePoint {
-    const pressure = e.pointerType === 'mouse' ? 1 : e.pressure > 0 ? e.pressure : 0.5;
-    return { x: p.x * dpi, y: p.y * dpi, pressure, tiltX: e.tiltX || 0, tiltY: e.tiltY || 0, t: performance.now() - t0 };
+    const pressure = e.pointerType === 'pen' ? e.pressure : e.pointerType === 'mouse' ? 1 : e.pressure || 0.5;
+    return { x: p.x * dpi, y: p.y * dpi, pressure, tiltX: e.tiltX || 0, tiltY: e.tiltY || 0, t: Math.max(0, e.timeStamp - t0) };
+  }
+
+  function colourAt(p: Pt): string | null {
+    if (p.x < 0 || p.y < 0 || p.x >= page.widthIn || p.y >= page.heightIn) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d')!;
+    const s = Math.min(dpi, 150);
+    g.translate(-Math.floor(p.x * s), -Math.floor(p.y * s));
+    renderPage(g, page, art, { scale: s, panels: ctx.panels(), types: { pencil: state.showPencil }, balloons: false });
+    const data = g.getImageData(0, 0, 1, 1).data;
+    return '#' + Array.from(data.slice(0, 3), (n) => n.toString(16).padStart(2, '0')).join('');
+  }
+
+  function colourControls(fill: boolean): HTMLElement[] {
+    const name = fill ? 'Fill colour' : 'Ink colour';
+    const input = h('input', { type: 'color', value: fill ? state.color : ink.color, 'aria-label': name });
+    input.addEventListener('input', () => {
+      if (fill) state.color = input.value;
+      else { ink.color = input.value; saveInk(); }
+    });
+    return [h('label', { class: 'mini' }, name, input),
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(pickingColor), onclick: () => { pickingColor = !pickingColor; ctx.chrome(); ctx.request(); } }, pickingColor ? 'Tap the canvas' : 'Eyedropper')];
   }
   let t0 = 0;
   let createdForStroke = false;
@@ -391,21 +422,23 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const brushId = erase ? DEFAULT_BRUSH[pass] : studio.brushId(currentBrush(tool as LinePass));
     const w = sizeIn(tool);
     const opacity = toolOpacity(tool);
+    const color = !erase && pass === 'ink' && ink.color !== PASS_STYLE.ink.color ? ink.color : undefined;
     const seed = (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100);
-    const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase, opacity), seed, points: [] };
+    const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase, opacity, color), seed, points: [] };
     if (!vector) {
       const canvas = planeCanvas(art, layer.id, browserPlaneOps);
       engine.resize(art.width, art.height);
       engine.bind(canvas);
       engine.begin(record, null);
     }
-    const stroke: Stroke = { pts: [], pressure: [], w, brushId, seed, ...(opacity < 1 ? { opacity } : {}), ...(erase ? { erase: true } : {}), ...(!erase && pass !== passForType(layer.type) ? { pass } : {}) };
-    t0 = performance.now();
+    const stroke: Stroke = { pts: [], pressure: [], w, brushId, seed, ...(color ? { color } : {}), ...(opacity < 1 ? { opacity } : {}), ...(erase ? { erase: true } : {}), ...(!erase && pass !== passForType(layer.type) ? { pass } : {}) };
+    t0 = e.timeStamp;
+    const b = record.brush;
     live = {
       layerId: layer.id,
       record,
       walker: new DabWalker(record.brush, seed),
-      smoother: new Smoother(erase ? 0 : stabilizeOf(tool as LinePass), true, ctx.scale() / dpi),
+      smoother: erase ? new Smoother(0, false) : new Smoother(stabilizeOf(tool as LinePass), b.pulledString, ctx.scale() / dpi, { stabilize: b.stabilize, motion: b.motionFilter, expression: b.expression }),
       assist: new AssistLock<StrokePoint>(
         snap ? { ...ink.ruler, kind: 'parallel', angle: snap.angle } : erase ? { ...ink.ruler, kind: 'off' } : rulerInPx(),
         { x: p.x * dpi, y: p.y * dpi },
@@ -414,6 +447,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       stroke,
       last: { x: 0, y: 0, pressure: 1, tiltX: 0, tiltY: 0, t: 0 },
       raw: [],
+      holdAt: null,
       shape: null,
       vector,
     };
@@ -440,8 +474,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (live.vector) ctx.request();
     // QuickShape: hold still at the end of a freehand stroke
     if (ink.quickShape && !live.assist.active && !live.stroke.erase) {
-      clearTimeout(holdTimer);
-      holdTimer = window.setTimeout(snapShape, QUICKSHAPE_MS);
+      const hold = live.holdAt;
+      if (!hold || Math.hypot(sp.x - hold.x, sp.y - hold.y) * ctx.scale() / dpi >= 2) {
+        live.holdAt = sp;
+        clearTimeout(holdTimer);
+        holdTimer = window.setTimeout(snapShape, QUICKSHAPE_MS);
+      }
     }
   }
 
@@ -464,13 +502,24 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (!live || live.shape || live.raw.length < 4) return;
     const shape = recognizeShape(live.raw);
     if (!shape) return;
-    const profile = pressureProfile(shape, live.raw);
-    const outline = shapeOutline(shape, Math.max(1, dpi / 150));
-    const t0p = live.raw[0]!.t;
-    live.shape = shape;
-    live.record.points = outline.map((q, i) => ({ x: q.x, y: q.y, pressure: sampleProfile(profile, i / Math.max(1, outline.length - 1)), tiltX: 0, tiltY: 0, t: t0p + i * 4 }));
+    const grab = live.raw.at(-1)!;
+    live.shape = { original: shape, grab, at: grab, pressure: pressureProfile(shape, live.raw), shift: false };
+    adjustShape(grab, false);
+    toast(`${SHAPE_NAMES[shape.kind]} · drag to adjust · Shift or second finger to constrain`, 1800);
+  }
+
+  function adjustShape(p: Pt, shift: boolean): void {
+    if (!live?.shape) return;
+    const shape = live.shape;
+    const { original, grab, pressure } = shape;
+    shape.at = p;
+    shape.shift = shift;
+    const constrain = shift || constrainTouch;
+    const edited = editShape(original, grab, p, constrain);
+    const outline = shapeOutline(constrain ? constrainShape(edited) : edited, Math.max(1, dpi / 150));
+    const start = live.raw[0]!.t;
+    live.record.points = outline.map((q, i) => ({ ...q, pressure: sampleProfile(pressure, i / Math.max(1, outline.length - 1)), tiltX: 0, tiltY: 0, t: start + i * 4 }));
     repaintLive();
-    toast(`${SHAPE_NAMES[shape.kind]}: lift to keep it, or undo for the freehand line.`, 1600);
   }
 
   /** The layer's stroke list, looked up by id (structure edits replace layer objects). */
@@ -1049,6 +1098,14 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     return page.groups.filter((g) => g.visible && !g.locked).flatMap((g) => g.layers.filter((l) => l.vector && l.visible && !l.locked)).reverse();
   }
 
+  const selection = vectorSelection(ctx, (p) => {
+    const layers = editableVectors();
+    if (target === 'layer') return layers;
+    const id = groupAt(page, ctx.panels(), p).id;
+    const inContext = (l: Layer) => findLayer(page, l.id)?.group.id === id;
+    return [...layers.filter(inContext), ...layers.filter((l) => !inContext(l))];
+  }, editVector);
+
   function hitVector(p: Pt): { layer: Layer; index: number; at: number } | null {
     const reach = 8 / ctx.scale();
     const panels = ctx.panels();
@@ -1288,17 +1345,24 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         { id: 'leftover', label: 'Fill leftovers', glyph: '⁘' },
         { id: 'flats', label: 'Auto flats', glyph: '▦' },
       ] },
+      { id: 'selection', label: 'Select lines', glyph: '⬚', key: 'm', group: 'edit', variants: [
+        { id: 'rectangle', label: 'Rectangle', glyph: '⬚' },
+        { id: 'freehand', label: 'Freehand', glyph: '◌' },
+      ] },
       { id: 'image', label: 'Position image', glyph: '▧', group: 'image' },
     ],
     tool: 'ink',
-    cursor: () => (mode.tool === 'image' ? 'move' : mode.tool === 'fill' || mode.tool === 'lines' || mode.tool === 'vedit' ? 'cross' : 'brush'),
+    cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' ? 'move' : ['fill', 'lines', 'vedit', 'selection'].includes(mode.tool) ? 'cross' : 'brush'),
     ctx(bar) {
       const bt = brushTool();
+      const hasInkColor = bt !== null && currentBrush(bt).pass === 'ink';
+      if (!hasInkColor && mode.tool !== 'fill') pickingColor = false;
       if (bt) {
         const cur = currentBrush(bt);
         const pick = h('button', { class: 'btn brushbtn', type: 'button', title: 'Choose a brush', 'aria-haspopup': 'dialog' }, cur.name, ' ▾');
         pick.addEventListener('click', () => brushPicker(pick, studio, bt, cur.id, (e) => pickBrush(bt, e)));
         bar.append(pick, h('button', { class: 'icon', type: 'button', title: 'Brush Studio: edit this brush', 'aria-label': 'Edit brush', onclick: () => brushStudio(studio, cur, (e) => pickBrush(bt, e)) }, '✎'));
+        if (hasInkColor) bar.append(...colourControls(false));
       }
       showBrushControls(sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null));
       if (bt) {
@@ -1359,13 +1423,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'fill') {
         const swatches = h('div', { class: 'swatches', role: 'group', 'aria-label': 'Fill colour' },
           PALETTE.map((c) => h('button', { type: 'button', 'aria-label': c, 'aria-pressed': String(c === state.color), style: `background:${c}`, onclick: () => { state.color = c; ctx.chrome(); } })));
-        const pick = h('input', { type: 'color', value: state.color, 'aria-label': 'Custom colour' });
-        pick.addEventListener('input', () => (state.color = pick.value));
         const fv = fillVariant();
         bar.append(
           seg<FillVariant>([{ id: 'bucket', label: 'Bucket' }, { id: 'drag', label: 'Drag' }, { id: 'lasso', label: 'Enclose' }, { id: 'leftover', label: 'Leftovers' }, { id: 'flats', label: 'Flats' }], fv, (v) => ctx.setVariant('fill', v), 'Fill kind'),
         );
-        if (fv !== 'flats') bar.append(swatches, h('label', { class: 'mini' }, pick));
+        if (fv !== 'flats') bar.append(...colourControls(true), swatches);
+        else pickingColor = false;
         bar.append(
           slider('Close gaps', 0, 0.08, 0.005, state.gap, (v) => `${Math.round(v * dpi)}px`, (v) => (state.gap = v), () => ctx.request()),
           slider('Threshold', 1, 254, 1, state.threshold, String, (v) => (state.threshold = v), () => ctx.request()),
@@ -1382,6 +1445,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       updateLayerButton(contextLayers);
       bar.prepend(contextLayers, h('button', { class: 'btn', type: 'button', onclick: images.open }, 'Place image'));
       if (mode.tool === 'image') bar.append(h('span', { class: 'hint' }, 'Drag the image to move it. Drag its corner to resize.'));
+      if (mode.tool === 'selection') bar.append(
+        seg([{ id: 'rectangle', label: 'Rectangle' }, { id: 'freehand', label: 'Freehand' }], variantOf(mode, 'selection'), (x) => ctx.setVariant('selection', x), 'Selection shape'),
+        ...selection.controls(),
+      );
       refreshPicker();
       const show = h('input', { type: 'checkbox', checked: state.showPencil });
       show.addEventListener('change', () => { state.showPencil = show.checked; ctx.request(); });
@@ -1401,7 +1468,17 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       );
     },
     down(p, e) {
+      if (pickingColor) {
+        const color = colourAt(p);
+        if (!color) return;
+        if (mode.tool === 'fill') state.color = color;
+        else { ink.color = color; saveInk(); }
+        pickingColor = false;
+        ctx.chrome();
+        return;
+      }
       if (mode.tool === 'image') { images.start(p); return; }
+      if (mode.tool === 'selection') { selection.down(p, e, variantOf(mode, 'selection') === 'freehand'); return; }
       if (target === 'auto') {
         lastCanvasGroupId = groupAt(page, ctx.panels(), p).id;
         contextGroupId = null;
@@ -1433,6 +1510,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     move(p, e) {
       hover = p;
       if (mode.tool === 'image') { images.move(p); return; }
+      if (mode.tool === 'selection') { selection.move(p, e); return; }
       if (pour || sweep) {
         fillMove(p, e);
         return;
@@ -1452,10 +1530,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (!live) return;
-      addPoint(sample(p, e));
+      if (live.shape) adjustShape({ x: p.x * dpi, y: p.y * dpi }, e.shiftKey);
+      else addPoint(sample(p, e));
     },
     up(p, e) {
       if (mode.tool === 'image') { if (e.type !== 'pointercancel') images.move(p); images.end(e.type === 'pointercancel'); return; }
+      if (mode.tool === 'selection') { selection.up(p, e); return; }
       if (pour || sweep) {
         fillUp();
         return;
@@ -1482,11 +1562,16 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       hover = p;
       if (mode.tool === 'fill' && p) checkHover(p);
     },
-    live: () => (live ? { [live.layerId]: engine.displaySource() } : {}),
+    modifierTouch(active) {
+      constrainTouch = active;
+      if (live?.shape) adjustShape(live.shape.at, live.shape.shift);
+    },
+    live: () => mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
     placement: () => mode.tool === 'image' ? images.preview() : undefined,
     types: () => ({ pencil: state.showPencil }),
     overlay(g, s) {
       if (mode.tool === 'image') { images.overlay(g, s); return; }
+      if (mode.tool === 'selection') { selection.overlay(g, s); return; }
       drawRuler(g, s);
       fillOverlay(g, s);
       vectorOverlay(g, s);
@@ -1502,7 +1587,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         g.restore();
       }
       const t = sizeTool();
-      if (!hover || !t) return;
+      if (!hover || !t || pickingColor) return;
       const r = Math.max(2, (sizeIn(t) * s) / 2);
       g.save();
       g.lineWidth = 1;
@@ -1518,7 +1603,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
+      if (pickingColor && e.key === 'Escape') { pickingColor = false; ctx.chrome(); ctx.request(); return true; }
       if (mode.tool === 'image' && e.key === 'Escape') { images.end(true); ctx.request(); return true; }
+      if (mode.tool === 'selection' && e.key === 'Escape') { selection.cancel(true); return true; }
       if (e.key === 'Escape' && (vdrag || vbrush || verase)) { cancelVector(); return true; }
       if (mode.tool === 'fill' && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
         state.check = !state.check;
@@ -1547,6 +1634,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     dispose() {
       clearTimeout(holdTimer);
+      selection.dispose();
       if (live) endStroke();
     },
   };

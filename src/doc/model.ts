@@ -67,6 +67,8 @@ export const PT = 72;
 export interface Letter {
   id: string;
   cap: CaptionSpec;
+  /** Clockwise degrees around the caption centre. Tail tips stay in page coordinates. */
+  rotation?: number;
   /** The script line this lettering comes from: beat id and line index. */
   src?: { beat: string; line: number; lineId?: string };
   /** Starter lettering may be repositioned or removed automatically until refined. */
@@ -122,6 +124,8 @@ export interface Stroke {
   erase?: boolean;
   /** Tool opacity multiplier, independent of the brush preset. */
   opacity?: number;
+  /** Optional brush colour. Older strokes use the ink or pencil default. */
+  color?: string;
   /** Clipped to the panel its first point is in, as drawn (schema 1 data; no longer drawn). */
   clip?: boolean;
   /** Drawn with this pass's colour (pencil blue / ink black); default: the layer type's. */

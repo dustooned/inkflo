@@ -35,7 +35,7 @@ export function passForType(type: LayerType): LinePass {
 }
 
 /** The engine brush and colour a stroke draws with at `dpi` (shared by live drawing and replay). */
-export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: number, erase = false, opacity = 1): Pick<StrokeRecord, 'brush' | 'color' | 'tool'> {
+export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: number, erase = false, opacity = 1, color = PASS_STYLE[pass].color): Pick<StrokeRecord, 'brush' | 'color' | 'tool'> {
   const k = dpi / REF_DPI;
   const brush = brushFor(brushId, pass);
   brush.size = w * dpi;
@@ -43,7 +43,7 @@ export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: num
   brush.taperEnd *= k;
   if (!erase) brush.opacity *= PASS_STYLE[pass].opacity;
   brush.opacity *= opacity;
-  return { brush, color: PASS_STYLE[pass].color, tool: erase ? 'eraser' : 'brush' };
+  return { brush, color, tool: erase ? 'eraser' : 'brush' };
 }
 
 /** One stored stroke as the engine's record, scaled to `dpi`. Pure, so it is testable without a canvas. */
@@ -58,7 +58,7 @@ export function toRecord(stroke: Stroke, pass: LinePass, dpi: number, id = 'repl
     t: i * SAMPLE_MS * k, // same speed in page units at every dpi
     ...(stroke.pw ? { w: stroke.pw[i] ?? 1 } : {}),
   }));
-  const style = strokeStyle(stroke.brushId, stroke.w, stroke.pass ?? pass, dpi, stroke.erase, stroke.opacity);
+  const style = strokeStyle(stroke.brushId, stroke.w, stroke.pass ?? pass, dpi, stroke.erase, stroke.opacity, stroke.color);
   if (stroke.flat?.[0]) style.brush.taperStart = 0;
   if (stroke.flat?.[1]) style.brush.taperEnd = 0;
   return { id, ...style, seed: stroke.seed, points };

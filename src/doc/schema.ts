@@ -159,6 +159,11 @@ function stroke(v: unknown, path: string): Stroke {
   const s: Stroke = { pts: pts(o.pts, `${path}.pts`), w: pos(o.w, `${path}.w`), brushId: str(o.brushId, `${path}.brushId`), seed: num(o.seed, `${path}.seed`) };
   if (!s.pts.length) fail(`${path}.pts`, 'needs at least one point');
   if (o.erase === true) s.erase = true;
+  if (o.color !== undefined) {
+    const color = str(o.color, `${path}.color`);
+    if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
+    s.color = color;
+  }
   if (o.opacity !== undefined) {
     const opacity = num(o.opacity, `${path}.opacity`);
     if (opacity <= 0 || opacity > 1) fail(`${path}.opacity`, 'should be greater than 0 and no more than 1');
@@ -376,6 +381,11 @@ function letterOf(v: unknown, path: string): Letter {
     fail(`${path}.cap`, `is not a readable caption (${e instanceof Error ? e.message : String(e)})`);
   }
   const l: Letter = { id: str(o.id, `${path}.id`), cap };
+  if (o.rotation !== undefined) {
+    const rotation = num(o.rotation, `${path}.rotation`);
+    if (rotation < -180 || rotation > 180) fail(`${path}.rotation`, 'should be from -180 to 180 degrees');
+    if (rotation) l.rotation = rotation;
+  }
   const src = source(o, path);
   if (src) l.src = src;
   if (o.speaker !== undefined) l.speaker = str(o.speaker, `${path}.speaker`);

@@ -1,5 +1,5 @@
 import type { Page, Pt } from '../doc/model';
-import { cutPath, layoutOf } from './carve';
+import { gutterPaths, layoutOf } from './carve';
 
 /**
  * The gutter area of a page: a band `gutter` wide along every cut (the same band the renderer
@@ -19,8 +19,7 @@ function segDist(p: Pt, a: Pt, b: Pt): number {
 export function inGutter(page: Page, p: Pt): boolean {
   const half = layoutOf(page).gutter / 2;
   if (half <= 0 || p.x < 0 || p.y < 0 || p.x > page.widthIn || p.y > page.heightIn) return false;
-  for (const c of page.cuts) {
-    const path = cutPath(c, page);
+  for (const { points: path } of gutterPaths(page)) {
     for (let i = 1; i < path.length; i++) if (segDist(p, path[i - 1]!, path[i]!) <= half) return true;
   }
   return false;
@@ -31,8 +30,7 @@ export function gutterMask(page: Page, dpi: number, w: number, h: number): Uint8
   const out = new Uint8Array(w * h);
   const half = layoutOf(page).gutter / 2;
   if (half <= 0) return out;
-  for (const c of page.cuts) {
-    const path = cutPath(c, page);
+  for (const { points: path } of gutterPaths(page)) {
     for (let i = 1; i < path.length; i++) {
       const a = path[i - 1]!;
       const b = path[i]!;

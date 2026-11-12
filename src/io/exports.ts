@@ -3,11 +3,11 @@ import { PT, sheetOf, type Book, type Layer, type LayerGroup, type LayerType, ty
 import { centreIn } from '../geom/lettering';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
-import { cutPath, derivePanels, layoutOf, panelAt } from '../geom/carve';
+import { derivePanels, layoutOf, panelAt } from '../geom/carve';
 import { groupPanels } from '../geom/groups';
-import { paintLetter, sizePt, toPx } from '../render/caption';
+import { captionWithLocalTails, paintLetter, sizePt, toPx } from '../render/caption';
 import { lettersReady } from '../render/fonts';
-import { COLORS, drawGutters, drawLayerBitmap, inGutterBands, panelPath, renderPage } from '../render/page';
+import { COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, panelPath, renderPage } from '../render/page';
 import { assetKey } from './capture';
 import { encodePng, makeCanvas } from './canvasops';
 import { DEFAULT_MOTION, motionProject, twoDopeCaption, type LayerArt, type MotionOptions, type MotionPage } from './to2dope';
@@ -62,17 +62,14 @@ function isBlankCanvas(c: HTMLCanvasElement): boolean {
 /** Erase the gutter bands (inside the current clip). */
 function cutBands(g: CanvasRenderingContext2D, page: Page, s: number): void {
   const { gutter } = layoutOf(page);
+  if (!gutter) return;
   g.save();
   g.globalCompositeOperation = 'destination-out';
-  g.lineCap = 'butt';
+  g.lineCap = 'round';
   g.lineJoin = 'round';
   g.lineWidth = gutter * s;
   g.strokeStyle = '#000';
-  for (const c of page.cuts) {
-    const p = new Path2D();
-    cutPath(c, page).forEach((q, i) => (i ? p.lineTo(q.x * s, q.y * s) : p.moveTo(q.x * s, q.y * s)));
-    g.stroke(p);
-  }
+  g.stroke(gutterBandPath(page, s));
   g.restore();
 }
 
@@ -180,7 +177,9 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
         if (opt.captions === 'live') {
           // a live 2Dope caption, in the comp's pixels: editable and animatable in 2Dope
           const k = s / PT;
-          balloons.push({ ...base, art: { line: null, fill: null }, caption: twoDopeCaption(toPx(b.cap, k) as unknown as Record<string, unknown> & { size: string }, sizePt(b.cap, sheet) * k, H) });
+          const pixels = captionWithLocalTails(toPx(b.cap, k), b.rotation);
+          const caption = twoDopeCaption(pixels as unknown as Record<string, unknown> & { size: string }, sizePt(b.cap, sheet) * k, H);
+          balloons.push({ ...base, art: { line: null, fill: null }, caption, ...(b.rotation ? { rotation: { degrees: b.rotation, pivot: [pixels.x, pixels.y] } } : {}) });
         } else {
           paintLetter(clear(line), b, sheet, s, page.widthIn, page.heightIn);
           balloons.push({ ...base, art: { line: await store(line), fill: null } });

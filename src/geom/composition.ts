@@ -1,5 +1,5 @@
 import type { Book, ModularGrid, Page, Pt } from '../doc/model';
-import { cutPath, derivePanels, makeCut, newCutId, panelAt, type Panel } from './carve';
+import { derivePanels, gutterPaths, makeCut, newCutId, panelAt, type Panel } from './carve';
 import { printOf, readerSpreads } from './printkinds';
 
 export const GUIDES = [
@@ -106,8 +106,7 @@ export function centreCrossing(page: Page): boolean {
   const y = page.heightIn / 2;
   const tolerance = Math.min(x, y) * 0.04;
   const near: { angle: number; id: string }[] = [];
-  for (const c of page.cuts) {
-    const path = cutPath(c, page);
+  for (const { cut, points: path } of gutterPaths(page)) {
     for (let i = 1; i < path.length; i++) {
       const a = path[i - 1]!;
       const b = path[i]!;
@@ -118,8 +117,8 @@ export function centreCrossing(page: Page): boolean {
       const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / length));
       if (Math.hypot(x - a.x - t * dx, y - a.y - t * dy) > tolerance) continue;
       const angle = Math.atan2(dy, dx);
-      if (near.some((n) => n.id !== c.id && Math.abs(Math.sin(n.angle - angle)) > 0.7)) return true;
-      near.push({ angle, id: c.id });
+      if (near.some((n) => n.id !== cut.id && Math.abs(Math.sin(n.angle - angle)) > 0.7)) return true;
+      near.push({ angle, id: cut.id });
     }
   }
   return false;

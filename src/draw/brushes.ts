@@ -58,11 +58,15 @@ function inkBase(name: string): BrushSettings {
   };
 }
 
+const G_PEN: BrushEntry = {
+    id: 'g-pen', name: 'G-pen', group: 'ink', pass: 'ink', w: 0.022, note: 'Opaque ink with a responsive light touch and short pointed ends',
+    settings: { ...inkBase('G-pen'), sizeDyn: dyn('pressure', 0.04, 1.08), taperStart: 6, taperEnd: 12, taperShape: 0.08, smoothing: 0.18 },
+};
+const ORIGINAL_G_PEN: BrushEntry = { ...G_PEN, settings: { ...inkBase('G-pen'), sizeDyn: dyn('pressure', 0.06, 0.55), taperStart: 30, taperEnd: 40, taperShape: 0.3 } };
+const ORIGINAL_G_PEN_SNAPSHOT = snapshotId(ORIGINAL_G_PEN);
+
 export const LIBRARY: BrushEntry[] = [
-  {
-    id: 'g-pen', name: 'G-pen', group: 'ink', pass: 'ink', w: 0.022, note: 'The default inker: strong pressure swell, crisp ends',
-    settings: { ...inkBase('G-pen'), sizeDyn: dyn('pressure', 0.06, 0.55), taperStart: 30, taperEnd: 40, taperShape: 0.3 },
-  },
+  G_PEN,
   {
     id: 'maru-pen', name: 'Maru pen', group: 'ink', pass: 'ink', w: 0.012, note: 'Technical lines, little swell, no taper',
     settings: { ...inkBase('Maru pen'), sizeDyn: dyn('pressure', 0.45, 1), taperStart: 0, taperEnd: 0, hardness: 1 },
@@ -150,6 +154,7 @@ export function knownBrush(id: string): boolean {
 export function brushFor(id: string, pass: LinePass): BrushSettings {
   const snap = bookBrushes[id];
   if (snap) return cloneBrush(snap);
+  if (id === ORIGINAL_G_PEN.id || id === ORIGINAL_G_PEN_SNAPSHOT) return cloneBrush(ORIGINAL_G_PEN.settings);
   const e = entry(id) ?? entry(DEFAULT_BRUSH[pass])!;
   return cloneBrush(e.settings);
 }

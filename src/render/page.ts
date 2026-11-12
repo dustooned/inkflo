@@ -1,6 +1,6 @@
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
-import { cutPath, derivePanels, layoutOf, panelAt, type Panel } from '../geom/carve';
+import { derivePanels, gutterPaths, layoutOf, panelAt, type Panel } from '../geom/carve';
 import { paintLetter } from './caption';
 
 /**
@@ -51,18 +51,18 @@ export interface RenderOptions {
  */
 export function inGutterBands(g: CanvasRenderingContext2D, page: Page, s: number, W: number, H: number, paint: (c: CanvasRenderingContext2D) => void): void {
   const gutter = layoutOf(page).gutter;
-  if (!gutter) return;
+  if (!gutter || !gutterPaths(page).length) return;
   const off = document.createElement('canvas');
   off.width = Math.max(1, Math.ceil(W));
   off.height = Math.max(1, Math.ceil(H));
   const o = off.getContext('2d')!;
   paint(o);
   o.globalCompositeOperation = 'destination-in';
-  o.lineCap = 'butt';
+  o.lineCap = 'round';
   o.lineJoin = 'round';
   o.lineWidth = gutter * s;
   o.strokeStyle = '#000';
-  for (const c of page.cuts) o.stroke(openPath(cutPath(c, page), s));
+  o.stroke(gutterBandPath(page, s));
   g.drawImage(off, 0, 0);
 }
 
@@ -73,26 +73,28 @@ export function panelPath(pts: readonly { x: number; y: number }[], s: number): 
   return p;
 }
 
-function openPath(pts: readonly { x: number; y: number }[], s: number): Path2D {
+export function gutterBandPath(page: Page, s: number): Path2D {
   const p = new Path2D();
-  pts.forEach((q, i) => (i ? p.lineTo(q.x * s, q.y * s) : p.moveTo(q.x * s, q.y * s)));
+  for (const { points } of gutterPaths(page)) {
+    points.forEach((q, i) => (i ? p.lineTo(q.x * s, q.y * s) : p.moveTo(q.x * s, q.y * s)));
+  }
   return p;
 }
 
 /** Gutter bands and trim border, on top of the panel art. */
 export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean; whitePaper?: boolean } = {}): void {
   const { gutter, border } = layoutOf(page);
-  const paths = page.cuts.map((c) => openPath(cutPath(c, page), s));
+  const path = gutterBandPath(page, s);
   g.save();
   g.beginPath();
   g.rect(0, 0, page.widthIn * s, page.heightIn * s);
   g.clip();
-  g.lineCap = 'butt';
+  g.lineCap = 'round';
   g.lineJoin = 'round';
   g.strokeStyle = COLORS.ink;
   if (gutter || border) {
     g.lineWidth = (gutter + border * 2) * s;
-    for (const p of paths) g.stroke(p);
+    g.stroke(path);
   }
   if (opts.paper === false) {
     g.globalCompositeOperation = 'destination-out';
@@ -100,7 +102,7 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   } else g.strokeStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
   if (gutter) {
     g.lineWidth = gutter * s;
-    for (const p of paths) g.stroke(p);
+    g.stroke(path);
   }
   g.globalCompositeOperation = 'source-over';
   g.strokeStyle = COLORS.ink;

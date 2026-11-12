@@ -7,12 +7,13 @@ import { panelAt } from '../../geom/carve';
 import { assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
 import { applyFix, letterPt, readabilityAll, safeFixes, snapScale, targetsFor, type FixId, type Level } from '../../geom/readability';
 import { hitLetter, letterBox, letterOutline } from '../../render/caption';
+import { boxHandles, resizeBox, rotateAround, type Bounds, type ResizeSide } from '../../geom/resizebox';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { askText, h, seg, toast } from '../dom';
 import { openDialogue } from '../dialogue';
 import { openStyleSheet } from '../stylesheet';
 
-type Grab = { kind: 'body' } | { kind: 'tail'; index: number } | { kind: 'size' };
+type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
 
 const KINDS: { id: BalloonStyle; label: string; glyph: string; key: string }[] = [
   { id: 'speech', label: 'Speech balloon', glyph: '💬', key: 'b' },
@@ -29,7 +30,7 @@ const LEVEL_COLOR: Record<Level, string> = { good: '#3E6B3A', risk: '#C98A1B', b
 const LEVEL_TEXT: Record<Level, string> = { good: 'Reads well', risk: 'At risk', bad: 'Won’t read well' };
 
 /** Session settings for the desk. */
-const state = { keepReadable: true };
+const state = { keepReadable: true, fromCenter: true };
 
 /**
  * Caption: letter the page from the script. Click inside a panel to letter its next line, or
@@ -53,13 +54,17 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   const sel = () => page.balloons.find((b) => b.id === selId) ?? null;
   const outline = (l: Letter) => letterOutline(l, sheet(), W, H);
   const box = (l: Letter) => letterBox(l, sheet(), W, H);
+  const localBox = (l: Letter) => box({ ...l, rotation: undefined });
+  const frame = (b: Bounds, k: number): Bounds => ({ x0: b.x0 - 5 / k, y0: b.y0 - 5 / k, x1: b.x1 + 5 / k, y1: b.y1 + 5 / k });
+  const rotationAt = (b: Bounds, pixelsPerPoint: number): Pt => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / pixelsPerPoint });
+  const onPage = (p: Pt, l: Letter): Pt => rotateAround(p, l.cap, l.rotation ?? 0);
 
   /** One undo step over lettering and (linked) script lines. */
   const commit = (label: string, beforeLetters: Letter[], beforeBeats: string) => {
     const previous = new Map(beforeLetters.map((l) => [l.id, l]));
     for (const l of page.balloons) {
       const original = previous.get(l.id);
-      if (l.generated && original && JSON.stringify(l.cap) !== JSON.stringify(original.cap)) delete l.generated;
+      if (l.generated && original && (l.rotation !== original.rotation || JSON.stringify(l.cap) !== JSON.stringify(original.cap))) delete l.generated;
       syncScriptFromLetter(page, l);
     }
     const was = { balloons: structuredClone(beforeLetters), beats: JSON.parse(beforeBeats) as typeof page.beats };
@@ -183,12 +188,14 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       } }, 'Save as preset'));
   }
 
-  function handles(l: Letter): { tails: Pt[]; size: Pt } {
-    const b = box(l);
-    return { tails: l.cap.style === 'sfx' ? [] : l.cap.tails.map((t) => ({ x: t.x, y: t.y })), size: { x: b.x1, y: b.y1 } };
+  function cancelDrag(): void {
+    if (drag) { page.balloons = drag.before; studio.drawing = false; }
+    drag = null;
+    loop = null;
+    downAt = null;
   }
 
-  let lastDown = 0;
+  let lastTap: { at: number; id: string; point: Pt } | null = null;
   const mode: DeskMode = {
     id: 'caption',
     tools: [
@@ -203,6 +210,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const left = page.beats.reduce((n, beat) => n + beat.lines.filter((raw, i) => parseLine(raw).text && !beat.dialogue?.[i]?.omit && dialoguePanel(page, panels, beat, i) && !letterForLine(page, beat, i)).length, 0);
       const keep = h('input', { type: 'checkbox', checked: state.keepReadable });
       keep.addEventListener('change', () => (state.keepReadable = keep.checked));
+      const center = h('input', { type: 'checkbox', checked: state.fromCenter });
+      center.addEventListener('change', () => { state.fromCenter = center.checked; ctx.request(); });
       const find = h('select', { 'aria-label': 'Find a balloon', class: 'balloon-jump' },
         h('option', { value: '' }, 'Page checks'),
         page.balloons.map((l, index) => {
@@ -215,10 +224,11 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         h('button', { class: 'btn', type: 'button', onclick: openScript }, 'Script dialogue'),
         h('button', { class: 'btn primary', type: 'button', disabled: !left, onclick: () => edit('Place script lettering', () => reconcileDialogue(book, page, panels, true)) }, 'Place from script' + (left ? ' · ' + left : '')),
         ...(page.balloons.length ? [find] : []),
+        ...(sel() ? [h('label', { class: 'mini', title: 'Resize around the centre. Turn off to anchor the opposite edge.' }, center, 'Resize from center')] : []),
         h('label', { class: 'mini', title: 'Sizes snap to readable steps and never drop below the style sheet minimum' }, keep, 'Keep readable'),
         h('button', { class: 'btn', type: 'button', onclick: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) }, 'Style sheet…'),
         h('span', { class: 'hint' }, mode.tool === 'select'
-          ? 'Drag to move · drag a dot to aim a tail · corner to resize · double-click for the next line'
+          ? 'Drag body to move · edges to resize · top stem to rotate · yellow dots aim tails'
           : `Click in a panel to letter its next line, or draw a loop for a balloon of that shape · ${left} line${left === 1 ? '' : 's'} left`),
       );
     },
@@ -231,33 +241,44 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     },
     down(p, e) {
       const now = performance.now();
-      const dbl = now - lastDown < 320;
-      lastDown = now;
       const q = toPt(p);
       const s = sel();
       if (s) {
-        const hd = handles(s);
-        const r = 8 / (ctx.scale() / PT);
-        const near = (a: Pt) => Math.abs(a.x - q.x) <= r && Math.abs(a.y - q.y) <= r;
-        const ti = hd.tails.findIndex(near);
-        const start = () => ({ start: q, orig: structuredClone(s.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false });
+        const r = (e.pointerType === 'touch' ? 14 : 9) / (ctx.scale() / PT);
+        const distance = (a: Pt) => Math.hypot(a.x - q.x, a.y - q.y);
+        const ti = s.cap.style === 'sfx' ? -1 : s.cap.tails.findIndex((tail) => distance(tail) <= r);
+        const start = () => {
+          studio.drawing = true;
+          return { start: q, orig: structuredClone(s.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
+        };
         if (ti >= 0) {
           drag = { id: s.id, grab: { kind: 'tail', index: ti }, ...start() };
           return;
         }
-        if (near(hd.size)) {
-          drag = { id: s.id, grab: { kind: 'size' }, ...start() };
+        const bounds = localBox(s);
+        const frameBounds = frame(bounds, ctx.scale() / PT);
+        if (distance(onPage(rotationAt(frameBounds, ctx.scale() / PT), s)) <= r) {
+          drag = { id: s.id, grab: { kind: 'rotate', angle: s.rotation ?? 0 }, ...start() };
+          return;
+        }
+        const hdDistance = (handle: { at: Pt }) => distance(onPage(handle.at, s));
+        const handle = boxHandles(frameBounds).sort((a, b) => hdDistance(a) - hdDistance(b))[0]!;
+        if (hdDistance(handle) <= r) {
+          const natural = localBox({ ...s, cap: { ...s.cap, minSize: undefined } });
+          drag = { id: s.id, grab: { kind: 'size', side: handle, box: bounds, minimum: { x: Math.max(2, natural.x1 - natural.x0), y: Math.max(2, natural.y1 - natural.y0) } }, ...start() };
           return;
         }
       }
       const hit = [...page.balloons].reverse().find((b) => hitLetter(b, sheet(), q, W, H));
       if (hit) {
         selId = hit.id;
-        if (dbl) {
+        if (lastTap?.id === hit.id && now - lastTap.at < 320 && Math.hypot(p.x - lastTap.point.x, p.y - lastTap.point.y) * ctx.scale() < 8) {
+          lastTap = null;
           cycleLine(hit);
           return;
         }
         drag = { id: hit.id, grab: { kind: 'body' }, start: q, orig: structuredClone(hit.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
+        studio.drawing = true;
         ctx.chrome();
         return;
       }
@@ -270,7 +291,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       loop = [p];
       downAt = p;
     },
-    move(p) {
+    move(p, e) {
       if (loop) {
         const last = loop[loop.length - 1]!;
         if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() > 2) loop.push(p);
@@ -292,14 +313,37 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       } else if (drag.grab.kind === 'tail') {
         const i = drag.grab.index;
         l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, x: q.x, y: q.y } : t)) };
+      } else if (drag.grab.kind === 'rotate') {
+        const angle = (point: Pt) => Math.atan2(point.y - o.y, point.x - o.x);
+        let degrees = drag.grab.angle + (angle(q) - angle(drag.start)) * 180 / Math.PI;
+        if (e.shiftKey) degrees = Math.round(degrees / 15) * 15;
+        degrees = (((degrees + 180) % 360) + 360) % 360 - 180;
+        if (degrees) l.rotation = degrees;
+        else delete l.rotation;
       } else {
-        const b0 = letterBox({ ...l, cap: o }, sheet(), W, H);
-        const a = Math.max(8, (b0.x1 - b0.x0) / 2 + dx / 2);
-        const bb = Math.max(6, (b0.y1 - b0.y0) / 2 + dy / 2);
-        l.cap = { ...o, minSize: [a, bb] };
+        const { box: b, side, minimum } = drag.grab;
+        const textOnly = o.style === 'sfx';
+        const fixedPath = o.style === 'custom' && o.path?.length && !o.look?.outline;
+        const origin = { x: 0, y: 0 };
+        const delta = rotateAround({ x: dx, y: dy }, origin, -(l.rotation ?? 0));
+        const result = resizeBox(b, side, delta, textOnly || fixedPath ? { x: 2, y: 2 } : minimum, state.fromCenter, e.shiftKey || textOnly);
+        const moveBy = (v: Pt): Pt => rotateAround(v, origin, l.rotation ?? 0);
+        if (textOnly) {
+          const scale = snapScale(o, sheet(), (o.scale ?? 1) * result.width / (b.x1 - b.x0), state.keepReadable && !l.smallOk, true);
+          const ratio = scale / (o.scale ?? 1);
+          const shift = state.fromCenter ? origin : moveBy({ x: side.x * (b.x1 - b.x0) * (ratio - 1) / 2, y: side.y * (b.y1 - b.y0) * (ratio - 1) / 2 });
+          l.cap = { ...o, scale, x: o.x + shift.x, y: o.y + shift.y };
+        } else {
+          const shift = moveBy(result.shift);
+          l.cap = { ...o, x: o.x + shift.x, y: o.y + shift.y,
+            ...(fixedPath ? { path: o.path!.map(([x, y]) => [x * result.width / (b.x1 - b.x0), y * result.height / (b.y1 - b.y0)]) } : { minSize: [result.width / 2, result.height / 2] }),
+          };
+        }
+        clampLetter(l, page);
       }
     },
-    up(p) {
+    up(p, e) {
+      if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
       if (loop) {
         const pts = loop;
         loop = null;
@@ -311,7 +355,9 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       if (!drag) return;
       const d = drag;
       drag = null;
-      if (d.moved) commit(d.grab.kind === 'body' ? 'Move balloon' : d.grab.kind === 'tail' ? 'Aim tail' : 'Resize balloon', d.before, d.beforeBeats);
+      studio.drawing = false;
+      if (d.moved) commit(d.grab.kind === 'body' ? 'Move balloon' : d.grab.kind === 'tail' ? 'Aim tail' : d.grab.kind === 'rotate' ? 'Rotate lettering' : 'Resize balloon', d.before, d.beforeBeats);
+      lastTap = !d.moved && d.grab.kind === 'body' ? { at: performance.now(), id: d.id, point: p } : null;
       ctx.chrome();
     },
     overlay(g, s) {
@@ -343,18 +389,39 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         outline(l).forEach((p, i) => (i ? g.lineTo(p.x * k, p.y * k) : g.moveTo(p.x * k, p.y * k)));
         g.closePath();
         g.stroke();
-        const hd = handles(l);
+        const b = frame(localBox(l), k);
         const dot = (q: Pt, fill: string) => {
           g.fillStyle = fill;
           g.strokeStyle = '#191A1F';
           g.lineWidth = 1.5;
           g.beginPath();
-          g.arc(q.x * k, q.y * k, 6, 0, Math.PI * 2);
+          g.arc(q.x * k, q.y * k, 4.5, 0, Math.PI * 2);
           g.fill();
           g.stroke();
         };
-        for (const t of hd.tails) dot(t, '#F2C230');
-        dot(hd.size, '#FFFDF7');
+        g.setLineDash([4, 3]);
+        g.strokeStyle = '#B8432F';
+        const handles = boxHandles(b);
+        g.beginPath();
+        handles.filter((h) => h.x && h.y).forEach((h, i) => {
+          const q = onPage(h.at, l);
+          if (i) g.lineTo(q.x * k, q.y * k);
+          else g.moveTo(q.x * k, q.y * k);
+        });
+        g.closePath();
+        g.stroke();
+        g.setLineDash([]);
+        const rotate = onPage(rotationAt(b, k), l);
+        const stem = onPage({ x: (b.x0 + b.x1) / 2, y: b.y0 }, l);
+        g.beginPath(); g.moveTo(stem.x * k, stem.y * k); g.lineTo(rotate.x * k, rotate.y * k); g.stroke();
+        dot(rotate, '#E3B8AC');
+        if (state.fromCenter) {
+          const x = l.cap.x * k;
+          const y = l.cap.y * k;
+          g.beginPath(); g.moveTo(x - 5, y); g.lineTo(x + 5, y); g.moveTo(x, y - 5); g.lineTo(x, y + 5); g.stroke();
+        }
+        for (const hd of handles) dot(onPage(hd.at, l), '#FFFDF7');
+        if (l.cap.style !== 'sfx') for (const tail of l.cap.tails) dot(tail, '#F2C230');
       }
       if (loop && loop.length > 1) {
         g.strokeStyle = '#B8432F';
@@ -375,14 +442,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         return true;
       }
       if (e.key === 'Escape') {
+        cancelDrag();
         selId = null;
-        loop = null;
         ctx.chrome();
         ctx.request();
         return true;
       }
       return false;
     },
+    dispose: cancelDrag,
   };
 
   // ---- inspector: one letter
@@ -391,6 +459,14 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     const sh = sheet();
     const sec = (title: string, ...kids: (Node | null)[]) => h('div', { class: 'sec stack' }, h('h4', {}, title), ...kids);
     const row = (label: string, control: Node) => h('label', { class: 'field' }, label, control);
+
+    const rotation = h('input', { type: 'number', min: -180, max: 180, step: 1, value: Math.round(l.rotation ?? 0), 'aria-label': 'Rotation in degrees' });
+    rotation.addEventListener('change', () => edit('Rotate lettering', () => {
+      const value = Math.max(-180, Math.min(180, rotation.valueAsNumber || 0));
+      if (value) l.rotation = value;
+      else delete l.rotation;
+    }));
+    el.append(sec('Transform', row('Rotation (°)', rotation), h('button', { class: 'btn', type: 'button', disabled: !l.cap.minSize, onclick: () => editCap('Reset balloon size', (cap) => ({ ...cap, minSize: undefined })) }, 'Fit balloon to text')));
 
     // Words
     const text = h('textarea', { 'aria-label': 'Words' });

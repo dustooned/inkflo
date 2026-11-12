@@ -1,9 +1,11 @@
 import type { Cut, CutMode, PageLayout, Pt } from '../../doc/model';
-import { DEFAULT_LAYOUT, K, evenOut, layoutOf, makeCut, nearestCut, presetCuts, shiftCut, type Panel, type Preset } from '../../geom/carve';
+import { K, canEvenOut, derivePanels, evenOut, gutterPaths, layoutOf, nearestCut, newCutId, panelAt, planCut, presetCuts, type Panel, type Preset } from '../../geom/carve';
+import { movePanelCuts, sameGutterTopology } from '../../geom/paneltransform';
+import { inGutter } from '../../geom/gutters';
 import { panelPath } from '../../render/page';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
-import { confirmDialog, h, seg, slider } from '../dom';
-import { centreCrossing, DEFAULT_GRID, downbeatPanel, revealIssues, snapGridCut, staggerCentre } from '../../geom/composition';
+import { confirmDialog, h, seg, slider, toast } from '../dom';
+import { centreCrossing, DEFAULT_GRID, downbeatPanel, gridLines, revealIssues, snapGridCut, staggerCentre } from '../../geom/composition';
 import { drawModularGrid } from '../composition';
 import { openGrid } from '../grid';
 import { openPageTemplates } from '../pagetemplates';
@@ -15,6 +17,29 @@ interface Handle {
   at: Pt;
   cut: Cut;
   axis: 'x' | 'y';
+}
+type CutMove = Pick<Handle, 'axis' | 'cut' | 'at'>;
+
+function panelNumberAt(panel: Panel, page: DeskCtx['page'], scale: number): Pt | null {
+  const { y0, y1 } = panel.bbox;
+  const { gutter, border } = layoutOf(page);
+  const room = gutter / 2 + border + 11 / scale;
+  const top = Math.min(y0 + room, (y0 + y1) / 2);
+  for (const y of [top, y0 + (y1 - y0) / 4, (y0 + y1) / 2, y1 - (y1 - y0) / 4]) {
+    const hits = panel.pts.flatMap((a, i) => {
+      const b = panel.pts[(i + 1) % panel.pts.length]!;
+      return (a.y > y) === (b.y > y) ? [] : [a.x + (b.x - a.x) * (y - a.y) / (b.y - a.y)];
+    }).sort((a, b) => a - b);
+    let width = 16 / scale;
+    let at: Pt | null = null;
+    for (let i = 1; i < hits.length; i += 2) {
+      const w = hits[i]! - hits[i - 1]!;
+      const point = { x: (hits[i]! + hits[i - 1]!) / 2, y };
+      if (w > width && !inGutter(page, point)) { width = w; at = point; }
+    }
+    if (at) return at;
+  }
+  return null;
 }
 
 const PRESETS: { id: Preset; label: string }[] = [
@@ -32,26 +57,18 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   let showGrid = true;
   let trail: Pt[] | null = null;
   let straight = false;
+  let heldStraight = false;
+  let holdTimer = 0;
+  let autoShape = true;
   let sel: number | null = null;
-  let hoverCut: Cut | null = null;
-  let drag: { handle: Handle; start: Pt; before: Cut[]; moved: boolean } | null = null;
-  let layoutBefore: PageLayout | null = null;
+  let hoverCut: CutMove | null = null;
+  let drag: { moves: CutMove[]; start: Pt; before: Cut[]; count: number; blocked: boolean; whole: boolean } | null = null;
+  let preview: ReturnType<NonNullable<DeskMode['layoutPreview']>>;
 
-  const selected = (): Panel | null => (sel === null ? null : ctx.panels()[sel] ?? null);
-  const panelIndexAt = (p: Pt) => {
-    const ps = ctx.panels();
-    for (let i = ps.length - 1; i >= 0; i--) {
-      const poly = ps[i]!.pts;
-      let inside = false;
-      for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) {
-        const A = poly[a]!;
-        const B = poly[b]!;
-        if (A.y > p.y !== B.y > p.y && p.x < ((B.x - A.x) * (p.y - A.y)) / (B.y - A.y) + A.x) inside = !inside;
-      }
-      if (inside) return i;
-    }
-    return null;
-  };
+  const displayPage = () => preview?.page ?? page;
+  const displayPanels = () => preview?.panels ?? ctx.panels();
+  const selected = (): Panel | null => (sel === null ? null : displayPanels()[sel] ?? null);
+  const panelIndexAt = (p: Pt) => panelAt(ctx.panels(), p)?.index ?? null;
 
   function handles(): Handle[] {
     const p = selected();
@@ -68,31 +85,72 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     const out: Handle[] = [];
     const gutter = layoutOf(page).gutter;
     for (const s of sides) {
-      const c = nearestCut(page, s.at);
+      const c = nearestCut(displayPage(), s.at);
       if (!c) continue;
       const aligned = s.axis === 'x' ? Math.abs(c.n.x) > 0.55 : Math.abs(c.n.y) > 0.55;
-      if (aligned && c.d <= gutter / 2 + 18 / K) out.push({ ...s, cut: c.cut });
+      if (aligned && c.d <= gutter / 2 + 18 / K) out.push({ ...s, at: c.at, cut: c.cut });
     }
     return out;
   }
 
-  const handleAt = (p: Pt): Handle | null => {
-    const r = 10 / ctx.scale();
+  const handleAt = (p: Pt, r: number): Handle | null => {
     return handles().find((hd) => Math.abs(hd.at.x - p.x) <= r && Math.abs(hd.at.y - p.y) <= r) ?? null;
   };
 
+  function gutterAt(p: Pt, r: number): CutMove | null {
+    const near = nearestCut(page, p);
+    if (!near || near.d > layoutOf(page).gutter / 2 + r) return null;
+    const axis = Math.abs(near.n.x) >= Math.abs(near.n.y) ? 'x' : 'y';
+    return { cut: near.cut, axis, at: p };
+  }
+
+  function panelMoves(): Handle[] {
+    const edges = handles();
+    return edges.filter((edge) => edges.some((other) => other.axis === edge.axis && other.side !== edge.side && other.cut.id !== edge.cut.id));
+  }
+
+  function holdToStraight(): void {
+    clearTimeout(holdTimer);
+    if (!autoShape || !trail || trail.length < 2 || heldStraight) return;
+    holdTimer = window.setTimeout(() => {
+      if (!trail || Math.hypot(trail.at(-1)!.x - trail[0]!.x, trail.at(-1)!.y - trail[0]!.y) * ctx.scale() < 22) return;
+      heldStraight = true;
+      trail = [trail[0]!, trail.at(-1)!];
+      ctx.request();
+    }, 550);
+  }
+
+  function cancelDrag(): void {
+    clearTimeout(holdTimer);
+    trail = null;
+    drag = null;
+    preview = undefined;
+  }
+
   function setLayout(patch: Partial<PageLayout>, commit: boolean): void {
-    layoutBefore ??= structuredClone(page.layout ?? DEFAULT_LAYOUT);
-    page.layout = { ...layoutOf(page), ...patch };
+    const before = layoutOf(page);
+    const layout = { ...before, ...patch };
+    const reflow = before.curve !== layout.curve;
+    const cuts = reflow ? movePanelCuts(page, new Map(), layout) : page.cuts;
+    const styled = { ...page, layout, cuts };
+    const valid = !reflow || sameGutterTopology(page, styled);
+    if (commit) {
+      preview = undefined;
+      if (valid) studio.editPage(page, 'Panel style', reflow ? ['layout', 'cuts'] : ['layout'], (p) => {
+        p.layout = layout;
+        if (reflow) p.cuts = cuts;
+      });
+      else { toast('That curve setting would disconnect a gutter.'); ctx.chrome(); }
+    } else if (valid) preview = { page: styled, panels: reflow ? derivePanels(styled) : ctx.panels() };
     ctx.request();
-    if (!commit) return;
-    const was = layoutBefore;
-    const now = structuredClone(page.layout);
-    layoutBefore = null;
-    studio.run({ label: 'Panel style', do: () => (page.layout = structuredClone(now)), undo: () => (page.layout = structuredClone(was)) }, true);
   }
 
   const cutMode = (): CutMode => (variantOf(mode, 'knife') === 'across' ? 'across' : 'panel');
+  function knifePreview(points: Pt[], isStraight: boolean) {
+    const grid = page.grid ?? book.fixedGrid;
+    const stroke = showGrid && grid ? snapGridCut(page, grid, points, 10 / ctx.scale()) : points;
+    return { stroke, plan: planCut(page, stroke, cutMode(), isStraight), gridGutter: stroke !== points ? grid?.gutter : undefined };
+  }
   const templates = () => openPageTemplates(page, (template) => {
     studio.editPage(page, 'Apply ' + template.name, ['cuts', 'layout', 'grid', 'downbeat'], (p) => applyPageTemplate(p, template));
     sel = null;
@@ -115,28 +173,40 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         { id: 'across', label: 'To edges', glyph: '⟷' },
       ] },
       { id: 'erase', label: 'Uncut', glyph: '⌫', key: 'e', group: 'cut' },
-      { id: 'resize', label: 'Resize', glyph: '⇔', key: 'r', group: 'edit' },
+      { id: 'resize', label: 'Transform panels', glyph: '⇔', key: 'r', group: 'edit' },
     ],
     tool: 'knife',
-    cursor: () => (mode.tool === 'knife' ? 'cross' : mode.tool === 'resize' ? 'move' : ''),
+    cursor: () => {
+      if (mode.tool === 'knife') return 'cross';
+      if (mode.tool !== 'resize') return '';
+      const edge = drag?.moves[0] ?? hoverCut;
+      return !edge || drag?.whole ? 'move' : edge.axis === 'x' ? 'ew-resize' : 'ns-resize';
+    },
     ctx(bar) {
       const L = layoutOf(page);
-      if (mode.tool === 'knife') bar.append(seg<CutMode>([{ id: 'panel', label: 'Panel only' }, { id: 'across', label: 'To edges' }], cutMode(), (v) => ctx.setVariant('knife', v), 'Cut mode'));
+      if (mode.tool === 'knife') {
+        const snap = h('input', { type: 'checkbox', checked: autoShape });
+        snap.addEventListener('change', () => (autoShape = snap.checked));
+        bar.append(seg<CutMode>([{ id: 'panel', label: 'Panel only' }, { id: 'across', label: 'To edges' }], cutMode(), (v) => ctx.setVariant('knife', v), 'Cut mode'),
+          h('label', { class: 'mini', title: 'Hold at the end of the cut, then drag to aim the straight edge' }, snap, 'Auto Shape'));
+      }
       bar.append(
         h('button', { class: 'btn', type: 'button', onclick: templates }, 'Page templates'),
         slider('Gutter', 0, 0.6, 0.01, L.gutter, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ gutter: v }, false), (v) => setLayout({ gutter: v }, true)),
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),
-        h('button', { class: 'btn', type: 'button', disabled: page.cuts.length < 2, onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
-        h('span', { class: 'hint' }, mode.tool === 'knife' ? 'Drag across the page to cut · Shift for straight' : mode.tool === 'resize' ? 'Select a panel, drag a handle to move the cut' : 'Click a gutter to remove that cut'),
+        h('button', { class: 'btn', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
+        h('span', { class: 'hint' }, mode.tool === 'knife' ? 'Hold to straighten the cut' : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : 'Click a gutter to remove it'),
       );
     },
     inspector(el) {
-      const ps = ctx.panels();
+      const ps = displayPanels();
       const p = selected();
       const downbeat = downbeatPanel(page, ps);
       const crossing = centreCrossing(page);
       const staggered = crossing ? staggerCentre(page) : undefined;
+      const activeCuts = new Set(gutterPaths(page).map(({ cut }) => cut.id));
+      const unused = page.cuts.length - activeCuts.size;
       el.append(
         h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, `${ps.length} panel${ps.length === 1 ? '' : 's'}`)),
         h('div', { class: 'sec' }, h('h4', {}, 'Presets'),
@@ -168,6 +238,10 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       el.append(
         h('div', { class: 'sec' }, h('h4', {}, 'Page'),
           h('div', { class: 'rows' }, 'Cuts', h('b', {}, String(page.cuts.length))),
+          unused > 0 ? h('button', { class: 'btn', type: 'button', onclick: () => {
+            studio.editPage(page, 'Remove unused cuts', ['cuts'], (p) => { p.cuts = p.cuts.filter((cut) => activeCuts.has(cut.id)); });
+            ctx.chrome();
+          } }, `Remove ${unused} unused ${unused === 1 ? 'cut' : 'cuts'}`) : null,
           h('div', { class: 'rows' }, 'Beats', h('b', {}, String(page.beats.length))),
           downbeat ? h('div', { class: 'rows' }, 'Downbeat', h('b', {}, 'Panel ' + (downbeat.index + 1))) : null,
           !downbeat && ps.length > 1 ? h('button', { class: 'btn', type: 'button', onclick: () => markDownbeat(ps.at(-1)!) }, 'Mark last panel as downbeat') : null,
@@ -185,16 +259,16 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'knife') {
         trail = [p];
         straight = e.shiftKey;
+        heldStraight = false;
         sel = panelIndexAt(p);
         return;
       }
       if (mode.tool === 'resize') {
-        const hd = handleAt(p);
-        if (hd) {
-          drag = { handle: hd, start: p, before: structuredClone(page.cuts), moved: false };
-          return;
-        }
-        sel = panelIndexAt(p);
+        const reach = (e.pointerType === 'touch' ? 15 : 8) / ctx.scale();
+        const edge = handleAt(p, reach) ?? gutterAt(p, reach);
+        if (!edge) sel = panelIndexAt(p);
+        const moves = edge ? [edge] : panelMoves();
+        if (moves.length) drag = { moves, start: p, before: page.cuts, count: ctx.panels().length, blocked: false, whole: !edge };
         ctx.chrome();
         return;
       }
@@ -209,69 +283,85 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     move(p, e) {
       if (trail) {
-        straight = e.shiftKey;
+        straight = e.shiftKey || heldStraight;
         if (straight) trail = [trail[0]!, p];
-        else if (Math.hypot(p.x - trail[trail.length - 1]!.x, p.y - trail[trail.length - 1]!.y) > 2.2 / ctx.scale()) trail.push(p);
-        return;
-      }
-      if (drag) {
-        const d = drag.handle.axis === 'x' ? p.x - drag.start.x : p.y - drag.start.y;
-        if (!drag.moved && Math.abs(d) * ctx.scale() < 3) return;
-        drag.moved = true;
-        const orig = drag.before.find((c) => c.id === drag!.handle.cut.id)!;
-        page.cuts = drag.before.map((c) => (c.id === orig.id ? shiftCut(orig, drag!.handle.axis, d) : c));
-      }
-    },
-    hover(p) {
-      hoverCut = null;
-      if (p && mode.tool === 'erase') {
-        const c = nearestCut(page, p);
-        if (c && c.d <= layoutOf(page).gutter / 2 + 8 / ctx.scale()) hoverCut = c.cut;
-      }
-    },
-    up() {
-      if (trail) {
-        const grid = page.grid ?? book.fixedGrid;
-        const stroke = showGrid && grid ? snapGridCut(page, grid, trail, 10 / ctx.scale()) : trail;
-        const snapped = stroke !== trail;
-        trail = null;
-        const cut = makeCut(page, stroke, cutMode(), straight);
-        sel = null; // reading-order indices shift when panels split
-        if (cut) {
-          const useGridGutter = snapped && grid && !page.cuts.length;
-          studio.editPage(page, cutMode() === 'panel' ? 'Cut panel' : 'Cut across', useGridGutter ? ['cuts', 'layout'] : ['cuts'], (pg) => {
-            if (useGridGutter) pg.layout = { ...layoutOf(pg), gutter: grid.gutter };
-            pg.cuts.push(cut);
-          });
-          studio.markStage(page, 'layout', 1);
-          ctx.chrome();
+        else if (Math.hypot(p.x - trail[trail.length - 1]!.x, p.y - trail[trail.length - 1]!.y) > 2.2 / ctx.scale()) {
+          trail.push(p);
+          holdToStraight();
         }
         return;
       }
       if (drag) {
-        const was = drag.before;
-        const moved = drag.moved;
+        const d = drag;
+        const delta = { x: p.x - d.start.x, y: p.y - d.start.y };
+        if (!preview && Math.hypot(delta.x, delta.y) * ctx.scale() < 3) return;
+        const grid = page.grid ?? book.fixedGrid;
+        const axes = showGrid && grid && !e.shiftKey && !d.whole ? gridLines(page, grid) : undefined;
+        const shifts = new Map(d.moves.map((m) => {
+          const at = m.cut.pts[0]![m.axis] + delta[m.axis];
+          const snap = axes?.[m.axis].find((v) => Math.abs(v - at) * ctx.scale() <= 8);
+          return [m.cut.id, { axis: m.axis, by: snap === undefined ? delta[m.axis] : snap - m.cut.pts[0]![m.axis] }];
+        }));
+        const next = movePanelCuts({ ...page, cuts: d.before }, shifts);
+        const movedPage = { ...page, cuts: next };
+        const panels = derivePanels(movedPage);
+        d.blocked = panels.length !== d.count || !sameGutterTopology(page, movedPage) || panels.some(({ bbox }) => bbox.x1 - bbox.x0 < 0.08 || bbox.y1 - bbox.y0 < 0.08);
+        if (d.blocked) return;
+        preview = [...shifts.values()].some((v) => Math.abs(v.by) > 1e-6) ? { page: movedPage, panels } : undefined;
+      }
+    },
+    hover(p) {
+      hoverCut = null;
+      if (p && (mode.tool === 'erase' || mode.tool === 'resize')) hoverCut = gutterAt(p, 8 / ctx.scale());
+    },
+    up(p, e) {
+      clearTimeout(holdTimer);
+      if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
+      if (trail) {
+        const isStraight = straight || heldStraight || e.shiftKey;
+        const points = isStraight ? [trail[0]!, p] : [...trail, p];
+        const { plan, gridGutter } = knifePreview(points, isStraight);
+        trail = null;
+        sel = null; // reading-order indices shift when panels split
+        if (plan) {
+          const cut = { id: newCutId(), ...plan.cut };
+          const useGridGutter = gridGutter !== undefined && !page.cuts.length;
+          studio.editPage(page, cutMode() === 'panel' ? 'Cut panel' : 'Cut across', useGridGutter ? ['cuts', 'layout'] : ['cuts'], (pg) => {
+            if (useGridGutter) pg.layout = { ...layoutOf(pg), gutter: gridGutter };
+            pg.cuts.push(cut);
+          });
+          studio.markStage(page, 'layout', 1);
+          ctx.chrome();
+        } else if (points.some((q) => Math.hypot(q.x - points[0]!.x, q.y - points[0]!.y) * ctx.scale() >= 18)) {
+          toast(cutMode() === 'panel' ? 'Start inside the panel and draw across it to make a cut.' : 'Draw a continuous cut that crosses the page or a panel.');
+        }
+        return;
+      }
+      if (drag) {
+        const { whole, before } = drag;
+        const now = preview?.page.cuts;
         drag = null;
-        if (!moved) return;
-        const now = structuredClone(page.cuts);
-        page.cuts = was;
-        studio.editPage(page, 'Move cut', ['cuts'], (pg) => (pg.cuts = now));
+        preview = undefined;
+        if (now && page.cuts === before) studio.editPage(page, whole ? 'Move panel boundaries' : 'Move gutter', ['cuts'], (pg) => (pg.cuts = now));
         ctx.chrome();
       }
     },
+    layoutPreview: () => preview,
     overlay(g, s) {
-      const ps = ctx.panels();
+      const ps = displayPanels();
       const grid = page.grid ?? book.fixedGrid;
       if (showGrid && grid) drawModularGrid(g, page, grid, s);
       const downbeat = downbeatPanel(page, ps);
       // panel numbers
       g.save();
-      g.font = `600 ${Math.max(9, 0.11 * s)}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
+      g.font = `600 ${Math.max(10, 0.11 * s)}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
       g.textAlign = 'center';
-      g.fillStyle = 'rgba(25,26,31,.32)';
+      g.textBaseline = 'middle';
       for (const p of ps) {
-        g.fillStyle = p === downbeat ? '#8F4723' : 'rgba(25,26,31,.42)';
-        g.fillText((p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0'), p.centroid.x * s, (p.bbox.y0 + 0.22) * s);
+        const at = panelNumberAt(p, displayPage(), s);
+        if (!at) continue;
+        g.fillStyle = p === downbeat ? '#8F4723' : 'rgba(25,26,31,.55)';
+        g.fillText((p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0'), at.x * s, at.y * s);
       }
       const p = selected();
       if (p) {
@@ -293,31 +383,43 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           g.fill();
           g.stroke();
         }
+        if (p && panelMoves().length) {
+          const { x, y } = p.centroid;
+          g.fillStyle = '#2F6F7E';
+          g.font = 'bold 18px sans-serif';
+          g.textBaseline = 'middle';
+          g.fillText('✥', x * s, y * s);
+        }
       }
-      if (hoverCut) {
-        g.strokeStyle = '#B8432F';
+      const highlighted = drag?.moves.map((m) => m.cut.id) ?? (hoverCut ? [hoverCut.cut.id] : []);
+      g.save();
+      g.beginPath(); g.rect(0, 0, page.widthIn * s, page.heightIn * s); g.clip();
+      for (const { cut, points } of gutterPaths(displayPage())) {
+        if (!highlighted.includes(cut.id)) continue;
+        g.strokeStyle = mode.tool === 'erase' || drag?.blocked ? '#B8432F' : '#2F6F7E';
         g.lineWidth = 3;
         g.setLineDash([6, 5]);
         g.beginPath();
-        hoverCut.pts.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
+        points.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
         g.stroke();
         g.setLineDash([]);
       }
+      g.restore();
       if (trail && trail.length > 1) {
-        g.strokeStyle = '#B8432F';
+        const { stroke, plan } = knifePreview(trail, straight || heldStraight);
+        g.strokeStyle = plan ? '#2F6F7E' : '#B8432F';
         g.lineWidth = 2.2;
         g.lineCap = 'round';
         g.setLineDash([8, 7]);
         g.beginPath();
-        const preview = showGrid && grid ? snapGridCut(page, grid, trail, 10 / s) : trail;
-        preview.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
+        for (const path of plan?.paths ?? [stroke]) path.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
         g.stroke();
       }
       g.restore();
     },
     key(e) {
       if (e.key === 'Escape') {
-        trail = null;
+        cancelDrag();
         sel = null;
         ctx.chrome();
         ctx.request();
@@ -325,6 +427,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       }
       return false;
     },
+    dispose: cancelDrag,
   };
   return mode;
 }

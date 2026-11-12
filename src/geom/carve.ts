@@ -69,14 +69,17 @@ interface Hit {
 }
 
 function segInt(a: Pt, b: Pt, c: Pt, d: Pt): Hit | null {
+  if (Math.max(a.x, b.x) < Math.min(c.x, d.x) - EPS || Math.max(c.x, d.x) < Math.min(a.x, b.x) - EPS ||
+    Math.max(a.y, b.y) < Math.min(c.y, d.y) - EPS || Math.max(c.y, d.y) < Math.min(a.y, b.y) - EPS) return null;
   const r = sub(b, a);
   const s = sub(d, c);
   const den = r.x * s.y - r.y * s.x;
   if (Math.abs(den) < 1e-9) return null;
   const tp = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / den;
   const tu = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / den;
-  if (tp < 0 || tp > 1 || tu < 0 || tu > 1) return null;
-  return { x: a.x + tp * r.x, y: a.y + tp * r.y, tp, tu };
+  if (tp < -1e-9 || tp > 1 + 1e-9 || tu < -1e-9 || tu > 1 + 1e-9) return null;
+  const t = Math.max(0, Math.min(1, tp));
+  return { x: a.x + t * r.x, y: a.y + t * r.y, tp: t, tu: Math.max(0, Math.min(1, tu)) };
 }
 
 export function chaikin(pts: readonly Pt[], iters: number): Pt[] {
@@ -141,11 +144,8 @@ function extendEnds(pts: readonly Pt[]): Pt[] {
 
 function subPath(path: readonly Pt[], s0: number, s1: number): Pt[] {
   const n = path.length - 1;
-  const clamp = (v: number) => Math.max(0, Math.min(n - 1e-6, v));
-  s0 = clamp(s0);
-  s1 = clamp(s1);
-  const i0 = Math.floor(s0);
-  const i1 = Math.floor(s1);
+  const i0 = Math.min(n - 1, Math.floor(s0));
+  const i1 = Math.min(n - 1, Math.floor(s1));
   const t0 = s0 - i0;
   const t1 = s1 - i1;
   const lerp = (i: number, t: number): Pt => ({ x: path[i]!.x + (path[i + 1]!.x - path[i]!.x) * t, y: path[i]!.y + (path[i + 1]!.y - path[i]!.y) * t });
@@ -154,18 +154,20 @@ function subPath(path: readonly Pt[], s0: number, s1: number): Pt[] {
   if (i0 === i1) return [pA, pB];
   const out = [pA];
   for (let i = i0 + 1; i <= i1; i++) out.push({ ...path[i]! });
-  if (dist(out[out.length - 1]!, pB) > 0.01) out.push(pB);
+  if (dist(out[out.length - 1]!, pB) > 1e-6) out.push(pB);
   return out;
 }
 
 interface Crossing {
   pt: Pt;
   edge: number;
+  edgeT: number;
   s: number;
 }
 
 function walk(poly: readonly Pt[], from: Crossing, to: Crossing): Pt[] {
   const n = poly.length;
+  if (from.edge === to.edge && from.edgeT <= to.edgeT) return [from.pt, to.pt];
   const out: Pt[] = [{ ...from.pt }];
   let i = (from.edge + 1) % n;
   let guard = 0;
@@ -178,33 +180,81 @@ function walk(poly: readonly Pt[], from: Crossing, to: Crossing): Pt[] {
   return out;
 }
 
-/** Split a polygon along a path that crosses it; returns the pieces (or the polygon itself). */
-export function splitPoly(poly: readonly Pt[], path: readonly Pt[]): Pt[][] {
+const EPS = 1e-6;
+
+function onBoundary(p: Pt, poly: readonly Pt[]): boolean {
+  return poly.some((a, i) => {
+    const b = poly[(i + 1) % poly.length]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) <= EPS * Math.hypot(dx, dy) &&
+      p.x >= Math.min(a.x, b.x) - EPS && p.x <= Math.max(a.x, b.x) + EPS &&
+      p.y >= Math.min(a.y, b.y) - EPS && p.y <= Math.max(a.y, b.y) + EPS;
+  });
+}
+
+function insideStrict(p: Pt, poly: readonly Pt[]): boolean {
+  return pointInPoly(p, poly) && !onBoundary(p, poly);
+}
+
+function cleanPath(points: Pt[]): Pt[] {
+  const out: Pt[] = [];
+  for (const p of points) if (!out.length || dist(out.at(-1)!, p) > EPS) out.push(p);
+  return out;
+}
+
+function simplePath(path: Pt[]): boolean {
+  for (let i = 1; i < path.length; i++) {
+    for (let j = i + 2; j < path.length; j++) {
+      if (segInt(path[i - 1]!, path[i]!, path[j - 1]!, path[j]!)) return false;
+    }
+  }
+  return true;
+}
+
+/** Find the first continuous, interior span that really divides this polygon. */
+function splitOnce(poly: Pt[], path: readonly Pt[], after = 0, at?: number) {
   const ins: Crossing[] = [];
-  for (let j = 0; j < path.length - 1; j++) {
+  for (let j = Math.floor(after); j < path.length - 1; j++) {
     for (let i = 0; i < poly.length; i++) {
       const r = segInt(path[j]!, path[j + 1]!, poly[i]!, poly[(i + 1) % poly.length]!);
       if (!r) continue;
       const pt = { x: r.x, y: r.y };
-      if (ins.some((q) => dist(q.pt, pt) < 1)) continue;
-      ins.push({ pt, edge: i, s: j + r.tp });
+      const s = j + r.tp;
+      if (s < after - EPS || ins.some((q) => Math.abs(q.s - s) < EPS)) continue;
+      ins.push({ pt, edge: i, edgeT: r.tu, s });
     }
   }
-  if (ins.length < 2) return [poly.map((p) => ({ ...p }))];
   ins.sort((a, b) => a.s - b.s);
-  const A = ins[0]!;
-  const B = ins[ins.length - 1]!;
-  if (dist(A.pt, B.pt) < 1) return [poly.map((p) => ({ ...p }))];
-  const chain = subPath(path, A.s, B.s);
-  const c1 = walk(poly, A, B);
-  const c2 = walk(poly, B, A);
-  const clean = (p: Pt[]) => {
-    const out: Pt[] = [];
-    for (const q of p) if (!out.length || dist(out[out.length - 1]!, q) > 0.6) out.push(q);
-    if (out.length > 2 && dist(out[0]!, out[out.length - 1]!) < 0.6) out.pop();
-    return out;
-  };
-  return [c1.concat([...chain].reverse()), c2.concat(chain)].map(clean).filter((p) => p.length >= 3 && Math.abs(area(p)) > 2);
+  for (let i = 1; i < ins.length; i++) {
+    const a = ins[i - 1]!;
+    const b = ins[i]!;
+    if ((at !== undefined && (at < a.s - EPS || at > b.s + EPS)) || dist(a.pt, b.pt) < 1) continue;
+    const chain = cleanPath(subPath(path, a.s, b.s));
+    if (chain.length < 2 || !chain.slice(1).every((p, j) => insideStrict({ x: (p.x + chain[j]!.x) / 2, y: (p.y + chain[j]!.y) / 2 }, poly))) continue;
+    if (!simplePath(chain)) continue;
+    const pieces = [walk(poly, a, b).concat([...chain].reverse()), walk(poly, b, a).concat(chain)].map((points) => {
+      const clean = cleanPath(points);
+      if (dist(clean[0]!, clean.at(-1)!) < EPS) clean.pop();
+      return clean;
+    });
+    if (pieces.some((p) => p.length < 3 || area(p) * Math.sign(area(poly)) <= 2)) continue;
+    return { pieces, chain, end: b.s };
+  }
+  return null;
+}
+
+function divide(poly: Pt[], path: readonly Pt[], gutters: Pt[][]): Pt[][] {
+  const pending = [{ poly, after: 0 }];
+  const pieces: Pt[][] = [];
+  while (pending.length) {
+    const item = pending.pop()!;
+    const split = splitOnce(item.poly, path, item.after);
+    if (!split) { pieces.push(item.poly); continue; }
+    gutters.push(split.chain);
+    for (const part of split.pieces) pending.push({ poly: part, after: split.end });
+  }
+  return pieces;
 }
 
 export function pointInPoly(pt: Pt, poly: readonly Pt[]): boolean {
@@ -215,22 +265,6 @@ export function pointInPoly(pt: Pt, poly: readonly Pt[]): boolean {
     if (a.y > pt.y !== b.y > pt.y && pt.x < ((b.x - a.x) * (pt.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
   }
   return inside;
-}
-
-function rayExit(poly: readonly Pt[], origin: Pt, dir: Pt): Pt | null {
-  const far = { x: origin.x + dir.x * 4000, y: origin.y + dir.y * 4000 };
-  let best: Pt | null = null;
-  let bt = 1e9;
-  for (let i = 0; i < poly.length; i++) {
-    const r = segInt(origin, far, poly[i]!, poly[(i + 1) % poly.length]!);
-    if (!r) continue;
-    const t = (r.x - origin.x) * dir.x + (r.y - origin.y) * dir.y;
-    if (t > 0.5 && t < bt) {
-      bt = t;
-      best = { x: r.x, y: r.y };
-    }
-  }
-  return best;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -249,10 +283,10 @@ function trimProto(page: Page): Pt[] {
 /** The full path a cut splits along, in proto space. */
 function cutPathProto(c: Cut, curve: number): Pt[] {
   if (c.mode === 'panel' && c.extended && c.extended.length >= 2) return toProto(c.extended);
-  return extendEnds(chaikin(toProto(c.pts), curve));
+  return extendEnds(simplify(chaikin(toProto(c.pts), curve), 0.65));
 }
 
-/** The full path a cut splits along, inches (for rendering the gutter band). */
+/** The stored cut's construction path, including extensions, in inches. */
 export function cutPath(c: Cut, page: Page): Pt[] {
   return toInches(cutPathProto(c, layoutOf(page).curve));
 }
@@ -266,21 +300,37 @@ function readingOrder(polys: Pt[][]): Pt[][] {
   });
 }
 
-function basePanelsProto(page: Page, cuts: readonly Cut[]): Pt[][] {
+export interface GutterPath { cut: Cut; points: Pt[] }
+
+interface CarvedPage { polys: Pt[][]; gutters: GutterPath[] }
+const cache = new WeakMap<Page, { key: string; value: CarvedPage }>();
+
+function carvePage(page: Page): CarvedPage {
   const curve = layoutOf(page).curve;
+  const key = JSON.stringify([page.widthIn, page.heightIn, curve, page.cuts]);
+  const cached = cache.get(page);
+  if (cached?.key === key) return cached.value;
   let ps: Pt[][] = [trimProto(page)];
-  for (const c of cuts) {
-    const path = cutPathProto(c, curve);
-    const next: Pt[][] = [];
-    for (const p of ps) for (const q of splitPoly(p, path)) next.push(q);
-    ps = next;
+  const gutters: GutterPath[] = [];
+  for (const cut of page.cuts) {
+    const path = cutPathProto(cut, curve);
+    const boundaries: Pt[][] = [];
+    ps = ps.flatMap((poly) => divide(poly, path, boundaries));
+    for (const pts of boundaries) gutters.push({ cut, points: toInches(pts) });
   }
-  return readingOrder(ps);
+  const value = { polys: readingOrder(ps), gutters };
+  cache.set(page, { key, value });
+  return value;
+}
+
+/** Only paths that divide panels. Rendering, fill masks and hit testing use these same spans. */
+export function gutterPaths(page: Page): readonly GutterPath[] {
+  return carvePage(page).gutters;
 }
 
 /** Fold the page's cuts into panels, in reading order. Never stored. */
 export function derivePanels(page: Page): Panel[] {
-  return basePanelsProto(page, page.cuts).map((poly, index) => {
+  return carvePage(page).polys.map((poly, index) => {
     const pts = toInches(poly);
     const xs = pts.map((p) => p.x);
     const ys = pts.map((p) => p.y);
@@ -312,10 +362,10 @@ export function newCutId(): string {
 
 /**
  * Turn a knife stroke (inches) into a cut, or null when it is too small or splits nothing.
- * `straight` keeps only the ends (Shift). Panel-mode cuts freeze the path that stops at the
- * boundary of the panels its ends sit in.
+ * `straight` keeps only the ends (Shift). Panel-mode cuts freeze the first valid span within
+ * the panel where the stroke started.
  */
-export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): Cut | null {
+export function planCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): { cut: Omit<Cut, 'id'>; paths: Pt[][] } | null {
   let raw = simplify(toProto(stroke), 2);
   if (straight && raw.length >= 2) raw = [raw[0]!, raw[raw.length - 1]!];
   if (raw.length < 2) return null;
@@ -324,23 +374,27 @@ export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
   if (Math.max(...xs) - Math.min(...xs) < 12 && Math.max(...ys) - Math.min(...ys) < 12) return null;
   raw[0] = snapToTrim(raw[0]!, page, 14);
   raw[raw.length - 1] = snapToTrim(raw[raw.length - 1]!, page, 14);
-  const cut: Cut = { id: newCutId(), mode, pts: toInches(raw) };
+  const cut: Omit<Cut, 'id'> = { mode, pts: toInches(raw) };
+  const { polys } = carvePage(page);
+  const path = cutPathProto({ id: '', ...cut }, layoutOf(page).curve);
   if (mode === 'panel') {
-    const base = basePanelsProto(page, page.cuts);
-    const pts = chaikin(raw, layoutOf(page).curve);
-    const first = pts[0]!;
-    const last = pts[pts.length - 1]!;
-    const p0 = base.find((p) => pointInPoly(first, p));
-    const p1 = base.find((p) => pointInPoly(last, p));
-    const dS = outward(pts, true);
-    const dE = outward(pts, false);
-    const s = (p0 && rayExit(p0, first, dS)) || { x: first.x + dS.x * FAR, y: first.y + dS.y * FAR };
-    const e = (p1 && rayExit(p1, last, dE)) || { x: last.x + dE.x * FAR, y: last.y + dE.y * FAR };
-    cut.extended = toInches([s, ...pts, e]);
+    const first = path[1]!;
+    const next = path[2]!;
+    const probe = { x: first.x + (next.x - first.x) * 0.001, y: first.y + (next.y - first.y) * 0.001 };
+    const panel = polys.find((poly) => insideStrict(first, poly)) ?? polys.find((poly) => insideStrict(probe, poly));
+    const span = panel && splitOnce(panel, path, 0, 1);
+    if (!span) return null;
+    cut.extended = toInches(span.chain);
+    return { cut, paths: [cut.extended] };
   }
-  const before = basePanelsProto(page, page.cuts).length;
-  const after = basePanelsProto(page, [...page.cuts, cut]).length;
-  return after > before ? cut : null;
+  const boundaries: Pt[][] = [];
+  for (const poly of polys) divide(poly, path, boundaries);
+  return boundaries.length ? { cut, paths: boundaries.map(toInches) } : null;
+}
+
+export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): Cut | null {
+  const plan = planCut(page, stroke, mode, straight);
+  return plan ? { id: newCutId(), ...plan.cut } : null;
 }
 
 /** Move a cut along one axis (inches). Panel-mode cuts move their frozen path with it. */
@@ -353,6 +407,8 @@ export function shiftCut(c: Cut, axis: 'x' | 'y', d: number): Cut {
 
 export interface NearCut {
   cut: Cut;
+  /** Nearest point on the shared boundary. */
+  at: Pt;
   /** Distance, inches. */
   d: number;
   /** Unit normal of the nearest segment. */
@@ -361,8 +417,7 @@ export interface NearCut {
 
 export function nearestCut(page: Page, pt: Pt): NearCut | null {
   let best: NearCut | null = null;
-  for (const c of page.cuts) {
-    const path = cutPath(c, page);
+  for (const { cut, points: path } of gutterPaths(page)) {
     for (let i = 0; i < path.length - 1; i++) {
       const a = path[i]!;
       const b = path[i + 1]!;
@@ -370,35 +425,39 @@ export function nearestCut(page: Page, pt: Pt): NearCut | null {
       const aby = b.y - a.y;
       const L = abx * abx + aby * aby || 1;
       const t = Math.max(0, Math.min(1, ((pt.x - a.x) * abx + (pt.y - a.y) * aby) / L));
-      const d = Math.hypot(pt.x - (a.x + abx * t), pt.y - (a.y + aby * t));
+      const at = { x: a.x + abx * t, y: a.y + aby * t };
+      const d = dist(pt, at);
       if (!best || d < best.d) {
         const l = Math.sqrt(L) || 1;
-        best = { cut: c, d, n: { x: -aby / l, y: abx / l } };
+        best = { cut, at, d, n: { x: -aby / l, y: abx / l } };
       }
     }
   }
   return best;
 }
 
-/** Space the page's horizontal cuts evenly top to bottom, and its vertical cuts left to right. */
+function gridAxis(c: Cut): 'x' | 'y' | undefined {
+  if (c.mode !== 'across') return;
+  const first = c.pts[0]!;
+  if (c.pts.every((p) => Math.abs(p.x - first.x) < 1e-6)) return 'x';
+  if (c.pts.every((p) => Math.abs(p.y - first.y) < 1e-6)) return 'y';
+}
+
+export function canEvenOut(page: Page): boolean {
+  const axes = page.cuts.map(gridAxis);
+  return axes.length >= 2 && axes.every(Boolean) && new Set(gutterPaths(page).map(({ cut }) => cut.id)).size === axes.length;
+}
+
+/** Even spacing for complete rectangular grids. Irregular layouts keep their junctions. */
 export function evenOut(page: Page): Cut[] {
-  const curve = layoutOf(page).curve;
-  const groups: Record<'h' | 'v', { c: Cut; mean: number }[]> = { h: [], v: [] };
-  for (const c of page.cuts) {
-    const path = chaikin(c.pts, curve);
-    const a = path[0]!;
-    const b = path[path.length - 1]!;
-    const horiz = Math.abs(b.x - a.x) >= Math.abs(b.y - a.y);
-    const mean = path.reduce((s, q) => s + (horiz ? q.y : q.x), 0) / path.length;
-    groups[horiz ? 'h' : 'v'].push({ c, mean });
-  }
+  if (!canEvenOut(page)) return page.cuts;
   const moved = new Map<string, Cut>();
-  for (const key of ['h', 'v'] as const) {
-    const arr = groups[key].sort((a, b) => a.mean - b.mean);
-    const end = key === 'h' ? page.heightIn : page.widthIn;
-    arr.forEach((item, i) => {
+  for (const axis of ['x', 'y'] as const) {
+    const arr = page.cuts.filter((c) => gridAxis(c) === axis).sort((a, b) => a.pts[0]![axis] - b.pts[0]![axis]);
+    const end = axis === 'y' ? page.heightIn : page.widthIn;
+    arr.forEach((cut, i) => {
       const target = (end * (i + 1)) / (arr.length + 1);
-      moved.set(item.c.id, shiftCut(item.c, key === 'h' ? 'y' : 'x', target - item.mean));
+      moved.set(cut.id, shiftCut(cut, axis, target - cut.pts[0]![axis]));
     });
   }
   return page.cuts.map((c) => moved.get(c.id) ?? c);

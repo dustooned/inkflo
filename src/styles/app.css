@@ -114,6 +114,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .stagearea canvas { position: absolute; left: 0; top: 0; }
 .stagearea[data-cursor="cross"] { cursor: crosshair; }
 .stagearea[data-cursor="move"] { cursor: grab; }
+.stagearea[data-cursor="ew-resize"] { cursor: ew-resize; }
+.stagearea[data-cursor="ns-resize"] { cursor: ns-resize; }
 .stagearea[data-cursor="brush"] { cursor: none; }
 .pane { position: absolute; inset: 0; overflow: auto; padding: 26px 30px; background: var(--bg); z-index: 3; }
 

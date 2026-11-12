@@ -135,7 +135,7 @@ export interface MotionPage {
   /** Page size in pixels at the export dpi (every page must match the project canvas). */
   paper: LayerArt;
   panels: { index: number; bbox: { x0: number; y0: number; x1: number; y1: number }; art: LayerArt; beat?: { desc: string; lines: string[] } }[];
-  balloons: { name: string; panelIndex: number | null; art: LayerArt; text: string; caption?: Record<string, unknown> }[];
+  balloons: { name: string; panelIndex: number | null; art: LayerArt; text: string; caption?: Record<string, unknown>; rotation?: { degrees: number; pivot: Vec2 } }[];
   /** Art drawn over the frame (over-frame layers, Over-panels group): above the panels, under the balloons. */
   extras?: { name: string; panelIndex: number | null; art: LayerArt }[];
 }
@@ -231,7 +231,13 @@ export function motionProject(name: string, pages: MotionPage[], size: { width: 
     // balloons on top, each appearing when the camera reaches its panel
     page.balloons.forEach((b, bi) => {
       const at = b.panelIndex === null ? 0 : (timing.arrive.get(b.panelIndex) ?? 0);
-      layers.push(layer(`${cid}b${bi + 1}`, b.name, 'drawings', W, H, { in: at, exposures: [{ drawing: drawing(b.art), length: len, dialogue: b.text }], ...(b.caption ? { caption: b.caption } : {}) }));
+      const xform = transform(W, H);
+      if (b.rotation) {
+        xform.anchor = still(b.rotation.pivot);
+        xform.position = still(b.rotation.pivot);
+        xform.rotation = still(b.rotation.degrees);
+      }
+      layers.push(layer(`${cid}b${bi + 1}`, b.name, 'drawings', W, H, { in: at, transform: xform, exposures: [{ drawing: drawing(b.art), length: len, dialogue: b.text }], ...(b.caption ? { caption: b.caption } : {}) }));
     });
     // over-frame art, appearing with its panel
     (page.extras ?? []).forEach((x, xi) => {

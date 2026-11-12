@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { brushFor, entry, knownBrush, LIBRARY, readUserBrushes, setBookBrushes, setUserBrushes, snapshotId } from './brushes';
-import { cloneBrush } from '../engine/core/brush';
+import { cloneBrush, evalDynamic } from '../engine/core/brush';
 
 afterEach(() => {
   setBookBrushes(undefined);
@@ -40,5 +40,14 @@ describe('brush library', () => {
     setUserBrushes(list);
     expect(entry('my-1')?.name).toBe('Mine');
     expect(readUserBrushes('nope')).toEqual([]);
+  });
+
+  it('gives new G-pen strokes lighter pressure response and shorter tips without changing legacy ink', () => {
+    const legacy = brushFor('g-pen', 'ink');
+    const revised = brushFor(snapshotId(entry('g-pen')!), 'ink');
+    const light = { pressure: 0.1, speed: 0, tilt: 0 };
+    expect(evalDynamic(revised.sizeDyn, light, 0.5)).toBeLessThan(evalDynamic(legacy.sizeDyn, light, 0.5) / 2);
+    expect([legacy.taperStart, legacy.taperEnd]).toEqual([30, 40]);
+    expect([revised.taperStart, revised.taperEnd]).toEqual([6, 12]);
   });
 });

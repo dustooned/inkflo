@@ -372,3 +372,31 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Autosave flushes on tab hide, but a hard reload within 400 ms of an edit can lose that edit.
 - Lettering uses system comic fonts (Comic Neue / Comic Sans MS fallbacks); no font ships yet.
 - Not tested on an iPad or with a real pen. Desktop Chromium only.
+
+## Drawing gestures, panel movement and lettering transforms
+
+- In Draw, keep holding a snapped QuickShape and drag to adjust it. Shift or a second finger
+  constrains it. In Layout, holding the Knife straightens the cut so it can be aimed before release.
+- Transform panels previews shared gutter movement on the page. Drag a gutter directly or drag
+  a panel body along an axis with two movable boundaries. Panel-only cuts stay attached where
+  possible, and the preview holds at the last valid layout when a move would collapse a panel.
+- Select lines uses a rectangular or freehand selection on one vector layer. Drag to move, resize
+  or rotate the lines, or use the flip controls. Shift constrains the transform and Alt resizes
+  from the centre. Vector transforms retain pressure and brush colour.
+- Ink and Vector pen accept a custom colour. The eyedropper can also set ink or fill colour from
+  the visible art. Pencil still uses the blue sketch pass.
+- Caption has edge and corner handles, a centre or opposite-edge anchor, and on-canvas and
+  numeric rotation. The tail tips stay at their page positions. Rotation is saved with the letter
+  and carried into print, layered images and 2Dope exports.
+- New G-pen strokes use a lighter pressure curve, shorter built-in tapers and the preset's
+  smoothing mode. Older strokes keep their original brush settings. Physical stylus feel still
+  needs a side-by-side tablet check.
+
+## Layout gutter cleanup
+
+- Gutters follow the actual shared panel boundaries in the workspace, fill masks and exports.
+  Older cuts can contain extra tails or disconnected strokes. Those parts are hidden on open.
+  Layout's inspector can remove completely unused cuts in one undoable edit.
+- The Knife previews the boundaries it can create. Panel only stops at the starting panel's
+  edges. Even out is limited to straight grids, and curve changes and drags keep the existing
+  panel divisions attached.
