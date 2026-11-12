@@ -1,13 +1,11 @@
 import { findLayer, type Layer, type Pt, type Stroke } from '../doc/model';
 import { applyPoint, IDENTITY, matrixFor, overallScale, type XParams } from '../engine/core/selxform';
 import { pointInPoly } from '../geom/carve';
-import { boxHandles, resizeBox, type Bounds, type ResizeSide } from '../geom/resizebox';
+import type { Bounds } from '../geom/resizebox';
 import { renderVectorLayer } from '../render/vector';
 import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
-
-const centerOf = (b: Bounds): Pt => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
-const corners = (a: Pt, b: Pt): Pt[] => [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
+import { drawSelectionFrame, drawSelectionPath, grabSelection, selectionCenter, selectionCorners, selectionTransform, type SelectionGrab } from './selectiongesture';
 
 function crosses(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
   const cross = (u: Pt, v: Pt, w: Pt) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
@@ -33,14 +31,13 @@ function boundsOf(strokes: Stroke[], indices: Set<number>): Bounds {
   return b;
 }
 
-type Grab = { kind: 'move' | 'rotate' } | { kind: 'resize'; side: ResizeSide };
 type Selection = { id: string; source: Stroke[]; indices: Set<number> };
 
 export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
   let marquee: { path: Pt[]; freehand: boolean } | null = null;
-  let drag: { grab: Grab; from: Pt; bounds: Bounds; next: Stroke[] | null; angle: number } | null = null;
+  let drag: { grab: SelectionGrab; from: Pt; bounds: Bounds; next: Stroke[] | null; angle: number } | null = null;
   let preview: HTMLCanvasElement | null = null;
   let rendered: Stroke[] | null = null;
 
@@ -76,20 +73,12 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
     }) });
   }
 
-  const rotationAt = (b: Bounds, scale: number) => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / scale });
-  const handles = (b: Bounds, scale: number) => boxHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
-
   return {
     down(p: Pt, e: PointerEvent, freehand: boolean) {
       const s = current();
       if (s) {
         const bounds = boundsOf(s.source, s.indices);
-        const reach = (e.pointerType === 'touch' ? 13 : 8) / ctx.scale();
-        const distance = (q: Pt) => Math.hypot(p.x - q.x, p.y - q.y);
-        const corner = handles(bounds, ctx.scale()).sort((a, b) => distance(a.at) - distance(b.at))[0]!;
-        const within = p.x >= bounds.x0 && p.x <= bounds.x1 && p.y >= bounds.y0 && p.y <= bounds.y1;
-        const grab: Grab | null = distance(rotationAt(bounds, ctx.scale())) <= reach ? { kind: 'rotate' }
-          : distance(corner.at) <= reach ? { kind: 'resize', side: corner } : within ? { kind: 'move' } : null;
+        const grab = grabSelection(bounds, p, ctx.scale(), e.pointerType === 'touch');
         if (grab) {
           drag = { grab, from: p, bounds, next: null, angle: 0 };
           studio.drawing = true;
@@ -114,22 +103,9 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const delta = { x: p.x - d.from.x, y: p.y - d.from.y };
       if (!d.next && Math.hypot(delta.x, delta.y) * ctx.scale() < 2) return;
       if (Math.hypot(delta.x, delta.y) < 1e-6) { d.next = null; d.angle = 0; return; }
-      const center = centerOf(d.bounds);
-      const xform = { ...IDENTITY };
-      if (d.grab.kind === 'move') {
-        xform.dx = e.shiftKey && Math.abs(delta.y) > Math.abs(delta.x) ? 0 : delta.x;
-        xform.dy = e.shiftKey && Math.abs(delta.x) >= Math.abs(delta.y) ? 0 : delta.y;
-      } else if (d.grab.kind === 'rotate') {
-        const angle = (q: Pt) => Math.atan2(q.y - center.y, q.x - center.x);
-        const turn = (angle(p) - angle(d.from)) * 180 / Math.PI;
-        xform.rotate = e.shiftKey ? Math.round(turn / 15) * 15 : turn;
-      } else if (d.grab.kind === 'resize') {
-        const b = d.bounds;
-        const resize = resizeBox(b, d.grab.side, delta, { x: 0.005, y: 0.005 }, e.altKey, e.shiftKey);
-        Object.assign(xform, { dx: resize.shift.x, dy: resize.shift.y, sx: resize.width / (b.x1 - b.x0), sy: resize.height / (b.y1 - b.y0) });
-      }
+      const xform = selectionTransform(d.grab, d.bounds, d.from, p, e);
       d.angle = xform.rotate;
-      d.next = transform(s, xform, center);
+      d.next = transform(s, xform, selectionCenter(d.bounds));
     },
     up(p: Pt, e: PointerEvent) {
       if (e.type === 'pointercancel') { stop(); ctx.request(); return; }
@@ -142,7 +118,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       }
       if (!marquee) return;
       const { path, freehand } = marquee;
-      const poly = freehand ? [...path, p] : corners(path[0]!, p);
+      const poly = freehand ? [...path, p] : selectionCorners(path[0]!, p);
       stop();
       for (const l of layersAt(path[0]!)) {
         const indices = new Set<number>();
@@ -180,7 +156,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
     controls() {
       const s = current();
       const action = (label: string, patch: Partial<XParams>) => h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => {
-        if (s && current() === s) apply(label, transform(s, { ...IDENTITY, ...patch }, centerOf(boundsOf(s.source, s.indices))));
+        if (s && current() === s) apply(label, transform(s, { ...IDENTITY, ...patch }, selectionCenter(boundsOf(s.source, s.indices))));
       } }, label);
       return [action('Flip horizontal', { flipH: true }), action('Flip vertical', { flipV: true }), action('Rotate 45°', { rotate: 45 }),
         h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => { selected = null; ctx.chrome(); ctx.request(); } }, 'Deselect'),
@@ -192,24 +168,13 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       g.lineWidth = 1.5;
       g.setLineDash([5, 4]);
       if (marquee) {
-        const path = marquee.freehand ? marquee.path : corners(marquee.path[0]!, marquee.path[1]!);
-        g.beginPath();
-        path.forEach((p, i) => i ? g.lineTo(p.x * scale, p.y * scale) : g.moveTo(p.x * scale, p.y * scale));
-        g.closePath();
-        g.stroke();
+        const path = marquee.freehand ? marquee.path : selectionCorners(marquee.path[0]!, marquee.path[1]!);
+        drawSelectionPath(g, path, scale);
       }
       const s = current();
       if (s) {
         const b = boundsOf(drag?.next ?? s.source, s.indices);
-        g.strokeRect(b.x0 * scale, b.y0 * scale, (b.x1 - b.x0) * scale, (b.y1 - b.y0) * scale);
-        g.setLineDash([]);
-        g.fillStyle = '#FFFDF7';
-        const rotate = rotationAt(b, scale);
-        g.beginPath(); g.moveTo(rotate.x * scale, b.y0 * scale); g.lineTo(rotate.x * scale, rotate.y * scale); g.stroke();
-        for (const q of [...handles(b, scale).map((h) => h.at), rotate]) {
-          g.beginPath(); g.arc(q.x * scale, q.y * scale, 4, 0, Math.PI * 2); g.fill(); g.stroke();
-        }
-        if (drag?.grab.kind === 'rotate') g.fillText(`${Math.round(drag.angle)}°`, rotate.x * scale + 10, rotate.y * scale);
+        drawSelectionFrame(g, b, scale, drag?.grab.kind === 'rotate' ? drag.angle : undefined);
       }
       g.restore();
     },

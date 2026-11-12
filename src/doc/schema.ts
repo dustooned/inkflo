@@ -3,7 +3,8 @@ import { readStyle, type CaptionStyle } from '../engine/lettering/styles';
 import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
-import type { DialogueLine, ModularGrid, PlacedImage } from './model';
+import { invert } from '../engine/core/selxform';
+import type { DialogueLine, ModularGrid, PixelTransform, PlacedImage } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -215,7 +216,7 @@ function layer(v: unknown, path: string): Layer {
   const o = obj(v, path);
   const type = oneOf(o.type, LAYER_TYPES, `${path}.type`);
   const d = newLayer(type, str(o.id, `${path}.id`));
-  return {
+  const l: Layer = {
     id: d.id,
     name: o.name === undefined ? d.name : str(o.name, `${path}.name`),
     type,
@@ -230,6 +231,28 @@ function layer(v: unknown, path: string): Layer {
     strokes: arr(o.strokes ?? [], `${path}.strokes`).map((x, i) => stroke(x, `${path}.strokes[${i}]`)),
     fills: arr(o.fills ?? [], `${path}.fills`).map((x, i) => fill(x, `${path}.fills[${i}]`)),
   };
+  if (o.pixelTransforms !== undefined) {
+    const entries = arr(o.pixelTransforms, `${path}.pixelTransforms`);
+    if (entries.length && (l.vector || l.image)) fail(`${path}.pixelTransforms`, 'requires a raster layer');
+    let lastStroke = 0, lastFill = 0;
+    l.pixelTransforms = entries.map((v, i): PixelTransform => {
+      const p = `${path}.pixelTransforms[${i}]`;
+      const op = obj(v, p);
+      const polygon = pts(op.polygon, `${p}.polygon`);
+      if (polygon.length < 3 || polygon.length > 8192) fail(`${p}.polygon`, 'needs 3 to 8192 points');
+      const raw = arr(op.matrix, `${p}.matrix`);
+      if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
+      const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
+      if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
+      const strokes = num(op.strokes, `${p}.strokes`), fills = num(op.fills, `${p}.fills`);
+      if (!Number.isInteger(strokes) || strokes < lastStroke || strokes > l.strokes.length) fail(`${p}.strokes`, 'has an invalid stroke index');
+      if (!Number.isInteger(fills) || fills < lastFill || fills > l.fills.length) fail(`${p}.fills`, 'has an invalid fill index');
+      lastStroke = strokes;
+      lastFill = fills;
+      return { polygon, matrix, strokes, fills };
+    });
+  }
+  return l;
 }
 
 function placedImage(v: unknown, path: string): PlacedImage {

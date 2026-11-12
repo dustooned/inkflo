@@ -178,6 +178,15 @@ export interface PlacedImage {
   credit?: string;
 }
 
+export interface PixelTransform {
+  polygon: Pt[];
+  /** Canvas affine matrix in page inches. */
+  matrix: [number, number, number, number, number, number];
+  /** Replay this move after these many strokes and fills on the layer. */
+  strokes: number;
+  fills: number;
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -200,6 +209,7 @@ export interface Layer {
   image?: PlacedImage;
   strokes: Stroke[];
   fills: Fill[];
+  pixelTransforms?: PixelTransform[];
 }
 
 /** `gutter`: art in the gutters and margins, clipped to outside the panels (borderless pages). */

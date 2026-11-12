@@ -304,6 +304,9 @@ h4.label { margin: 0 0 6px; font: 650 10px/1 var(--ui); letter-spacing: .14em; t
 .export-app-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
 .brush-controls { position: absolute; z-index: 2; left: 10px; top: 50%; transform: translateY(-50%); display: grid; gap: 8px; max-height: calc(100% - 16px); overflow: auto; padding: 8px 5px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-float); box-shadow: var(--shadow); cursor: default; }
 .brush-controls[hidden] { display: none; }
+.quickshape-actions { position: absolute; z-index: 3; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 24px); padding: 5px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-float); box-shadow: var(--shadow); cursor: default; }
+.quickshape-actions[hidden] { display: none; }
+.quickshape-actions .hint { padding: 0 4px; }
 .brush-control { display: grid; justify-items: center; gap: 4px; font-size: 10px; font-weight: 650; }
 .brush-control input[type="range"] { writing-mode: vertical-lr; direction: rtl; height: clamp(38px, 11dvh, 96px); width: 22px; margin: 0; accent-color: var(--focus); }
 .brush-value { display: flex; align-items: center; gap: 2px; }

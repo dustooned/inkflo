@@ -400,3 +400,19 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - The Knife previews the boundaries it can create. Panel only stops at the starting panel's
   edges. Even out is limited to straight grids, and curve changes and drags keep the existing
   panel divisions attached.
+
+## Raster selection
+
+- **Draw → Select pixels** (`R`) lifts pixels from one paint layer with Rectangle or Freehand.
+  Drag inside the frame to move, use the handles to resize or rotate, or use the flip buttons.
+  Apply commits the whole preview as one undo step. Cancel or Escape discards it.
+- The layer keeps the transform in its paint history. A saved `.inkflo` and a layered PSD use
+  the applied layer pixels, and **Rebuild from strokes** replays the edit on stroke-based layers.
+
+## QuickShape editing after pen-up
+
+- Hold to snap a line, rectangle or ellipse, lift the pen, then choose **Edit shape**. Drag a line
+  endpoint, rectangle corner or ellipse edge. Use the center handle to move the whole shape.
+- Shift constrains the angle or proportions. **Keep round** makes an ellipse a circle and keeps
+  it round while resizing. Apply shape makes one undoable edit, and Cancel leaves the snapped
+  stroke in place. This works with raster brushes and Vector Pen.

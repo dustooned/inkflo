@@ -9,6 +9,7 @@ import { gutterMask } from '../geom/gutters';
 import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { fillRefLayers } from '../geom/groups';
+import { liftPixels, paintPixelTransform } from './pixeltransform';
 
 /**
  * Rebuild layer bitmaps from the page's data (strokes and fills).
@@ -166,19 +167,34 @@ export function paintFill(kit: FillKit, colour: HTMLCanvasElement, fill: Fill): 
  */
 export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number, engine: RasterEngine, ops: Pick<PlaneOps, 'newCanvas' | 'resize'>, panels: Panel[] = derivePanels(page)): void {
   if (layer.image) return;
-  if (!layer.strokes.length && !layer.fills.length && !art.planes[layer.id]) return; // nothing drawn, nothing to clear
+  // Older imported pages can have a bitmap with no stroke or fill data to regenerate it from.
+  const firstTransform = layer.pixelTransforms?.[0];
+  if (firstTransform?.strokes === 0 && firstTransform.fills === 0) return;
+  if (!layer.strokes.length && !layer.fills.length && !layer.pixelTransforms?.length && !art.planes[layer.id]) return;
   const canvas = planeCanvas(art, layer.id, ops);
   ops.resize(canvas, art.width, art.height); // resizing clears
-  if (layer.fills.length) {
-    const kit = layerKit(page, art, layer, dpi, panels);
-    for (const f of layer.fills) paintFill(kit, canvas, f);
-  }
   if (layer.vector) {
     renderVectorLayer(layer, canvas, dpi);
-  } else if (layer.strokes.length) {
-    engine.resize(art.width, art.height);
-    engine.bind(canvas);
-    replayStrokes(layer.strokes, passForType(layer.type), dpi, art.width, art.height, engine, panels, `${page.id}:${layer.id}`);
+  } else {
+    const kit = layer.fills.length ? layerKit(page, art, layer, dpi, panels) : null;
+    if (layer.strokes.length) {
+      engine.resize(art.width, art.height);
+      engine.bind(canvas);
+    }
+    let firstStroke = 0, firstFill = 0;
+    const replayTo = (strokeCount: number, fillCount: number) => {
+      if (kit) for (const f of layer.fills.slice(firstFill, fillCount)) paintFill(kit, canvas, f);
+      const strokes = layer.strokes.slice(firstStroke, strokeCount);
+      if (strokes.length) replayStrokes(strokes, passForType(layer.type), dpi, art.width, art.height, engine, panels, `${page.id}:${layer.id}:${firstStroke}`);
+      firstStroke = strokeCount;
+      firstFill = fillCount;
+    };
+    for (const edit of layer.pixelTransforms ?? []) {
+      replayTo(edit.strokes, edit.fills);
+      const lifted = liftPixels(canvas, edit.polygon, dpi);
+      if (lifted) paintPixelTransform(canvas.getContext('2d')!, lifted, edit.matrix, dpi);
+    }
+    replayTo(layer.strokes.length, layer.fills.length);
   }
   touchLayer(art, layer.id);
 }

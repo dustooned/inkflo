@@ -24,6 +24,15 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('retains pixel transforms and checks their place in the paint history', () => {
+    const f = file();
+    const op = { polygon: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }], matrix: [1, 0, 0, 1, 0.5, 2] as const, strokes: 1, fills: 0 };
+    const layer = ink(f);
+    layer.pixelTransforms = [{ ...op, matrix: [...op.matrix] }];
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    layer.pixelTransforms.push({ ...op, matrix: [...op.matrix], strokes: 0 });
+    expect(() => parseBookFile(JSON.stringify(f))).toThrow(/pixelTransforms\[1\]\.strokes/);
+  });
   it('retains coloured strokes and rotated captions in a saved book', () => {
     const f = file();
     ink(f).strokes[0]!.color = '#3f6c9e';

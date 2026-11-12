@@ -302,7 +302,7 @@ export class Studio {
   /** True when no page has any drawn art yet (strokes, fills or stored bitmaps). */
   get blankArt(): boolean {
     const b = this.requireBook();
-    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length))) &&
+    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length && !l.pixelTransforms?.length))) &&
       [...this.art.values()].every((a) => Object.values(a.planes).every((c) => !c));
   }
 
