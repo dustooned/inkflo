@@ -1,10 +1,12 @@
-import { findLayer, newLayer, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
+import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
 import { DEFAULT_BRUSH, entry, type BrushEntry } from '../../draw/brushes';
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
 import { smoothStroke } from '../../engine/brush/smoothing';
 import { pressureProfile, recognizeShape, sampleProfile, shapeOutline, SHAPE_NAMES, type Shape } from '../../engine/core/quickshape';
 import { brushPicker, brushStudio } from '../brushui';
+import { brushControl, clampToolValue } from '../brushcontrols';
+import { imagePlacement } from '../imageplacement';
 import { popover } from '../popover';
 import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, type FillPaint, type LinePass } from '../../draw/replay';
 import { FILL_THRESHOLD, FillKit, flatColours, openEnds } from '../../draw/fillkit';
@@ -26,12 +28,15 @@ import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
 import { brushWidth, eraseStrokes, hitStroke, pointAt, reshape, scaleWidth, simplify, smooth, type VectorErase } from '../../draw/vectoredit';
 
 type SizedTool = 'pencil' | 'ink' | 'eraser';
-/** Sizes (inches) remembered per tool for the session. */
-const SIZES: Record<SizedTool, number> = { pencil: 0.03, ink: 0.022, eraser: 0.09 };
+const MIN_SIZE = 0.25;
+const SIZE_STEP = 0.05;
+const maxSize = (tool: SizedTool) => tool === 'eraser' ? 72 : 36;
 
 /** Device-remembered inking setup (never book data). */
 interface InkPrefs {
   brush: Record<LinePass, string>;
+  sizes: Record<string, number>;
+  opacity: Record<string, number>;
   /** Live stabilizer (pulled string) per tool, 0-1; missing = the brush's own. */
   stabilize: Partial<Record<LinePass, number>>;
   /** Post-correction after the pen lifts, 0-1. */
@@ -44,6 +49,8 @@ interface InkPrefs {
 const INK_KEY = 'inkflo.ink.v1';
 const INK_DEFAULTS: InkPrefs = {
   brush: { ...DEFAULT_BRUSH },
+  sizes: {},
+  opacity: {},
   stabilize: {},
   correct: 0.3,
   quickShape: true,
@@ -58,6 +65,8 @@ function readInk(): InkPrefs {
       ...structuredClone(INK_DEFAULTS),
       ...v,
       brush: { ...INK_DEFAULTS.brush, ...v.brush },
+      sizes: v.sizes && typeof v.sizes === 'object' ? v.sizes : {},
+      opacity: v.opacity && typeof v.opacity === 'object' ? v.opacity : {},
       ruler: { ...structuredClone(DEFAULT_RULER), ...v.ruler },
       focus: { ...INK_DEFAULTS.focus, ...v.focus },
       speed: { ...INK_DEFAULTS.speed, ...v.speed },
@@ -84,7 +93,7 @@ const RULERS: { id: RulerKind; label: string }[] = [
 /** Hold still this long at the end of a stroke to snap it to a shape. */
 const QUICKSHAPE_MS = 550;
 const PALETTE = ['#E8C4A0', '#C8553D', '#F2C230', '#5B8E7D', '#3F6C9E', '#7D5BA6', '#8A8A8A', '#FFFDF7', '#2B2D33'];
-type EditVariant = 'pull' | 'wider' | 'thinner';
+type EditVariant = 'pull' | 'move' | 'wider' | 'thinner';
 const vstate = {
   /** Vector eraser mode. */
   erase: 'crossing' as VectorErase,
@@ -153,7 +162,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     vector: boolean;
   } | null = null;
   /** Vector edits in progress. */
-  let vdrag: { layerId: string; before: Stroke[]; index: number; grabbed: Stroke; grab: number; from: Pt; moved: boolean } | null = null;
+  let vdrag: { layerId: string; before: Stroke[]; index: number; grabbed: Stroke; grab: number; from: Pt; moved: boolean; kind: 'pull' | 'move' } | null = null;
   let vbrush: { layerId: string; before: Stroke[]; last: Pt } | null = null;
   let verase: Pt[] | null = null;
   /** The selected vector line (Edit lines). */
@@ -186,10 +195,31 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const brushTool = (): LinePass | null => (mode.tool === 'vpen' ? 'ink' : mode.tool === 'pencil' || mode.tool === 'ink' ? mode.tool : null);
   const vectorErase = () => mode.tool === 'eraser' && variantOf(mode, 'eraser') === 'vector';
   const currentBrush = (t: LinePass): BrushEntry => entry(ink.brush[t]) ?? entry(DEFAULT_BRUSH[t])!;
+  const brushKey = (t: SizedTool) => t === 'eraser' ? 'eraser' : t + ':' + currentBrush(t).id;
+  const sizeIn = (t: SizedTool) => {
+    const saved = ink.sizes[brushKey(t)];
+    const base = t === 'eraser' ? 0.09 : currentBrush(t).w;
+    return clampToolValue(Number.isFinite(saved) ? saved! : base * PT, MIN_SIZE, maxSize(t), SIZE_STEP) / PT;
+  };
+  const toolOpacity = (t: SizedTool) => {
+    const value = ink.opacity[brushKey(t)];
+    return Number.isFinite(value) ? clampToolValue(value!, 1, 100, 1) / 100 : 1;
+  };
+  const controls = h('aside', { class: 'brush-controls', 'aria-label': 'Brush controls', hidden: true });
+  for (const event of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel']) controls.addEventListener(event, (e) => e.stopPropagation());
+  ctx.stage.append(controls);
+  function showBrushControls(t: SizedTool | null): void {
+    controls.hidden = !t;
+    if (!t) return;
+    const key = brushKey(t);
+    controls.replaceChildren(
+      brushControl('Size', 'pt', sizeIn(t) * PT, MIN_SIZE, maxSize(t), SIZE_STEP, (v) => { ink.sizes[key] = v; ctx.request(); }, saveInk, true),
+      ...(vectorErase() ? [] : [brushControl('Opacity', '%', toolOpacity(t) * 100, 1, 100, 1, (v) => { ink.opacity[key] = v; }, saveInk)]),
+    );
+  }
   const stabilizeOf = (t: LinePass): number => ink.stabilize[t] ?? currentBrush(t).settings.smoothing;
   function pickBrush(t: LinePass, e: BrushEntry): void {
     ink.brush[t] = e.id;
-    SIZES[t] = e.w;
     delete ink.stabilize[t];
     saveInk();
     ctx.chrome();
@@ -199,6 +229,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const id = activeLayer.get(page.id);
     return id ? findLayer(page, id) : null;
   };
+  const selectImage = (id: string) => {
+    activeLayer.set(page.id, id);
+    contextGroupId = active()?.group.id ?? null;
+    mode.tool = 'image';
+    setTarget('auto');
+  };
+  const images = imagePlacement(ctx, () => active()?.layer.id ?? null, selectImage);
 
   function contextGroup(): LayerGroup | undefined {
     ctx.panels();
@@ -234,6 +271,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       onContext: (id) => { contextGroupId = id; refreshPicker(true); },
       onView: (view) => { layerView = view; if (picker) picker.scrollTop = 0; refreshPicker(true); },
       onSelect: (id) => {
+        if (id && findLayer(page, id)?.layer.image) { dismissPicker?.(); selectImage(id); return; }
         if (id) {
           activeLayer.set(page.id, id);
           contextGroupId = active()?.group.id ?? null;
@@ -309,12 +347,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       const a = active();
       if (!a) return 'Open Layers to choose a layer or switch to “Panel under pen”.';
       if (a.layer.locked || a.group.locked) return `“${a.layer.name}” is locked.`;
+      if (a.layer.image) return 'Choose a drawing layer or switch to Panel under pen.';
       if (!a.layer.visible || !a.group.visible) return `“${a.layer.name}” is hidden.`;
       if (!!a.layer.vector !== vector) return a.layer.vector ? `“${a.layer.name}” is a vector layer: draw on it with the Vector pen.` : `“${a.layer.name}” is not a vector layer: the Vector pen draws on vector layers.`;
       return { layerId: a.layer.id, created: false };
     }
     const group = groupAt(page, ctx.panels(), p);
-    if (group.locked) return `${groupLabel(page, ctx.panels(), group)} is locked.`;
+    if (group.locked || !group.visible) return `${groupLabel(page, ctx.panels(), group)} is ${group.locked ? 'locked' : 'hidden'}.`;
     const existing = layerOfType(group, type, vector);
     if (existing) {
       if (existing.locked) return `“${existing.name}” in ${groupLabel(page, ctx.panels(), group)} is locked.`;
@@ -350,16 +389,17 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     // the brush's own pass (pencil blue / ink black), recorded when it differs from the layer's
     const pass: LinePass = erase ? passForType(layer.type) : currentBrush(tool as LinePass).pass;
     const brushId = erase ? DEFAULT_BRUSH[pass] : studio.brushId(currentBrush(tool as LinePass));
-    const w = SIZES[tool];
+    const w = sizeIn(tool);
+    const opacity = toolOpacity(tool);
     const seed = (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100);
-    const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase), seed, points: [] };
+    const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase, opacity), seed, points: [] };
     if (!vector) {
       const canvas = planeCanvas(art, layer.id, browserPlaneOps);
       engine.resize(art.width, art.height);
       engine.bind(canvas);
       engine.begin(record, null);
     }
-    const stroke: Stroke = { pts: [], pressure: [], w, brushId, seed, ...(erase ? { erase: true } : {}), ...(!erase && pass !== passForType(layer.type) ? { pass } : {}) };
+    const stroke: Stroke = { pts: [], pressure: [], w, brushId, seed, ...(opacity < 1 ? { opacity } : {}), ...(erase ? { erase: true } : {}), ...(!erase && pass !== passForType(layer.type) ? { pass } : {}) };
     t0 = performance.now();
     live = {
       layerId: layer.id,
@@ -822,7 +862,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     }
     const brush = currentBrush('ink');
     const brushId = studio.brushId(brush);
-    const w = SIZES.ink;
+    const w = sizeIn('ink');
+    const opacity = toolOpacity('ink');
     const layer = findLayer(page, target.layerId)!.layer;
     const pass: LinePass = brush.pass;
     const canvas = planeCanvas(art, layer.id, browserPlaneOps);
@@ -847,7 +888,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       pts.push(ln.pts.at(-1)!);
       pr.push(ln.pressure.at(-1)!);
       const stroke: Stroke = { pts, pressure: pr, w, brushId, seed: seed * 1000 + i, ...(pass !== passForType(layer.type) ? { pass } : {}) };
-      const rec: StrokeRecord = { id: `gen${i}`, ...strokeStyle(brushId, w, pass, dpi), seed: stroke.seed, points: pts.map((q, j) => ({ x: q.x * dpi, y: q.y * dpi, pressure: pr[j]!, tiltX: 0, tiltY: 0, t: j * 8 })) };
+      if (opacity < 1) stroke.opacity = opacity;
+      const rec: StrokeRecord = { id: `gen${i}`, ...strokeStyle(brushId, w, pass, dpi, false, opacity), seed: stroke.seed, points: pts.map((q, j) => ({ x: q.x * dpi, y: q.y * dpi, pressure: pr[j]!, tiltX: 0, tiltY: 0, t: j * 8 })) };
       engine.begin(rec, null);
       const c = engine.commit(true);
       if (c) commits.push(c);
@@ -1009,7 +1051,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function hitVector(p: Pt): { layer: Layer; index: number; at: number } | null {
     const reach = 8 / ctx.scale();
-    for (const layer of editableVectors()) {
+    const panels = ctx.panels();
+    const under = panelAt(panels, p);
+    for (const layer of editableVectors().reverse()) {
+      const group = findLayer(page, layer.id)?.group;
+      if (group?.kind === 'panel' && group.mask && !layer.overFrame && (!under || !group.anchor || panelAt(panels, group.anchor) !== under)) continue;
       const hit = hitStroke(layer.strokes, p, reach);
       if (hit) return { layer, index: hit.index, at: hit.at };
     }
@@ -1029,7 +1075,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     }
     const v = editVariant();
     const hit = hitVector(p);
-    if (v === 'pull') {
+    if (v === 'pull' || v === 'move') {
       if (!hit) {
         vsel = null;
         ctx.chrome();
@@ -1037,9 +1083,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       const before = structuredClone(hit.layer.strokes);
-      const { stroke, index } = pointAt(hit.layer.strokes[hit.index]!, hit.at);
+      const source = hit.layer.strokes[hit.index]!;
+      const { stroke, index } = v === 'pull' ? pointAt(source, hit.at) : { stroke: source, index: 0 };
       vsel = { layerId: hit.layer.id, index: hit.index };
-      vdrag = { layerId: hit.layer.id, before, index: hit.index, grabbed: stroke, grab: index, from: p, moved: false };
+      vdrag = { layerId: hit.layer.id, before, index: hit.index, grabbed: stroke, grab: index, from: p, moved: false, kind: v };
       hit.layer.strokes[hit.index] = stroke;
       ctx.chrome();
       ctx.request();
@@ -1081,7 +1128,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (!layer) return;
       const delta = { x: p.x - vdrag.from.x, y: p.y - vdrag.from.y };
       if (Math.hypot(delta.x, delta.y) * ctx.scale() > 2) vdrag.moved = true;
-      layer.strokes[vdrag.index] = reshape(vdrag.grabbed, vdrag.grab, delta, vstate.pullR);
+      layer.strokes[vdrag.index] = vdrag.kind === 'move'
+        ? { ...vdrag.grabbed, pts: vdrag.grabbed.pts.map((pt) => ({ x: pt.x + delta.x, y: pt.y + delta.y })) }
+        : reshape(vdrag.grabbed, vdrag.grab, delta, vstate.pullR);
       redrawVector(layer.id);
       return;
     }
@@ -1092,7 +1141,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (verase) {
       const path = verase;
       verase = null;
-      const r = SIZES.eraser / 2;
+      const r = sizeIn('eraser') / 2;
       let n = 0;
       for (const layer of editableVectors()) {
         const next = eraseStrokes(layer.strokes, path, r, vstate.erase, passForType(layer.type), dpi, () => (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100));
@@ -1118,7 +1167,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         redrawVector(d.layerId);
         return;
       }
-      editVector(d.layerId, 'Reshape line', layer.strokes, d.before);
+      editVector(d.layerId, d.kind === 'move' ? 'Move vector line' : 'Reshape line', layer.strokes, d.before);
       return;
     }
     if (vbrush) {
@@ -1132,6 +1181,16 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   /** Change the selected vector line as one undo step. */
+  function cancelVector(): void {
+    const edit = vdrag ?? vbrush;
+    vdrag = vbrush = verase = null;
+    if (edit) {
+      const layer = findLayer(page, edit.layerId)?.layer;
+      if (layer) { layer.strokes = edit.before; redrawVector(layer.id); }
+    }
+    ctx.request();
+  }
+
   function changeSelected(label: string, f: (s: Stroke) => Stroke | null): void {
     if (!vsel) return;
     const layer = findLayer(page, vsel.layerId)?.layer;
@@ -1158,7 +1217,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (verase && verase.length) {
       g.save();
       g.strokeStyle = 'rgba(200,85,61,.35)';
-      g.lineWidth = SIZES.eraser * s;
+      g.lineWidth = sizeIn('eraser') * s;
       g.lineCap = g.lineJoin = 'round';
       g.beginPath();
       verase.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
@@ -1214,6 +1273,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       ] },
       { id: 'vedit', label: 'Edit lines', glyph: '⌇', key: 'a', group: 'paint', variants: [
         { id: 'pull', label: 'Pull and select', glyph: '⌇' },
+        { id: 'move', label: 'Move line', glyph: '✥' },
         { id: 'wider', label: 'Thicken', glyph: '⬤' },
         { id: 'thinner', label: 'Thin', glyph: '•' },
       ] },
@@ -1228,9 +1288,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         { id: 'leftover', label: 'Fill leftovers', glyph: '⁘' },
         { id: 'flats', label: 'Auto flats', glyph: '▦' },
       ] },
+      { id: 'image', label: 'Position image', glyph: '▧', group: 'image' },
     ],
     tool: 'ink',
-    cursor: () => (mode.tool === 'fill' || mode.tool === 'lines' || mode.tool === 'vedit' ? 'cross' : 'brush'),
+    cursor: () => (mode.tool === 'image' ? 'move' : mode.tool === 'fill' || mode.tool === 'lines' || mode.tool === 'vedit' ? 'cross' : 'brush'),
     ctx(bar) {
       const bt = brushTool();
       if (bt) {
@@ -1239,8 +1300,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         pick.addEventListener('click', () => brushPicker(pick, studio, bt, cur.id, (e) => pickBrush(bt, e)));
         bar.append(pick, h('button', { class: 'icon', type: 'button', title: 'Brush Studio: edit this brush', 'aria-label': 'Edit brush', onclick: () => brushStudio(studio, cur, (e) => pickBrush(bt, e)) }, '✎'));
       }
-      const t = sizeTool();
-      if (t) bar.append(slider('Size', 0.004, t === 'eraser' ? 0.4 : 0.12, 0.002, SIZES[t], (v) => `${(v * 72).toFixed(1)}pt`, (v) => { SIZES[t] = v; ctx.request(); }));
+      showBrushControls(sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null));
       if (bt) {
         bar.append(slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { ink.stabilize[bt] = v; }, () => saveInk()));
         bar.append(slider('Correct', 0, 1, 0.05, ink.correct, (v) => (v ? `${Math.round(v * 100)}%` : 'off'), (v) => { ink.correct = v; }, () => saveInk()));
@@ -1279,9 +1339,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'vpen') bar.append(h('span', { class: 'hint' }, 'Editable lines on a vector layer. Reshape and re-weight them with Edit lines (A).'));
       if (mode.tool === 'vedit') {
         const v = editVariant();
-        bar.append(seg<EditVariant>([{ id: 'pull', label: 'Pull' }, { id: 'wider', label: 'Thicken' }, { id: 'thinner', label: 'Thin' }], v, (x) => ctx.setVariant('vedit', x), 'Edit'));
+        bar.append(seg<EditVariant>([{ id: 'pull', label: 'Pull' }, { id: 'move', label: 'Move line' }, { id: 'wider', label: 'Thicken' }, { id: 'thinner', label: 'Thin' }], v, (x) => ctx.setVariant('vedit', x), 'Edit'));
         if (v === 'pull') bar.append(slider('Reach', 0, 2, 0.05, vstate.pullR, (x) => (x ? `${x.toFixed(2)}″` : 'one point'), (x) => (vstate.pullR = x)));
-        else bar.append(slider('Brush', 0.03, 0.5, 0.01, vstate.widthR, (x) => `${(x * 2 * 72).toFixed(0)}pt`, (x) => (vstate.widthR = x)));
+        else if (v !== 'move') bar.append(slider('Brush', 0.03, 0.5, 0.01, vstate.widthR, (x) => `${(x * 2 * 72).toFixed(0)}pt`, (x) => (vstate.widthR = x)));
         const sel = vsel ? findLayer(page, vsel.layerId)?.layer.strokes[vsel.index] : null;
         if (sel) {
           bar.append(
@@ -1294,7 +1354,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
             h('button', { class: 'btn', type: 'button', title: 'Reset width changes along the line', onclick: () => changeSelected('Even width', (x) => { const { pw: _pw, ...rest } = x; return rest; }) }, 'Even width'),
             h('button', { class: 'btn danger', type: 'button', title: 'Delete line (Del)', onclick: () => changeSelected('Delete line', () => null) }, 'Delete'),
           );
-        } else bar.append(h('span', { class: 'hint' }, v === 'pull' ? 'Drag a vector line to pull it into shape; click one to select it.' : `Brush over vector lines to make them ${v === 'wider' ? 'thicker' : 'thinner'} there.`));
+        } else bar.append(h('span', { class: 'hint' }, v === 'move' ? 'Drag a vector line to move it as a whole.' : v === 'pull' ? 'Drag a vector line to pull it into shape; click one to select it.' : `Brush over vector lines to make them ${v === 'wider' ? 'thicker' : 'thinner'} there.`));
       }
       if (mode.tool === 'fill') {
         const swatches = h('div', { class: 'swatches', role: 'group', 'aria-label': 'Fill colour' },
@@ -1320,7 +1380,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         bar.append(h('span', { class: 'hint' }, FILL_HINT[fv]));
       }
       updateLayerButton(contextLayers);
-      bar.prepend(contextLayers);
+      bar.prepend(contextLayers, h('button', { class: 'btn', type: 'button', onclick: images.open }, 'Place image'));
+      if (mode.tool === 'image') bar.append(h('span', { class: 'hint' }, 'Drag the image to move it. Drag its corner to resize.'));
       refreshPicker();
       const show = h('input', { type: 'checkbox', checked: state.showPencil });
       show.addEventListener('change', () => { state.showPencil = show.checked; ctx.request(); });
@@ -1328,6 +1389,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     inspector(el) {
       updateLayerButton(inspectorLayers);
+      if (mode.tool === 'image') {
+        el.append(h('div', { class: 'sec' }, inspectorLayers), images.options());
+        return;
+      }
       el.append(
         h('div', { class: 'sec' }, inspectorLayers),
         h('div', { class: 'sec' }, h('h4', {}, 'Strokes are data'),
@@ -1336,6 +1401,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       );
     },
     down(p, e) {
+      if (mode.tool === 'image') { images.start(p); return; }
       if (target === 'auto') {
         lastCanvasGroupId = groupAt(page, ctx.panels(), p).id;
         contextGroupId = null;
@@ -1366,6 +1432,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     move(p, e) {
       hover = p;
+      if (mode.tool === 'image') { images.move(p); return; }
       if (pour || sweep) {
         fillMove(p, e);
         return;
@@ -1387,7 +1454,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (!live) return;
       addPoint(sample(p, e));
     },
-    up() {
+    up(p, e) {
+      if (mode.tool === 'image') { if (e.type !== 'pointercancel') images.move(p); images.end(e.type === 'pointercancel'); return; }
       if (pour || sweep) {
         fillUp();
         return;
@@ -1404,7 +1472,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (vdrag || vbrush || verase) {
-        vectorUp();
+        if (e.type === 'pointercancel') cancelVector();
+        else vectorUp();
         return;
       }
       endStroke();
@@ -1414,8 +1483,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'fill' && p) checkHover(p);
     },
     live: () => (live ? { [live.layerId]: engine.displaySource() } : {}),
+    placement: () => mode.tool === 'image' ? images.preview() : undefined,
     types: () => ({ pencil: state.showPencil }),
     overlay(g, s) {
+      if (mode.tool === 'image') { images.overlay(g, s); return; }
       drawRuler(g, s);
       fillOverlay(g, s);
       vectorOverlay(g, s);
@@ -1432,7 +1503,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       }
       const t = sizeTool();
       if (!hover || !t) return;
-      const r = Math.max(2, (SIZES[t] * s) / 2);
+      const r = Math.max(2, (sizeIn(t) * s) / 2);
       g.save();
       g.lineWidth = 1;
       g.strokeStyle = 'rgba(255,255,255,.9)';
@@ -1447,6 +1518,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
+      if (mode.tool === 'image' && e.key === 'Escape') { images.end(true); ctx.request(); return true; }
+      if (e.key === 'Escape' && (vdrag || vbrush || verase)) { cancelVector(); return true; }
       if (mode.tool === 'fill' && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
         state.check = !state.check;
         preview = null;
@@ -1460,9 +1533,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return true;
       }
       if (e.key === '[' || e.key === ']') {
-        const t = sizeTool();
+        const t = sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null);
         if (!t) return false;
-        SIZES[t] = Math.max(0.004, Math.min(0.4, SIZES[t] * (e.key === ']' ? 1.2 : 1 / 1.2)));
+        const pt = sizeIn(t) * PT;
+        const step = Math.max(SIZE_STEP, pt * 0.12);
+        ink.sizes[brushKey(t)] = clampToolValue(pt + (e.key === ']' ? step : -step), MIN_SIZE, maxSize(t), SIZE_STEP);
+        saveInk();
         ctx.chrome();
         ctx.request();
         return true;

@@ -11,7 +11,8 @@ import { metaFromFile, openStore, requestPersistence, type BookMeta, type Store 
 import { renderThumb } from '../render/page';
 import { readUserBrushes, setBookBrushes, setUserBrushes, snapshotId, type BrushEntry } from '../draw/brushes';
 import { gridCuts } from '../geom/composition';
-import { layoutOf } from '../geom/carve';
+import { derivePanels, layoutOf } from '../geom/carve';
+import { reconcileDialogue } from '../geom/lettering';
 
 /**
  * The app's one piece of state: the library, the open book, its page art, ONE undo stack per
@@ -218,9 +219,12 @@ export class Studio {
    * so undo restores them exactly.
    */
   editPage<K extends keyof Page>(page: Page, label: string, keys: K[], mutate: (p: Page) => void): void {
-    const snap = () => Object.fromEntries(keys.map((k) => [k, structuredClone(page[k])])) as Pick<Page, K>;
+    const sync = this.book && keys.some((k) => k === 'cuts') && (page.autoLetter || page.balloons.some((l) => l.generated));
+    const fields: (keyof Page)[] = sync ? [...new Set<keyof Page>([...keys, 'beats', 'balloons'])] : keys;
+    const snap = () => Object.fromEntries(fields.map((k) => [k, structuredClone(page[k])]));
     const before = snap();
     mutate(page);
+    if (sync) reconcileDialogue(this.book!, page, derivePanels(page));
     const after = snap();
     page.updatedAt = Date.now();
     this.run(
@@ -248,7 +252,7 @@ export class Studio {
     this.saver.markDirty();
   }
 
-  addPage(after?: Page): Page {
+  addPage(after?: Page, setup?: (page: Page) => void): Page {
     const b = this.requireBook();
     const page = newPage();
     const size = after ?? b.pages.at(-1);
@@ -260,6 +264,7 @@ export class Studio {
       page.cuts = gridCuts(page, b.fixedGrid);
       page.layout = { ...layoutOf(page), gutter: b.fixedGrid.gutter };
     }
+    setup?.(page);
     const at = after ? b.pages.indexOf(after) + 1 : b.pages.length;
     this.ensureArt(page);
     this.run({
@@ -297,7 +302,7 @@ export class Studio {
   /** True when no page has any drawn art yet (strokes, fills or stored bitmaps). */
   get blankArt(): boolean {
     const b = this.requireBook();
-    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.strokes.length && !l.fills.length))) &&
+    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length))) &&
       [...this.art.values()].every((a) => Object.values(a.planes).every((c) => !c));
   }
 

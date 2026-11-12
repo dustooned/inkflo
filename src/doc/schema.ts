@@ -3,7 +3,7 @@ import { readStyle, type CaptionStyle } from '../engine/lettering/styles';
 import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
-import type { ModularGrid } from './model';
+import type { DialogueLine, ModularGrid, PlacedImage } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -16,7 +16,7 @@ import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, 
  */
 
 export const FORMAT = 'inkflo-book';
-export const SCHEMA = 4;
+export const SCHEMA = 6;
 
 /** Asset keys of one page's layer bitmaps, by layer id (`null` = blank, nothing stored). */
 export type PageArtKeys = Record<string, string | null>;
@@ -89,6 +89,12 @@ function pts(v: unknown, path: string): Pt[] {
   return arr(v, path).map((p, i) => pt(p, `${path}[${i}]`));
 }
 
+function relativePoint(v: unknown, path: string): Pt {
+  const p = pt(v, path);
+  if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) fail(path, 'should be within the trim');
+  return p;
+}
+
 function cut(v: unknown, path: string): Cut {
   const o = obj(v, path);
   const c: Cut = { id: str(o.id, `${path}.id`), mode: oneOf(o.mode, ['across', 'panel'] as const, `${path}.mode`), pts: pts(o.pts, `${path}.pts`) };
@@ -100,6 +106,19 @@ function cut(v: unknown, path: string): Cut {
 function beat(v: unknown, path: string): Beat {
   const o = obj(v, path);
   const b: Beat = { id: str(o.id, `${path}.id`), desc: str(o.desc, `${path}.desc`), lines: arr(o.lines, `${path}.lines`).map((l, i) => str(l, `${path}.lines[${i}]`)) };
+  if (o.dialogue !== undefined) {
+    b.dialogue = arr(o.dialogue, `${path}.dialogue`).map((v, i) => {
+      const key = `${path}.dialogue[${i}]`;
+      const raw = obj(v, key);
+      const line: DialogueLine = { id: str(raw.id, `${key}.id`) };
+      if (raw.panel !== undefined) line.panel = relativePoint(raw.panel, `${key}.panel`);
+      if (raw.preset !== undefined) line.preset = str(raw.preset, `${key}.preset`);
+      if (raw.omit === true) line.omit = true;
+      return line;
+    });
+    if (b.dialogue.length !== b.lines.length) fail(`${path}.dialogue`, 'should have one entry per line');
+    if (new Set(b.dialogue.map((line) => line.id)).size !== b.dialogue.length) fail(`${path}.dialogue`, 'has duplicate line IDs');
+  }
   if (o.reveal !== undefined) {
     const r = obj(o.reveal, `${path}.reveal`);
     b.reveal = { pageId: str(r.pageId, `${path}.reveal.pageId`), beatId: str(r.beatId, `${path}.reveal.beatId`) };
@@ -140,6 +159,11 @@ function stroke(v: unknown, path: string): Stroke {
   const s: Stroke = { pts: pts(o.pts, `${path}.pts`), w: pos(o.w, `${path}.w`), brushId: str(o.brushId, `${path}.brushId`), seed: num(o.seed, `${path}.seed`) };
   if (!s.pts.length) fail(`${path}.pts`, 'needs at least one point');
   if (o.erase === true) s.erase = true;
+  if (o.opacity !== undefined) {
+    const opacity = num(o.opacity, `${path}.opacity`);
+    if (opacity <= 0 || opacity > 1) fail(`${path}.opacity`, 'should be greater than 0 and no more than 1');
+    s.opacity = opacity;
+  }
   if (o.clip === true) s.clip = true;
   if (o.pass === 'pencil' || o.pass === 'ink') s.pass = o.pass;
   if (!Number.isInteger(s.seed)) fail(`${path}.seed`, 'should be a whole number');
@@ -197,8 +221,25 @@ function layer(v: unknown, path: string): Layer {
     fillRef: bool(o.fillRef, `${path}.fillRef`, d.fillRef),
     overFrame: bool(o.overFrame, `${path}.overFrame`, false),
     ...(o.vector === true ? { vector: true } : {}),
+    ...(o.image !== undefined ? { image: placedImage(o.image, `${path}.image`) } : {}),
     strokes: arr(o.strokes ?? [], `${path}.strokes`).map((x, i) => stroke(x, `${path}.strokes[${i}]`)),
     fills: arr(o.fills ?? [], `${path}.fills`).map((x, i) => fill(x, `${path}.fills[${i}]`)),
+  };
+}
+
+function placedImage(v: unknown, path: string): PlacedImage {
+  const o = obj(v, path);
+  const pixelWidth = pos(o.pixelWidth, `${path}.pixelWidth`);
+  const pixelHeight = pos(o.pixelHeight, `${path}.pixelHeight`);
+  if (!Number.isInteger(pixelWidth) || !Number.isInteger(pixelHeight) || Math.max(pixelWidth, pixelHeight) > 8192 || pixelWidth * pixelHeight > 16_000_000) {
+    fail(path, 'has unsupported source bitmap dimensions');
+  }
+  return {
+    x: num(o.x, `${path}.x`), y: num(o.y, `${path}.y`),
+    width: pos(o.width, `${path}.width`), height: pos(o.height, `${path}.height`),
+    rotation: num(o.rotation, `${path}.rotation`),
+    pixelWidth, pixelHeight,
+    ...(o.credit === undefined ? {} : { credit: str(o.credit, `${path}.credit`) }),
   };
 }
 
@@ -301,7 +342,7 @@ function source(o: Obj, path: string): Letter['src'] | undefined {
   const src = obj(o.src, `${path}.src`);
   const line = num(src.line, `${path}.src.line`);
   if (!Number.isInteger(line) || line < 0) fail(`${path}.src.line`, 'should be a whole number from 0');
-  return { beat: str(src.beat, `${path}.src.beat`), line };
+  return { beat: str(src.beat, `${path}.src.beat`), line, ...(src.lineId === undefined ? {} : { lineId: str(src.lineId, `${path}.src.lineId`) }) };
 }
 
 /**
@@ -339,6 +380,7 @@ function letterOf(v: unknown, path: string): Letter {
   if (src) l.src = src;
   if (o.speaker !== undefined) l.speaker = str(o.speaker, `${path}.speaker`);
   if (o.smallOk === true) l.smallOk = true;
+  if (o.generated === true) l.generated = true;
   return l;
 }
 
@@ -360,6 +402,15 @@ function sheet(v: unknown, path: string): LetterSheet | undefined {
       fail(`${path}.characters.${who}`, `is not a readable style (${e instanceof Error ? e.message : String(e)})`);
     }
   }
+  const presets = o.presets === undefined ? undefined : Object.fromEntries(
+    Object.entries(obj(o.presets, `${path}.presets`)).map(([id, st]) => {
+      try {
+        return [id, readStyle(st)] as const;
+      } catch (e) {
+        return fail(`${path}.presets.${id}`, `is not a readable style (${e instanceof Error ? e.message : String(e)})`);
+      }
+    }),
+  );
   const font = o.font === undefined ? DEFAULT_SHEET.font : str(o.font, `${path}.font`);
   return {
     sizes: { small: pt(sz.small, `${path}.sizes.small`, DEFAULT_SHEET.sizes.small), body: pt(sz.body, `${path}.sizes.body`, DEFAULT_SHEET.sizes.body), big: pt(sz.big, `${path}.sizes.big`, DEFAULT_SHEET.sizes.big) },
@@ -367,6 +418,7 @@ function sheet(v: unknown, path: string): LetterSheet | undefined {
     minPt: pt(o.minPt, `${path}.minPt`, DEFAULT_SHEET.minPt),
     font: BUNDLED_FONTS.some((f) => f.id === font) ? font : DEFAULT_SHEET.font,
     characters,
+    ...(presets ? { presets } : {}),
     ...(o.checks !== undefined ? { checks: arr(o.checks, `${path}.checks`).map((c, i) => str(c, `${path}.checks[${i}]`)).slice(0, 8) } : {}),
   };
 }
@@ -401,11 +453,8 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   };
   if (lay) pg.layout = lay;
   if (o.grid !== undefined) pg.grid = modularGrid(o.grid, `${path}.grid`);
-  if (o.downbeat !== undefined) {
-    const p = pt(o.downbeat, `${path}.downbeat`);
-    if (p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) fail(`${path}.downbeat`, 'should be within the trim');
-    pg.downbeat = p;
-  }
+  if (o.downbeat !== undefined) pg.downbeat = relativePoint(o.downbeat, `${path}.downbeat`);
+  if (o.autoLetter === true) pg.autoLetter = true;
   groupOf(pg, 'over');
   groupOf(pg, 'background');
   return pg;

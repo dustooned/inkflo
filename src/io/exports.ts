@@ -7,7 +7,7 @@ import { cutPath, derivePanels, layoutOf, panelAt } from '../geom/carve';
 import { groupPanels } from '../geom/groups';
 import { paintLetter, sizePt, toPx } from '../render/caption';
 import { lettersReady } from '../render/fonts';
-import { COLORS, drawGutters, inGutterBands, panelPath, renderPage } from '../render/page';
+import { COLORS, drawGutters, drawLayerBitmap, inGutterBands, panelPath, renderPage } from '../render/page';
 import { assetKey } from './capture';
 import { encodePng, makeCanvas } from './canvasops';
 import { DEFAULT_MOTION, motionProject, twoDopeCaption, type LayerArt, type MotionOptions, type MotionPage } from './to2dope';
@@ -40,7 +40,7 @@ function clear(c: HTMLCanvasElement): CanvasRenderingContext2D {
 const FILL_TYPES = new Set<LayerType>(['colour', 'tone']);
 
 /** Draw a group's printing, visible layers that pass `pick`, bottom to top, page-sized. */
-function paintLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt, W: number, H: number, pick: (l: Layer) => boolean): void {
+function paintLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt, W: number, H: number, scale: number, pick: (l: Layer) => boolean): void {
   if (!group.visible) return;
   for (let i = group.layers.length - 1; i >= 0; i--) {
     const l = group.layers[i]!;
@@ -48,7 +48,7 @@ function paintLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageAr
     const c = art.planes[l.id];
     if (!c || !c.width) continue;
     g.globalAlpha = l.opacity * group.opacity;
-    g.drawImage(c, 0, 0, W, H);
+    drawLayerBitmap(g, c, W, H, scale, l.image);
   }
   g.globalAlpha = 1;
 }
@@ -123,8 +123,8 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       pg.fillRect(0, 0, W, H);
       // gutter art (borderless pages) belongs to the paper: outside the panels, under them all
       for (const grp of page.groups.filter((x) => x.kind === 'gutter')) {
-        if (grp.mask) inGutterBands(pg, page, s, W, H, (o) => paintLayers(o, grp, art, W, H, () => true));
-        else paintLayers(pg, grp, art, W, H, () => true);
+        if (grp.mask) inGutterBands(pg, page, s, W, H, (o) => paintLayers(o, grp, art, W, H, s, () => true));
+        else paintLayers(pg, grp, art, W, H, s, () => true);
       }
       const paper: LayerArt = { line: null, fill: await store(fill) };
       // panels: Background art plus the panel's own groups, clipped to the panel
@@ -139,13 +139,13 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
         f.clip(path);
         f.fillStyle = COLORS.panel;
         f.fill(path);
-        for (const g of [...bg, ...mine]) paintLayers(f, g, art, W, H, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
+        for (const g of [...bg, ...mine]) paintLayers(f, g, art, W, H, s, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
         cutBands(f, page, s);
         f.restore();
         const l = clear(line);
         l.save();
         l.clip(path);
-        for (const g of [...bg, ...mine]) paintLayers(l, g, art, W, H, (x) => !FILL_TYPES.has(x.type) && !x.overFrame);
+        for (const g of [...bg, ...mine]) paintLayers(l, g, art, W, H, s, (x) => !FILL_TYPES.has(x.type) && !x.overFrame);
         cutBands(l, page, s);
         drawGutters(l, page, s, { paper: false });
         l.restore();
@@ -163,14 +163,14 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       for (const g of page.groups.filter((x) => x.kind === 'panel')) {
         if (!g.layers.some((x) => x.overFrame && x.prints && x.visible)) continue;
         const o = clear(line);
-        paintLayers(o, g, art, W, H, (x) => x.overFrame);
+        paintLayers(o, g, art, W, H, s, (x) => x.overFrame);
         const p = owners.get(g.id) ?? null;
         extras.push({ name: `${p ? `Panel ${p.index + 1}` : 'Panel'} · over frame`, panelIndex: p?.index ?? null, art: { line: await store(line), fill: null } });
         void o;
       }
       for (const g of page.groups.filter((x) => x.kind === 'over')) {
         if (!g.layers.some((x) => x.prints && x.visible)) continue;
-        paintLayers(clear(line), g, art, W, H, () => true);
+        paintLayers(clear(line), g, art, W, H, s, () => true);
         extras.push({ name: 'Over panels', panelIndex: null, art: { line: await store(line), fill: null } });
       }
       // balloons

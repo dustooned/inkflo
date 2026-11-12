@@ -4,13 +4,14 @@ import { derivePanels } from '../geom/carve';
 import { preflightPage } from '../geom/preflight';
 import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
-import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, pagesIn, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { exportPsd, type PsdMode } from '../io/psd';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
 import { download, h, seg, slug } from './dom';
 
-type Tab = 'print' | 'files';
+type Tab = 'print' | 'files' | 'apps';
 
 const PRINT_MODES: { id: PrintMode; title: string; body: string }[] = [
   { id: 'shop', title: 'Print shop', body: 'A PDF of single pages with bleed and crop marks, trim and bleed boxes set. Blank pages are added if the binding needs them.' },
@@ -26,10 +27,15 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   const name = slug(book.title);
   const progress = h('div', { class: 'progress', role: 'status', 'aria-live': 'polite' });
   const buttons: HTMLButtonElement[] = [];
-  const busy = (on: boolean) => buttons.forEach((b) => (b.disabled = on));
+  let exporting = false;
+  const busy = (on: boolean) => {
+    exporting = on;
+    buttons.forEach((b) => (b.disabled = on));
+  };
   let tab: Tab = start;
 
   const run = async (label: string, make: () => Promise<Blob>, file: string) => {
+    if (exporting) return;
     busy(true);
     progress.textContent = `${label}…`;
     try {
@@ -45,7 +51,7 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
     }
   };
   const btn = (label: string, onclick: () => void, primary = false) => {
-    const b = h('button', { class: `btn${primary ? ' primary' : ''}`, type: 'button', onclick }, label);
+    const b = h('button', { class: `btn${primary ? ' primary' : ''}`, type: 'button', disabled: exporting, onclick }, label);
     buttons.push(b);
     return b;
   };
@@ -68,8 +74,11 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
     const kind = kindById(spec.kind);
     const plan = planPrint(book!, pr.mode);
     const sheet = sheetOf(book!);
-    const issues = book!.pages.flatMap((p, i) => preflightPage(book!, p, derivePanels(p), (l) => letterBox(l, sheet, p.widthIn, p.heightIn))
-      .filter((c) => c.level === 'warn' && !/No ink/.test(c.text)).map((c) => `Page ${i + 1}: ${c.text}`));
+    const issues = book!.pages.flatMap((p, i) => {
+      const warnings = preflightPage(book!, p, derivePanels(p), (l) => letterBox(l, sheet, p.widthIn, p.heightIn))
+        .filter((c) => c.level === 'warn' && !/No ink/.test(c.text));
+      return warnings.length ? [{ page: p, number: i + 1, warnings }] : [];
+    });
     const cards = h('div', { class: 'modes', role: 'radiogroup', 'aria-label': 'How it is printed' },
       PRINT_MODES.map((m) => h('button', { type: 'button', role: 'radio', class: 'option modecard', 'aria-checked': String(m.id === pr.mode), onclick: () => { pr.mode = m.id; render(); } },
         h('div', {}, h('b', {}, m.title), h('p', {}, m.body)))));
@@ -85,7 +94,13 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
       h('div', {}, h('h4', { class: 'label' }, 'Page order'), order),
       plan.message ? h('p', { class: 'warnline' }, plan.message) : null,
       issues.length
-        ? h('details', {}, h('summary', {}, `${issues.length} preflight warning${issues.length === 1 ? '' : 's'} (you can still print)`), h('ul', { class: 'check' }, issues.slice(0, 12).map((t) => h('li', { class: 'warn' }, t))))
+        ? h('details', {}, h('summary', {}, issues.length + (issues.length === 1 ? ' page to review' : ' pages to review')),
+          ...issues.map(({ page, number, warnings }) => h('section', { class: 'print-review-page' },
+            h('button', { class: 'btn', type: 'button', onclick: () => {
+              d.close();
+              location.hash = '#desk/' + book!.id + '/' + page.id + '/print';
+            } }, 'Review page ' + number),
+            h('ul', { class: 'check' }, warnings.map((c) => h('li', { class: 'warn' }, c.text))))))
         : h('p', { class: 'note', style: 'margin:0' }, 'Preflight: nothing to fix.'),
       h('div', { style: 'display:flex;justify-content:flex-end' },
         btn('Make the PDF', () => void run('Print PDF', () => exportPrintPdf(studio, { ...pr }, (m) => (progress.textContent = m)), file), true)),
@@ -97,6 +112,34 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   const fo: FilesOptions = { format: 'png', seps: ['all'], background: 'white', colour: 'colour', borders: true, range: { from: 1, to: book.pages.length } };
   let dpi = book.dpi;
   const motion: MotionOptions = { ...DEFAULT_MOTION };
+  const currentPage = Math.max(1, book.pages.findIndex((p) => p.id === book.lastPageId) + 1);
+  const psd = { mode: 'art' as PsdMode, dpi: book.dpi, from: currentPage, to: currentPage };
+  function appsTab(): HTMLElement {
+    const pageInput = (label: string, key: 'from' | 'to') => {
+      const input = h('input', { type: 'number', 'aria-label': label, min: 1, max: book!.pages.length, step: 1, value: psd[key] });
+      input.addEventListener('change', () => {
+        psd[key] = Math.max(1, Math.min(book!.pages.length, Math.round(input.valueAsNumber || currentPage)));
+        input.value = String(psd[key]);
+      });
+      return h('label', { class: 'field' }, label, input);
+    };
+    return h('div', { class: 'stack' },
+      h('div', {}, h('h3', {}, 'Layered Photoshop document'), h('p', { class: 'note' }, 'For Procreate, Photoshop, Affinity and Clip Studio Paint. Export the current page or a ZIP of layered PSDs.')),
+      seg<PsdMode>([{ id: 'art', label: 'Keep artwork' }, { id: 'template', label: 'Drawing template' }], psd.mode, (v) => { psd.mode = v; render(); }, 'PSD contents'),
+      h('p', { class: 'note' }, psd.mode === 'template'
+        ? 'Keep the layout and lettering. Each panel gets blank Pencil, Ink and Colour layers.'
+        : 'Keep the panel groups, artwork, borders and lettering in place. Lettering and vector ink are rendered as pixels.'),
+      h('div', { class: 'export-app-fields' }, pageInput('First page', 'from'), pageInput('Last page', 'to'),
+        select('Resolution', [[book!.dpi, book!.dpi + ' dpi (book)'], ...[150, 300, 600].filter((n) => n !== book!.dpi).map((n): [number, string] => [n, n + ' dpi'])], psd.dpi, (v) => (psd.dpi = v))),
+      h('p', { class: 'note' }, 'In Procreate, use Gallery → Import. In Photoshop, Affinity or Clip Studio Paint, open the PSD as a document. Keep your .inkflo book for editable cuts, lettering and script.'),
+      btn('Download layered PSD', () => {
+        const { from, to, mode, dpi: resolution } = psd;
+        const pages = pagesIn(book!, { from, to });
+        const stem = name + (mode === 'template' ? '-template' : '');
+        const file = pages.length === 1 ? stem + '-page-' + (book!.pages.indexOf(pages[0]!) + 1) + '.psd' : stem + '-psds.zip';
+        void run('Layered PSD', () => exportPsd(studio, { from, to }, mode, resolution, (m) => (progress.textContent = m)), file);
+      }, true));
+  }
   const inks: InkPair = ['#d49a55', '#243755'];
   function twoInkOptions(from: HTMLInputElement, to: HTMLInputElement): HTMLElement {
     const chart = h('div', { class: 'ink-chart', 'aria-label': 'Ink tint chart' });
@@ -214,8 +257,8 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   function render(): void {
     buttons.length = 0;
     body.replaceChildren(
-      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }], tab, (v) => { tab = v; render(); }, 'Export center'),
-      tab === 'print' ? printTab() : filesTab(),
+      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }, { id: 'apps', label: 'Open in another app' }], tab, (v) => { tab = v; render(); }, 'Export center'),
+      tab === 'print' ? printTab() : tab === 'apps' ? appsTab() : filesTab(),
       progress,
     );
   }

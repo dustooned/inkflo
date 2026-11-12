@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SHEET, newBook, newPage, PT, type Book, type Letter, type Page } from '../doc/model';
-import { derivePanels, presetCuts } from './carve';
-import { lineFor, newLetter, nextFreeLine, parseLine, readingOrderIssues, renameSpeaker, speakers, syncLettersFromScript, syncScriptFromLetter, withCharacterStyle } from './lettering';
+import { derivePanels, panelAt, presetCuts } from './carve';
+import { assignDialoguePanel, bindDialogue, centreIn, dialogueText, letterForLine, lineFor, linesFromDialogueText, newLetter, nextFreeLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, renameSpeaker, replaceDialogue, speakers, syncLettersFromScript, syncScriptFromLetter, withCharacterStyle } from './lettering';
 import { preflightPage } from './preflight';
 import { applyFix, contrast, readability, readabilityAll, safeFixes, snapScale, TARGETS } from './readability';
 import { comicInfo } from '../io/exports';
@@ -57,6 +57,65 @@ describe('script lines', () => {
 });
 
 describe('script ↔ lettering sync', () => {
+  it('preserves legacy balloon links and placement when dialogue is inserted or reordered', () => {
+    const p = page();
+    const book = bookWith(p);
+    const a = p.beats[0]!;
+    const manual = at(book, p, 1.5, 1.5, 'a', 1);
+    p.balloons.push(manual);
+    replaceDialogue(p, a, ['NEW: Intro.', 'JO: Two.', 'MAYA: One.']);
+    reconcileDialogue(book, p, derivePanels(p), true);
+    expect(letterForLine(p, a, 1)?.id).toBe(manual.id);
+    expect(manual.cap.x).toBe(1.5 * PT);
+    expect(manual.cap.text).toBe('Two.');
+    expect(letterForLine(p, a, 0)?.cap.text).toBe('Intro.');
+    expect(p.balloons).toHaveLength(9);
+    a.lines[1] = 'JO: Revised.';
+    reconcileDialogue(book, p, derivePanels(p));
+    expect(manual.cap.text).toBe('Revised.');
+  });
+
+  it('moves a balloon when reassigned, and keeps a skipped line from coming back', () => {
+    const p = page();
+    const book = bookWith(p);
+    const panels = derivePanels(p);
+    p.autoLetter = true;
+    reconcileDialogue(book, p, panels);
+    const a = p.beats[0]!;
+    const first = letterForLine(p, a, 0)!;
+    first.cap.fill = '#ffeecc';
+    assignDialoguePanel(p, panels, a, 0, panels[3]!);
+    expect(panelAt(panels, centreIn(first))).toBe(panels[3]);
+    expect(first.cap.fill).toBe('#ffeecc');
+    expect(readingOrderIssues(p, panels).filter((x) => x.balloon.id === first.id && /sits/.test(x.message))).toEqual([]);
+    omitDialogue(p, first);
+    p.balloons = p.balloons.filter((x) => x !== first);
+    reconcileDialogue(book, p, panels);
+    expect(letterForLine(p, a, 0)).toBeUndefined();
+  });
+
+  it('removes a generated balloon for deleted dialogue but preserves a refined balloon as free text', () => {
+    const p = page();
+    const book = bookWith(p);
+    const panels = derivePanels(p);
+    reconcileDialogue(book, p, panels, true);
+    const a = p.beats[0]!;
+    const first = letterForLine(p, a, 0)!;
+    const second = letterForLine(p, a, 1)!;
+    delete second.generated;
+    bindDialogue(p, a).splice(0, 2);
+    a.lines = [];
+    reconcileDialogue(book, p, panels);
+    expect(p.balloons).not.toContain(first);
+    expect(p.balloons).toContain(second);
+    expect(second.src).toBeUndefined();
+  });
+
+  it('round-trips explicit line breaks in one balloon through the beat text editor', () => {
+    const lines = ['MAYA: First\nSecond', 'Keep \\n literally'];
+    expect(linesFromDialogueText(dialogueText(lines))).toEqual(lines);
+    expect(parseLine(lines[0]!)).toEqual({ speaker: 'MAYA', text: 'First\nSecond', style: 'speech' });
+  });
   it('editing a script line updates its balloon; editing the balloon updates the line', () => {
     const p = page();
     const book = bookWith(p);

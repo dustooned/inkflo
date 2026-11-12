@@ -1,14 +1,15 @@
-import { PT, sheetOf, type Letter, type Pt } from '../../doc/model';
+import { newId, PT, sheetOf, type Letter, type Pt } from '../../doc/model';
 import { BUNDLED_FONTS } from '../../engine/lettering/fonts';
 import { detectBalloon, readBalloon } from '../../engine/lettering/geometry';
-import { applyStyle } from '../../engine/lettering/styles';
+import { applyStyle, captureStyle } from '../../engine/lettering/styles';
 import { LETTER_SIZES, TAIL_JOINS, type BalloonStyle, type CaptionSpec, type LetterSize, type TailJoin } from '../../engine/lettering/spec';
 import { panelAt } from '../../geom/carve';
-import { beatForPanel, centreIn, characterStyle, clampLetter, lineFor, newLetter, nextFreeLine, readingOrderIssues, speakers, syncLettersFromScript, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
+import { assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
 import { applyFix, letterPt, readabilityAll, safeFixes, snapScale, targetsFor, type FixId, type Level } from '../../geom/readability';
 import { hitLetter, letterBox, letterOutline } from '../../render/caption';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
-import { h, seg, toast } from '../dom';
+import { askText, h, seg, toast } from '../dom';
+import { openDialogue } from '../dialogue';
 import { openStyleSheet } from '../stylesheet';
 
 type Grab = { kind: 'body' } | { kind: 'tail'; index: number } | { kind: 'size' };
@@ -38,8 +39,9 @@ const state = { keepReadable: true };
 export function captionDesk(ctx: DeskCtx): DeskMode {
   const { studio, page, book } = ctx;
   const sheet = () => sheetOf(book);
-  // older balloons learn their speaker (and any script edits) from their linked lines
-  if (syncLettersFromScript(page)) studio.saver.markDirty();
+  const prior = JSON.stringify([page.beats, page.balloons]);
+  reconcileDialogue(book, page, ctx.panels());
+  if (JSON.stringify([page.beats, page.balloons]) !== prior) studio.saver.markDirty();
   let selId: string | null = null;
   let drag: { id: string; grab: Grab; start: Pt; orig: CaptionSpec; before: Letter[]; beforeBeats: string; moved: boolean } | null = null;
   let loop: Pt[] | null = null;
@@ -54,7 +56,12 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
 
   /** One undo step over lettering and (linked) script lines. */
   const commit = (label: string, beforeLetters: Letter[], beforeBeats: string) => {
-    for (const l of page.balloons) syncScriptFromLetter(page, l);
+    const previous = new Map(beforeLetters.map((l) => [l.id, l]));
+    for (const l of page.balloons) {
+      const original = previous.get(l.id);
+      if (l.generated && original && JSON.stringify(l.cap) !== JSON.stringify(original.cap)) delete l.generated;
+      syncScriptFromLetter(page, l);
+    }
     const was = { balloons: structuredClone(beforeLetters), beats: JSON.parse(beforeBeats) as typeof page.beats };
     const now = { balloons: structuredClone(page.balloons), beats: structuredClone(page.beats) };
     if (JSON.stringify(was) === JSON.stringify(now)) return;
@@ -91,14 +98,9 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   };
 
   function place(p: Pt, kind: BalloonStyle): void {
-    const panel = panelAt(ctx.panels(), p);
-    const beat = beatForPanel(page, panel);
-    let line: { beat: NonNullable<typeof beat>; index: number } | undefined;
-    if (beat) {
-      const i = nextFreeLine(page, beat);
-      if (i !== null) line = { beat, index: i };
-      else if (kind === 'speech') toast(`Every line of panel ${panel!.index + 1} is lettered. This balloon is free text.`);
-    }
+    const panels = ctx.panels();
+    const panel = panelAt(panels, p);
+    const line = nextPanelLine(page, panels, panel);
     const l = newLetter(book, toPt(p), kind, line);
     clampLetter(l, page);
     edit(KIND_LABEL[l.cap.style] ?? 'Balloon', () => page.balloons.push(l));
@@ -112,11 +114,10 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     if (detectBalloon(raw) === 'open') return false;
     const read = readBalloon(raw);
     if (!read) return false;
-    const panel = panelAt(ctx.panels(), { x: read.centre.x / PT, y: read.centre.y / PT });
-    const beat = beatForPanel(page, panel);
-    const i = beat ? nextFreeLine(page, beat) : null;
+    const panels = ctx.panels();
+    const panel = panelAt(panels, { x: read.centre.x / PT, y: read.centre.y / PT });
     const style = read.style === 'custom' ? 'speech' : read.style;
-    const l = newLetter(book, read.centre, style, beat && i !== null ? { beat, index: i } : undefined);
+    const l = newLetter(book, read.centre, style, nextPanelLine(page, panels, panel));
     l.cap = { ...l.cap, style: read.style, shape: Math.max(0.5, Math.min(2.5, read.shape)), minSize: [read.width / 2, read.height / 2] };
     if (read.style === 'custom' && read.outline) l.cap = { ...l.cap, look: { ...(l.cap.look ?? {}), outline: read.outline } };
     if (read.tail) l.cap = { ...l.cap, tails: [{ x: read.tail.x, y: read.tail.y, join: 'merged', width: 1.2 }] };
@@ -128,19 +129,58 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   }
 
   function cycleLine(l: Letter): void {
-    const panel = panelAt(ctx.panels(), centreIn(l));
-    const beat = beatForPanel(page, panel);
-    if (!beat || !beat.lines.length) return;
-    const start = l.src?.beat === beat.id ? l.src.line : -1;
-    const next = (start + 1) % beat.lines.length;
-    const fresh = newLetter(book, { x: l.cap.x, y: l.cap.y }, 'speech', { beat, index: next });
+    const panels = ctx.panels();
+    const line = nextPanelLine(page, panels, panelAt(panels, centreIn(l)));
+    if (!line) return;
+    const fresh = newLetter(book, l.cap, 'speech', line);
     edit('Next line', () => {
       const t = page.balloons.find((x) => x.id === l.id)!;
       t.cap = { ...t.cap, text: fresh.cap.text };
-      t.src = { beat: beat.id, line: next };
+      t.src = fresh.src;
       if (fresh.speaker) t.speaker = fresh.speaker;
       else delete t.speaker;
     });
+  }
+
+  const selectLetter = (id: string | null) => {
+    selId = id;
+    if (id) mode.tool = 'select';
+    ctx.chrome();
+    ctx.request();
+  };
+  const openScript = () => openDialogue(ctx, selectLetter);
+
+  function removeLetter(l: Letter): void {
+    omitDialogue(page, l);
+    page.balloons = page.balloons.filter((x) => x.id !== l.id);
+  }
+
+  function presetControls(l: Letter): HTMLElement {
+    const presets = sheet().presets ?? {};
+    const beat = l.src && page.beats.find((b) => b.id === l.src!.beat);
+    const index = beat && l.src ? sourceIndex(beat, l.src) : -1;
+    const assigned = beat ? beat.dialogue?.[index]?.preset : undefined;
+    const select = h('select', { 'aria-label': 'Lettering preset' },
+      h('option', { value: '' }, beat ? 'Speaker / script default' : 'Choose a preset'),
+      Object.entries(presets).map(([id, preset]) => h('option', { value: id, selected: id === assigned }, preset.name)));
+    select.addEventListener('change', () => edit('Apply lettering preset', () => {
+      const id = select.value;
+      if (beat && index >= 0) assignDialoguePreset(book, page, beat, index, id || undefined);
+      else if (id && presets[id]) l.cap = applyStyle(l.cap, presets[id]!);
+    }));
+    return h('div', { class: 'sec' }, h('h4', {}, 'Presets'),
+      Object.keys(presets).length ? h('label', { class: 'field' }, 'Lettering preset', select) : null,
+      h('button', { class: 'btn', type: 'button', onclick: async () => {
+        const name = (await askText('Save lettering preset', 'Preset name', '', 'Save'))?.trim();
+        if (!name) return;
+        const before = structuredClone(book.lettering);
+        const style = captureStyle(l.cap, newId('preset'), name);
+        const existing = Object.values(sheet().presets ?? {}).find((p) => p.name.toLowerCase() === style.name.toLowerCase());
+        if (existing) { toast('A preset with that name already exists.'); return; }
+        const after = { ...sheet(), presets: { ...sheet().presets, [style.id]: style } };
+        studio.run({ label: 'Save lettering preset', do: () => (book.lettering = structuredClone(after)), undo: () => (book.lettering = structuredClone(before)) });
+        ctx.chrome();
+      } }, 'Save as preset'));
   }
 
   function handles(l: Letter): { tails: Pt[]; size: Pt } {
@@ -159,10 +199,22 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     cursor: () => (mode.tool === 'select' ? 'move' : 'cross'),
     skipBalloon: () => undefined,
     ctx(bar) {
-      const left = page.beats.reduce((n, beat) => n + beat.lines.filter((_, i) => !page.balloons.some((b) => b.src?.beat === beat.id && b.src.line === i)).length, 0);
+      const panels = ctx.panels();
+      const left = page.beats.reduce((n, beat) => n + beat.lines.filter((raw, i) => parseLine(raw).text && !beat.dialogue?.[i]?.omit && dialoguePanel(page, panels, beat, i) && !letterForLine(page, beat, i)).length, 0);
       const keep = h('input', { type: 'checkbox', checked: state.keepReadable });
       keep.addEventListener('change', () => (state.keepReadable = keep.checked));
+      const find = h('select', { 'aria-label': 'Find a balloon', class: 'balloon-jump' },
+        h('option', { value: '' }, 'Page checks'),
+        page.balloons.map((l, index) => {
+          const panel = panelAt(panels, centreIn(l));
+          const words = l.cap.text.replace(/\s+/g, ' ').slice(0, 45);
+          return h('option', { value: l.id, selected: l.id === selId }, (panel ? 'Panel ' + (panel.index + 1) : 'Page') + ' · ' + (words || 'Balloon ' + (index + 1)));
+        }));
+      find.addEventListener('change', () => selectLetter(find.value || null));
       bar.append(
+        h('button', { class: 'btn', type: 'button', onclick: openScript }, 'Script dialogue'),
+        h('button', { class: 'btn primary', type: 'button', disabled: !left, onclick: () => edit('Place script lettering', () => reconcileDialogue(book, page, panels, true)) }, 'Place from script' + (left ? ' · ' + left : '')),
+        ...(page.balloons.length ? [find] : []),
         h('label', { class: 'mini', title: 'Sizes snap to readable steps and never drop below the style sheet minimum' }, keep, 'Keep readable'),
         h('button', { class: 'btn', type: 'button', onclick: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) }, 'Style sheet…'),
         h('span', { class: 'hint' }, mode.tool === 'select'
@@ -175,6 +227,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Caption'), h('div', { class: 'ins-title' }, l ? KIND_LABEL[l.cap.style] ?? 'Balloon' : `${page.balloons.length} balloon${page.balloons.length === 1 ? '' : 's'}`)));
       if (l) inspectLetter(el, l);
       else inspectPage(el);
+      if (l) el.append(presetControls(l));
     },
     down(p, e) {
       const now = performance.now();
@@ -316,7 +369,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     key(e) {
       const l = sel();
       if (l && (e.key === 'Delete' || e.key === 'Backspace')) {
-        edit('Delete balloon', () => (page.balloons = page.balloons.filter((x) => x.id !== l.id)));
+        edit('Delete balloon', () => removeLetter(l));
         selId = null;
         ctx.chrome();
         return true;
@@ -353,12 +406,13 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       before = null;
     });
     const beatIdx = l.src ? page.beats.findIndex((x) => x.id === l.src!.beat) : -1;
+    const panel = beatIdx >= 0 && l.src ? dialoguePanel(page, ctx.panels(), page.beats[beatIdx]!, sourceIndex(page.beats[beatIdx]!, l.src)) : null;
     el.append(sec('Words', text,
-      h('p', { class: 'note' }, beatIdx >= 0 ? `Script: panel ${beatIdx + 1}, line ${l.src!.line + 1} (“${lineFor(l).slice(0, 40)}”). Edits here update the script.` : 'Free text, not in the script.'),
+      h('p', { class: 'note' }, beatIdx >= 0 ? `Beat ${beatIdx + 1}, line ${l.src!.line + 1}${panel ? ' · Panel ' + (panel.index + 1) : ''}. Text edits update the script.` : 'Free text.'),
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
         l.src ? h('button', { class: 'btn', type: 'button', onclick: () => cycleLine(l) }, 'Next line') : null,
-        l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => delete sel()!.src) }, 'Unlink') : null,
-        h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete balloon', () => (page.balloons = page.balloons.filter((x) => x.id !== l.id))); selId = null; ctx.chrome(); } }, 'Delete'))));
+        l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => { omitDialogue(page, l); delete l.src; delete l.generated; }) }, 'Unlink') : null,
+        h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete balloon', () => removeLetter(l)); selId = null; ctx.chrome(); } }, 'Delete'))));
 
     // Speaker and character style
     const names = speakers(book);
@@ -495,8 +549,11 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           : h('ul', { class: 'check' }, h('li', {}, page.balloons.length ? 'Balloons read in script order.' : 'Nothing lettered yet.'))),
       h('div', { class: 'sec' }, h('h4', {}, 'Script lines'),
         page.beats.length
-          ? page.beats.map((beat, bi) => h('div', { class: 'rows' }, `Panel ${bi + 1}`, h('b', {}, `${page.balloons.filter((x) => x.src?.beat === beat.id).length}/${beat.lines.length}`)))
-          : h('p', { class: 'note' }, 'No script on this page. Write beats in Script and the balloons fill themselves.')),
+          ? page.beats.map((beat, bi) => {
+              const lines = beat.lines.map((raw, i) => ({ raw, i })).filter(({ raw, i }) => parseLine(raw).text && !beat.dialogue?.[i]?.omit);
+              return h('div', { class: 'rows' }, `Beat ${bi + 1}`, h('b', {}, lines.filter(({ i }) => letterForLine(page, beat, i)).length + '/' + lines.length));
+            })
+          : h('p', { class: 'note' }, 'Add beats in Script to place their dialogue here.')),
     );
   }
 

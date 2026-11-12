@@ -1,11 +1,12 @@
 import type { Beat, Letter } from '../../doc/model';
-import { syncLettersFromScript } from '../../geom/lettering';
+import { dialogueText, linesFromDialogueText, reconcileDialogue, replaceDialogue } from '../../geom/lettering';
 import { newId } from '../../doc/model';
 import { cutsForCount } from '../../geom/carve';
 import { downbeatPanel, revealIssues } from '../../geom/composition';
 import { printOf, readerSpreads } from '../../geom/printkinds';
 import type { DeskCtx, DeskMode } from '../desk';
 import { h, toast } from '../dom';
+import { openDialogue } from '../dialogue';
 import { cardCanvas, sketchCard } from '../notecard';
 
 /** Script: the page as a list of beats. Each beat becomes a panel; its lines become balloons. */
@@ -25,7 +26,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
     if (!before) return;
     const was = before;
     before = null;
-    syncLettersFromScript(page);
+    reconcileDialogue(book, page, ctx.panels());
     const now = { beats: structuredClone(page.beats), balloons: structuredClone(page.balloons) };
     if (JSON.stringify(was) === JSON.stringify(now)) return;
     studio.run({ label, do: () => Object.assign(page, structuredClone(now)), undo: () => Object.assign(page, structuredClone(was)) }, true);
@@ -103,15 +104,18 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       const issues = new Map(revealIssues(book, page, panels).map(({ index, text }) => [index, text]));
       const list = h('div', { class: cards ? 'beats notecards' : 'beats' });
       page.beats.forEach((b, i) => {
-        const desc = h('input', { value: b.desc, placeholder: 'What we see: a wide shot of the rooftop at night…', 'aria-label': `Panel ${i + 1} description` });
+        const desc = h('input', { value: b.desc, placeholder: 'What we see: a wide shot of the rooftop at night…', 'aria-label': `Panel ${i + 1} description`, 'data-beat-description': b.id });
         desc.addEventListener('focus', begin);
         desc.addEventListener('input', () => (b.desc = desc.value));
         desc.addEventListener('change', () => commit('Edit beat'));
         const lines = h('textarea', { placeholder: 'MAYA: We’re too late.\nCAPTION: Midnight.', 'aria-label': `Panel ${i + 1} dialogue, one line per balloon` });
-        lines.value = b.lines.join('\n');
+        lines.value = dialogueText(b.lines);
         lines.addEventListener('focus', begin);
-        lines.addEventListener('input', () => (b.lines = lines.value.split('\n').map((l) => l.trim()).filter(Boolean)));
-        lines.addEventListener('change', () => commit('Edit dialogue'));
+        lines.addEventListener('change', () => {
+          begin();
+          replaceDialogue(page, b, linesFromDialogueText(lines.value));
+          commit('Edit dialogue');
+        });
         const panel = panels[i];
         const actual = panel ? (panel.bbox.x1 - panel.bbox.x0) / (panel.bbox.y1 - panel.bbox.y0) : undefined;
         const warning = issues.get(i);
@@ -153,7 +157,11 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       });
       const actions = h('div', { class: 'beat-actions' },
         h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
-          h('button', { class: 'btn', type: 'button', onclick: () => change('Add beat', () => page.beats.push({ id: newId('bt'), desc: '', lines: [] })) }, '+ Add panel beat'),
+          h('button', { class: 'btn', type: 'button', onclick: () => {
+            const id = newId('bt');
+            change('Add beat', () => page.beats.push({ id, desc: '', lines: [] }));
+            ctx.stage.querySelector<HTMLInputElement>('[data-beat-description="' + id + '"]')?.focus();
+          } }, '+ Add panel beat'),
           h('span', { class: 'spacer' }),
           h('button', { class: 'btn primary', type: 'button', disabled: !page.beats.length, onclick: sendToLayout }, 'Send to Layout →')),
         h('p', { class: 'note' }, 'One line per balloon. Start a line with a name and a colon (“MAYA: …”) to name the speaker; “CAPTION:” makes a caption box. Caption pulls these lines into balloons, so nothing is typed twice.'),
@@ -162,6 +170,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
     },
     ctx(bar) {
       bar.append(h('button', { class: 'btn', type: 'button', 'aria-pressed': String(cards), onclick: () => { cards = !cards; ctx.chrome(); } }, cards ? 'Show beat list' : 'Show notecards'));
+      bar.append(h('button', { class: 'btn', type: 'button', onclick: () => openDialogue(ctx) }, 'Dialogue & panels'));
       bar.append(h('span', { class: 'hint' }, `${page.beats.length} beat${page.beats.length === 1 ? '' : 's'} · ${page.beats.reduce((n, b) => n + b.lines.length, 0)} lines`));
     },
     inspector(el) {

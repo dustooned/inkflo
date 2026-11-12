@@ -20,7 +20,7 @@ export function groupForPanel(page: Page, panels: Panel[], panel: Panel): LayerG
 }
 
 /** A point well inside a panel (its centroid, or a point nudged inside for odd shapes). */
-function anchorFor(panel: Panel): Pt {
+export function anchorFor(panel: Panel): Pt {
   if (pointInPoly(panel.centroid, panel.pts)) return { ...panel.centroid };
   const b = panel.bbox;
   for (let i = 1; i < 10; i++) {
@@ -47,7 +47,7 @@ export function syncGroups(page: Page, panels: Panel[]): boolean {
   const keep: LayerGroup[] = [];
   for (const g of page.groups.filter((x) => x.kind === 'panel')) {
     const p = g.anchor ? panelAt(panels, g.anchor) : null;
-    const empty = g.layers.every((l) => !l.strokes.length && !l.fills.length);
+    const empty = g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length);
     if (empty && (!p || claimed.has(p))) continue;
     if (p) claimed.add(p);
     keep.push(g);
@@ -72,7 +72,7 @@ export function groupAt(page: Page, panels: Panel[], p: Pt): LayerGroup {
 /** The topmost layer of a type in a group, or null. */
 /** The group's first layer of a type: raster by default, or its vector layer. */
 export function layerOfType(group: LayerGroup, type: LayerType, vector = false): Layer | null {
-  return group.layers.find((l) => l.type === type && !!l.vector === vector) ?? null;
+  return group.layers.find((l) => !l.image && l.type === type && !!l.vector === vector) ?? null;
 }
 
 /** Where a new layer of this type sits in the stack: above lower-ranked types. */

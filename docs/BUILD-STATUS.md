@@ -286,7 +286,7 @@ Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-ch
   - Resizing drawn pages.
   - Cover and spine PDF.
   - Creep compensation in the booklet output (the maths exists).
-  - 1-bit TIFF, PSD and ORA.
+  - 1-bit TIFF and ORA.
   - SVG lettering.
   - Webtoon slicing.
   - Fonts are standard Helvetica in instructions only.
@@ -314,6 +314,39 @@ Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-ch
   two continuous-tone grayscale plates, a color proof and print notes in a ZIP. Plates
   carry the selected PNG resolution. Physical press calibration and screening are external.
 - Books saved with these tools use schema 4. Older book files open in the current build.
+
+## Layered handoff, brush controls and script dialogue
+
+- **Export → Open in another app** writes one layered PSD for a single page or a ZIP of PSDs
+  for a range. Keep artwork preserves the named groups, clipping appearance, opacity,
+  visibility, paper, borders and rasterized lettering. Drawing template keeps the layout
+  and lettering and adds blank Pencil, Ink and Colour layers in masked panel groups.
+  Use Procreate Gallery → Import for layered PSDs. The .inkflo book retains editable
+  panel cuts, vector strokes and lettering.
+- **Draw** has vertical Size and Opacity controls with exact number entry. Brush sizes in
+  points use a logarithmic slider and the same limits as the keyboard shortcuts. Brush
+  settings are remembered on the device. Stroke opacity is stored with the drawing.
+- **Script → Dialogue & panels** and **Caption → Script dialogue** share the same editor.
+  Each line can be assigned to a panel and a preset. Caption can generate starter placement
+  once or auto-letter missing lines as the script changes. Reordering keeps each balloon
+  linked to its original line. Save a preset in Caption and assign it to a line or to a speaker.
+- Books saved with these tools use schema 5. The current build opens earlier book formats.
+
+## Page templates, placed artwork and desk refinements
+
+- **Layout → Page templates** previews built-in layouts and saves a custom page layout
+  on this device. **Book → From template** creates a new page from it. Cuts scale to the
+  destination trim, and the page keeps its own script, lettering and art when applying a template.
+- **Draw → Place image** imports PNG, JPEG and WebP as artwork or reference layers.
+  Position image supports dragging, corner resize, rotation, and Fit or Fill. The source
+  bitmap and placement survive undo, reload and .inkflo export/import. Print preflight
+  checks the resolution at the placed size.
+- **Draw → Edit lines → Move line** moves an entire vector stroke without changing its shape.
+  Escape and canceled pointer gestures restore an unfinished vector edit.
+- **Desk navigation** includes a page picker and a reachable inspector on narrow screens.
+  Script focuses new beats, Caption can find a balloon by its words, and the Print export
+  checklist links to pages with warnings.
+- Imported bitmap placement uses book schema 6. Earlier books still open in this build.
 
 ## Files
 

@@ -40,8 +40,17 @@ export interface Beat {
   id: string;
   desc: string;
   lines: string[];
+  dialogue?: DialogueLine[];
   reveal?: { pageId: string; beatId: string };
   card?: { ratio: number; strokes: Pt[][] };
+}
+
+export interface DialogueLine {
+  id: string;
+  /** A relative point inside the assigned panel. Absent uses the beat's reading order. */
+  panel?: Pt;
+  preset?: string;
+  omit?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -59,7 +68,9 @@ export interface Letter {
   id: string;
   cap: CaptionSpec;
   /** The script line this lettering comes from: beat id and line index. */
-  src?: { beat: string; line: number };
+  src?: { beat: string; line: number; lineId?: string };
+  /** Starter lettering may be repositioned or removed automatically until refined. */
+  generated?: boolean;
   /** Who speaks (from "MAYA: …"), for character styles and renames. */
   speaker?: string;
   /** Small on purpose (whispers, background chatter): the readability guard leaves it alone. */
@@ -81,6 +92,7 @@ export interface LetterSheet {
   font: string;
   /** Character styles by speaker name in capitals. */
   characters: Record<string, CaptionStyle>;
+  presets?: Record<string, CaptionStyle>;
   /** Extra outputs to check lettering at, besides print (readability TARGETS names). */
   checks?: string[];
 }
@@ -108,6 +120,8 @@ export interface Stroke {
   seed: number;
   /** An eraser stroke on this layer (additive). */
   erase?: boolean;
+  /** Tool opacity multiplier, independent of the brush preset. */
+  opacity?: number;
   /** Clipped to the panel its first point is in, as drawn (schema 1 data; no longer drawn). */
   clip?: boolean;
   /** Drawn with this pass's colour (pencil blue / ink black); default: the layer type's. */
@@ -147,6 +161,19 @@ export interface Fill {
 export type LayerType = 'pencil' | 'ink' | 'colour' | 'tone' | 'reference';
 export const LAYER_TYPES: readonly LayerType[] = ['pencil', 'ink', 'colour', 'tone', 'reference'];
 
+export interface PlacedImage {
+  /** Centre and size in inches on the page. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  /** Dimensions of the stored source bitmap. */
+  pixelWidth: number;
+  pixelHeight: number;
+  credit?: string;
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -166,6 +193,7 @@ export interface Layer {
    * only a cache redrawn from them after every edit. No raster strokes or fills on it.
    */
   vector?: boolean;
+  image?: PlacedImage;
   strokes: Stroke[];
   fills: Fill[];
 }
@@ -242,6 +270,7 @@ export interface Page {
   /** Relative position within the trim so the mark survives resizing. */
   downbeat?: Pt;
   beats: Beat[];
+  autoLetter?: boolean;
   /** Top of the stack first: Over panels, then panel groups, then Background. */
   groups: LayerGroup[];
   balloons: Letter[];

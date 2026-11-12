@@ -80,7 +80,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
     return h('div', { class: 'layer-options' },
       h('div', { class: 'row' }, h('label', {}, 'Opacity', opacity)),
       check('Prints', l.prints, (x, v) => (x.prints = v), 'In print and exports'),
-      check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
+      l.image ? null : check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
       g.kind === 'panel' ? check('Over frame', l.overFrame, (x, v) => (x.overFrame = v), 'Draw above the borders, unmasked (pop-out)') : null,
       h('div', { class: 'sep' }),
       h('h4', {}, 'Type'),
@@ -104,7 +104,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       } }, h('span', {}, '✎'), 'Rename'),
       h('button', { class: 'item', type: 'button', onclick: async () => {
         const n = l.strokes.length + l.fills.length;
-        if (n && !(await confirmDialog('Delete layer?', `“${l.name}” and its ${n} marks go away. Undo brings them back.`, 'Delete'))) return;
+        if ((n || l.image) && !(await confirmDialog('Delete layer?', `“${l.name}” is removed from the page. Undo brings it back.`, 'Delete'))) return;
         if (o.active === l.id) o.onSelect(null);
         edit('Delete layer', withGroup(g.id, (x) => (x.layers = x.layers.filter((y) => y.id !== l.id))));
         stack();
@@ -195,11 +195,11 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       const on = o.target === 'layer' && o.active === l.id;
       const more = h('button', { class: 'lt', type: 'button', 'aria-label': `${l.name} options`, title: 'Options', onclick: () => o.onView({ kind: 'layer', id: l.id }) }, '⋯');
       const type = TYPE_DEFAULTS[l.type].name;
-      const status = [l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
+      const status = [l.image ? 'Placed image' : l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
       card.append(
         h('div', { class: `llayer${on ? ' on' : ''}${l.visible ? '' : ' off'}` },
           h('button', { class: 'lname layer-select', type: 'button', 'data-focus': 'layer-' + l.id, 'aria-pressed': String(on),
-            title: on ? 'Use the panel under the pen' : 'Draw on ' + l.name,
+            title: l.image ? 'Position ' + l.name : on ? 'Use the panel under the pen' : 'Draw on ' + l.name,
             onclick: () => { if (on) o.onTarget('auto'); else o.onSelect(l.id); } },
             h('span', { class: 'ltype', 'data-type': l.type, 'aria-hidden': 'true' }, TYPE_GLYPH[l.type]),
             h('span', { class: 'layer-text' }, h('span', { class: 'layer-name' }, l.name), status ? h('small', {}, status) : null)),

@@ -19,6 +19,13 @@ const dabs = (s: Stroke, dpi: number, pass: 'pencil' | 'ink' = 'ink') => {
 };
 
 describe('stroke replay', () => {
+  it('keeps the stored opacity multiplier for brush and eraser strokes', () => {
+    for (const erase of [true, false]) {
+      const base = toRecord({ ...stroke, erase }, 'ink', 300);
+      const light = toRecord({ ...stroke, erase, opacity: 0.42 }, 'ink', 300);
+      expect(light.brush.opacity).toBeCloseTo(base.brush.opacity * 0.42);
+    }
+  });
   it('scales page units to pixels and keeps pressure', () => {
     const r = toRecord(stroke, 'ink', 300);
     expect(r.points[1]).toEqual({ x: 450, y: 360, pressure: 0.7, tiltX: 0, tiltY: 0, t: SAMPLE_MS });

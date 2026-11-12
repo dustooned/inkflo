@@ -6,7 +6,7 @@ import { groupLabel } from '../geom/groups';
 import { derivePanels } from '../geom/carve';
 import { bookletSheets, checkCount, miniZineCells, printOrder, printOf, readerSpreads } from '../geom/printkinds';
 import { lettersReady } from '../render/fonts';
-import { drawGutters, renderPage } from '../render/page';
+import { drawGutters, drawLayerBitmap, renderPage } from '../render/page';
 import { encodePng, makeCanvas } from './canvasops';
 import { withPages, type Progress } from './exports';
 import { browserDeflate, PdfDoc, PdfPage, type PdfImage } from './pdf';
@@ -354,7 +354,9 @@ export async function exportLayerFiles(studio: Studio, range?: PageRange, progre
           if (!c || !c.width) continue;
           progress(`Page ${n}: ${layer.name}…`);
           await yieldToUi();
-          files.push({ name: `${dir}/${gdir}/${String(li + 1).padStart(2, '0')}-${safe(layer.name)}.png`, data: await encodePng(c) });
+          const placed = layer.image ? makeCanvas(art.width, art.height) : c;
+          if (layer.image) drawLayerBitmap(placed.getContext('2d')!, c, art.width, art.height, book.dpi, layer.image);
+          files.push({ name: `${dir}/${gdir}/${String(li + 1).padStart(2, '0')}-${safe(layer.name)}.png`, data: await encodePng(placed) });
         }
       }
       if (page.balloons.length) {

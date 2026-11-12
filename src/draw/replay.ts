@@ -35,13 +35,14 @@ export function passForType(type: LayerType): LinePass {
 }
 
 /** The engine brush and colour a stroke draws with at `dpi` (shared by live drawing and replay). */
-export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: number, erase = false): Pick<StrokeRecord, 'brush' | 'color' | 'tool'> {
+export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: number, erase = false, opacity = 1): Pick<StrokeRecord, 'brush' | 'color' | 'tool'> {
   const k = dpi / REF_DPI;
   const brush = brushFor(brushId, pass);
   brush.size = w * dpi;
   brush.taperStart *= k;
   brush.taperEnd *= k;
   if (!erase) brush.opacity *= PASS_STYLE[pass].opacity;
+  brush.opacity *= opacity;
   return { brush, color: PASS_STYLE[pass].color, tool: erase ? 'eraser' : 'brush' };
 }
 
@@ -57,7 +58,7 @@ export function toRecord(stroke: Stroke, pass: LinePass, dpi: number, id = 'repl
     t: i * SAMPLE_MS * k, // same speed in page units at every dpi
     ...(stroke.pw ? { w: stroke.pw[i] ?? 1 } : {}),
   }));
-  const style = strokeStyle(stroke.brushId, stroke.w, stroke.pass ?? pass, dpi, stroke.erase);
+  const style = strokeStyle(stroke.brushId, stroke.w, stroke.pass ?? pass, dpi, stroke.erase, stroke.opacity);
   if (stroke.flat?.[0]) style.brush.taperStart = 0;
   if (stroke.flat?.[1]) style.brush.taperEnd = 0;
   return { id, ...style, seed: stroke.seed, points };
@@ -94,6 +95,7 @@ export { FILL_THRESHOLD };
 export function refAlpha(layers: Layer[], art: PageArt, w: number, h: number): Uint8Array {
   const alpha = new Uint8Array(w * h);
   for (const l of layers) {
+    if (l.image) continue;
     const c = art.planes[l.id];
     if (!c || !c.width) continue;
     const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
@@ -163,6 +165,7 @@ export function paintFill(kit: FillKit, colour: HTMLCanvasElement, fill: Fill): 
  * reference lines, which must already be current), then strokes. Bumps the layer's revision.
  */
 export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number, engine: RasterEngine, ops: Pick<PlaneOps, 'newCanvas' | 'resize'>, panels: Panel[] = derivePanels(page)): void {
+  if (layer.image) return;
   if (!layer.strokes.length && !layer.fills.length && !art.planes[layer.id]) return; // nothing drawn, nothing to clear
   const canvas = planeCanvas(art, layer.id, ops);
   ops.resize(canvas, art.width, art.height); // resizing clears

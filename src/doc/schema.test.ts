@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SHEET, groupOf, newBook, newGroup, newLayer, newPage, PT, type Layer } from './model';
 import { defaultCaption, readCaption } from '../engine/lettering/spec';
+import { captureStyle } from '../engine/lettering/styles';
 import { assetsOf, FORMAT, parseBookFile, SCHEMA, SchemaError, stringifyBookFile, V1_LAYER, type BookFile } from './schema';
 
 function file(): BookFile {
@@ -44,6 +45,36 @@ describe('book.json', () => {
   it('opens schema 3 books with their original art and lettering', () => {
     const f = { ...file(), schema: 3 };
     expect(parseBookFile(JSON.stringify(f))).toEqual({ ...f, schema: SCHEMA });
+  });
+
+  it('keeps panel assignments, named presets and automatic lettering in schema 5', () => {
+    const f = file();
+    const p = f.book.pages[0]!;
+    p.autoLetter = true;
+    p.beats[0]!.dialogue = [{ id: 'line-1', panel: { x: 0.7, y: 0.35 }, preset: 'house-voice' }];
+    p.balloons[0]!.src!.lineId = 'line-1';
+    p.balloons[0]!.generated = true;
+    f.book.lettering!.presets = { 'house-voice': captureStyle(p.balloons[0]!.cap, 'house-voice', 'House voice') };
+    ink(f).strokes[0]!.opacity = 0.42;
+    const restored = parseBookFile(stringifyBookFile(f));
+    expect(restored.book.pages[0]!.beats[0]!.dialogue).toEqual(p.beats[0]!.dialogue);
+    expect(restored.book.pages[0]!.balloons[0]!.src).toEqual(p.balloons[0]!.src);
+    expect(restored.book.lettering!.presets!['house-voice']!.name).toBe('House voice');
+    expect(restored.book.pages[0]!.autoLetter).toBe(true);
+    expect(restored.book.pages[0]!.balloons[0]!.generated).toBe(true);
+    expect(ink(restored).strokes[0]!.opacity).toBe(0.42);
+  });
+
+  it('keeps imported source dimensions and placement apart from the page bitmap', () => {
+    const f = file();
+    const page = f.book.pages[0]!;
+    const art = groupOf(page, 'background');
+    const image = { x: 1, y: 2, width: 2.5, height: 1.25, rotation: -12, pixelWidth: 1200, pixelHeight: 600, credit: 'Guest art' };
+    art.layers.push({ ...newLayer('colour', 'scan'), image });
+    f.art[page.id]!.scan = 'assets/scan.png';
+    const restored = parseBookFile(stringifyBookFile(f));
+    expect(groupOf(restored.book.pages[0]!, 'background').layers[0]!.image).toEqual(image);
+    expect(restored.art[page.id]!.scan).toBe('assets/scan.png');
   });
 
   it('refuses a file from a newer schema instead of half-reading it', () => {

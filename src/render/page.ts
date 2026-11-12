@@ -1,4 +1,4 @@
-import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page } from '../doc/model';
+import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { cutPath, derivePanels, layoutOf, panelAt, type Panel } from '../geom/carve';
 import { paintLetter } from './caption';
@@ -33,6 +33,8 @@ export interface RenderOptions {
   whitePaper?: boolean;
   /** A replacement canvas for a layer (the live stroke while drawing), by layer id. */
   live?: Record<string, HTMLCanvasElement>;
+  /** A temporary image transform shown while the user drags. */
+  placement?: { id: string; image: PlacedImage };
   /** Pre-derived panels, when the caller already has them. */
   panels?: Panel[];
   /** Balloons to skip (being dragged on the overlay, for instance). */
@@ -48,6 +50,8 @@ export interface RenderOptions {
  * the gutter paper is painted in, so gutter art fills the gutters exactly.
  */
 export function inGutterBands(g: CanvasRenderingContext2D, page: Page, s: number, W: number, H: number, paint: (c: CanvasRenderingContext2D) => void): void {
+  const gutter = layoutOf(page).gutter;
+  if (!gutter) return;
   const off = document.createElement('canvas');
   off.width = Math.max(1, Math.ceil(W));
   off.height = Math.max(1, Math.ceil(H));
@@ -56,7 +60,7 @@ export function inGutterBands(g: CanvasRenderingContext2D, page: Page, s: number
   o.globalCompositeOperation = 'destination-in';
   o.lineCap = 'butt';
   o.lineJoin = 'round';
-  o.lineWidth = layoutOf(page).gutter * s;
+  o.lineWidth = gutter * s;
   o.strokeStyle = '#000';
   for (const c of page.cuts) o.stroke(openPath(cutPath(c, page), s));
   g.drawImage(off, 0, 0);
@@ -86,23 +90,36 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   g.lineCap = 'butt';
   g.lineJoin = 'round';
   g.strokeStyle = COLORS.ink;
-  g.lineWidth = (gutter + border * 2) * s;
-  for (const p of paths) g.stroke(p);
+  if (gutter || border) {
+    g.lineWidth = (gutter + border * 2) * s;
+    for (const p of paths) g.stroke(p);
+  }
   if (opts.paper === false) {
     g.globalCompositeOperation = 'destination-out';
     g.strokeStyle = '#000';
   } else g.strokeStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
-  g.lineWidth = gutter * s;
-  for (const p of paths) g.stroke(p);
+  if (gutter) {
+    g.lineWidth = gutter * s;
+    for (const p of paths) g.stroke(p);
+  }
   g.globalCompositeOperation = 'source-over';
   g.strokeStyle = COLORS.ink;
-  g.lineWidth = border * s * 2;
-  g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
+  if (border) {
+    g.lineWidth = border * s * 2;
+    g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
+  }
   g.restore();
 }
 
 export function drawBalloons(g: CanvasRenderingContext2D, page: Page, s: number, sheet: LetterSheet = DEFAULT_SHEET, skip?: string): void {
   for (const l of page.balloons) if (l.id !== skip) paintLetter(g, l, sheet, s, page.widthIn, page.heightIn);
+}
+
+export function drawPagePaper(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, white = false): void {
+  g.fillStyle = white ? '#FFFFFF' : COLORS.gutter;
+  g.fillRect(0, 0, page.widthIn * s, page.heightIn * s);
+  g.fillStyle = white ? '#FFFFFF' : COLORS.panel;
+  for (const p of panels) g.fill(panelPath(p.pts, s));
 }
 
 /** Should this layer draw under these options? */
@@ -112,6 +129,24 @@ export function shows(layer: Layer, group: LayerGroup, opts: Pick<RenderOptions,
   if (opts.types && opts.types[layer.type] === false) return false;
   if (opts.onlyGroups && !opts.onlyGroups.has(group.id)) return false;
   return true;
+}
+
+/** Normal planes span the page. Imported planes are positioned in document units. */
+export function drawLayerBitmap(g: CanvasRenderingContext2D, canvas: HTMLCanvasElement, w: number, h: number, scale: number, image?: PlacedImage): void {
+  if (!image) {
+    g.drawImage(canvas, 0, 0, w, h);
+    return;
+  }
+  g.save();
+  g.beginPath();
+  g.rect(0, 0, w, h);
+  g.clip();
+  g.translate(image.x * scale, image.y * scale);
+  g.rotate(image.rotation * Math.PI / 180);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  g.drawImage(canvas, -width / 2, -height / 2, width, height);
+  g.restore();
 }
 
 /** Draw a group's layers bottom to top (`which` picks masked or over-frame layers). */
@@ -124,7 +159,7 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
     const c = opts.live?.[l.id] ?? (art && !art.parked ? art.planes[l.id] : null);
     if (!c || !c.width) continue;
     g.globalAlpha = l.opacity * group.opacity;
-    g.drawImage(c, 0, 0, W, H);
+    drawLayerBitmap(g, c, W, H, opts.scale, opts.placement?.id === l.id ? opts.placement.image : l.image);
   }
   g.globalAlpha = 1;
 }
@@ -138,12 +173,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   const panels = opts.panels ?? derivePanels(page);
   g.save();
   g.clearRect(0, 0, W, H);
-  if (frame) {
-    g.fillStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = opts.whitePaper ? '#FFFFFF' : COLORS.panel;
-    for (const p of panels) g.fill(panelPath(p.pts, s));
-  }
+  if (frame) drawPagePaper(g, page, panels, s, opts.whitePaper);
   g.imageSmoothingQuality = 'high';
   const bg = page.groups.filter((x) => x.kind === 'background');
   const panelGroups = page.groups.filter((x) => x.kind === 'panel');

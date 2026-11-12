@@ -6,6 +6,8 @@ import { confirmDialog, h, seg, slider } from '../dom';
 import { centreCrossing, DEFAULT_GRID, downbeatPanel, revealIssues, snapGridCut, staggerCentre } from '../../geom/composition';
 import { drawModularGrid } from '../composition';
 import { openGrid } from '../grid';
+import { openPageTemplates } from '../pagetemplates';
+import { applyPageTemplate } from '../../geom/pagetemplates';
 
 type Side = 'n' | 's' | 'e' | 'w';
 interface Handle {
@@ -91,6 +93,12 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   }
 
   const cutMode = (): CutMode => (variantOf(mode, 'knife') === 'across' ? 'across' : 'panel');
+  const templates = () => openPageTemplates(page, (template) => {
+    studio.editPage(page, 'Apply ' + template.name, ['cuts', 'layout', 'grid', 'downbeat'], (p) => applyPageTemplate(p, template));
+    sel = null;
+    ctx.chrome();
+    ctx.request();
+  }, true);
   function markDownbeat(panel: Panel, clear = false): void {
     studio.editPage(page, clear ? 'Clear downbeat' : 'Mark downbeat', ['downbeat'], (pg) => {
       if (clear) delete pg.downbeat;
@@ -115,6 +123,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       const L = layoutOf(page);
       if (mode.tool === 'knife') bar.append(seg<CutMode>([{ id: 'panel', label: 'Panel only' }, { id: 'across', label: 'To edges' }], cutMode(), (v) => ctx.setVariant('knife', v), 'Cut mode'));
       bar.append(
+        h('button', { class: 'btn', type: 'button', onclick: templates }, 'Page templates'),
         slider('Gutter', 0, 0.6, 0.01, L.gutter, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ gutter: v }, false), (v) => setLayout({ gutter: v }, true)),
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),

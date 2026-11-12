@@ -1,5 +1,5 @@
 import type { Studio } from '../app/studio';
-import { sheetOf, STAGES, type Book, type LayerType, type Page, type Pass, type Pt, type Stage } from '../doc/model';
+import { sheetOf, STAGES, type Book, type LayerType, type Page, type Pass, type PlacedImage, type Pt, type Stage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { derivePanels, type Panel } from '../geom/carve';
 import { syncGroups } from '../geom/groups';
@@ -71,6 +71,7 @@ export interface DeskMode {
   hover?(p: Pt | null): void;
   overlay?(g: CanvasRenderingContext2D, s: number): void;
   live?(): Partial<Record<Pass, HTMLCanvasElement>>;
+  placement?(): { id: string; image: PlacedImage } | undefined;
   types?(): Partial<Record<LayerType, boolean>>;
   skipBalloon?(): string | undefined;
   key?(e: KeyboardEvent): boolean;
@@ -196,7 +197,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const p = prefs();
     drawBackdrop(g, { width: r.width, height: r.height, ox, oy, s, pageW: page.widthIn, pageH: page.heightIn }, { ...colors, kind: p.backdrop, strength: p.gridOpacity, vignette: p.vignette });
     g.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
-    renderPage(g, page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), panels: ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    renderPage(g, page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
     if (composition) drawComposition(g, p.guide, page.widthIn, page.heightIn, s);
     mode.overlay?.(g, s);
     stageEl.dataset.cursor = mode.cursor?.() ?? '';
@@ -399,6 +400,20 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   // ---- header, focus corner, stage rail
   const idx = book.pages.indexOf(page);
   const pageHash = (i: number) => `#desk/${book.id}/${book.pages[i]!.id}/${stage}`;
+  const jump = () => {
+    const list = h('div', { class: 'page-jump' }, book.pages.map((item, i) => h('button', {
+      class: i === idx ? 'btn primary' : 'btn', type: 'button', 'aria-current': i === idx ? 'page' : null,
+      onclick: () => { d.close(); if (i !== idx) go(pageHash(i)); },
+    }, h('strong', {}, 'Page ' + (i + 1)), item.beats[0]?.desc ? h('small', {}, item.beats[0].desc) : null)));
+    const d = h('dialog', { 'aria-label': 'Jump to page' },
+      h('header', {}, h('h2', {}, 'Jump to page')),
+      h('div', { class: 'content' }, list),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')));
+    d.addEventListener('close', () => d.remove());
+    document.body.append(d);
+    d.showModal();
+    list.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
+  };
   const save = h('span', { class: 'save', 'aria-live': 'polite' });
   const undoBtns: HTMLButtonElement[] = [];
   const redoBtns: HTMLButtonElement[] = [];
@@ -435,6 +450,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   const layoutBtn = (glyph: string, label: string) => h('button', { class: 'icon', type: 'button', 'aria-label': label, title: `${label} (Tab)`, onclick: () => toggleLayout() }, glyph);
   const inspBtn = h('button', { class: 'icon', type: 'button', 'aria-label': 'Show inspector', 'aria-pressed': 'false', title: 'Inspector' }, '☰');
+  const narrowInspector = h('button', { class: 'btn studio-inspector-toggle', type: 'button', 'aria-label': 'Show inspector', 'aria-pressed': 'false' }, 'Inspector');
   const deskSelect = h('select', { 'aria-label': 'Desk' }, STAGES.map((s) => h('option', { value: s, selected: s === stage }, DESK_META[s].label)));
   deskSelect.addEventListener('change', () => go(`#desk/${book.id}/${page.id}/${deskSelect.value}`));
   const screen = h('div', { class: 'screen', 'data-desk': stage },
@@ -444,10 +460,10 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       h('span', { class: 'spacer' }),
       h('div', { class: 'pager' },
         h('button', { type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
-        `${idx + 1} / ${book.pages.length}`,
+        h('button', { type: 'button', class: 'page-jump-trigger', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, `${idx + 1} / ${book.pages.length} ▾`),
         h('button', { type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›')),
-      save, undoBtn(), redoBtn(), spreadButton(studio, page, stage, go), displayButton(true, composition), layoutBtn('⤢', 'Focus layout'), doneBtn,
-      h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio) }, 'Export')),
+      save, undoBtn(), redoBtn(), narrowInspector, spreadButton(studio, page, stage, go), displayButton(true, composition), layoutBtn('⤢', 'Focus layout'), doneBtn,
+      h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio, stage === 'print' ? 'print' : 'files') }, 'Export')),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),
     rail,
@@ -455,14 +471,20 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to book', onclick: () => go(`#book/${book.id}`) }, '←'),
       deskSelect,
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
+      h('button', { class: 'icon', type: 'button', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, String(idx + 1)),
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›'),
       undoBtn(), redoBtn(), inspBtn, spreadButton(studio, page, stage, go, true), displayButton(true, composition), layoutBtn('⤡', 'Studio layout')),
   );
-  inspBtn.addEventListener('click', () => {
+  const toggleInspector = () => {
     const on = !screen.classList.contains('insp-open');
     screen.classList.toggle('insp-open', on);
-    inspBtn.setAttribute('aria-pressed', String(on));
-  });
+    for (const b of [inspBtn, narrowInspector]) {
+      b.setAttribute('aria-pressed', String(on));
+      b.setAttribute('aria-label', on ? 'Hide inspector' : 'Show inspector');
+    }
+  };
+  inspBtn.addEventListener('click', toggleInspector);
+  narrowInspector.addEventListener('click', toggleInspector);
   root.replaceChildren(screen);
   if (mode.pane) stageEl.append(paneHost);
 

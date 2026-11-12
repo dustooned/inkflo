@@ -5,6 +5,8 @@ import { openExport } from './exportdialog';
 import { askText, confirmDialog, h } from './dom';
 import { displayButton } from './popover';
 import { spreadButton } from './spread';
+import { applyPageTemplate } from '../geom/pagetemplates';
+import { openPageTemplates } from './pagetemplates';
 
 const STAGE_LABEL: Record<string, string> = { script: 'Script', layout: 'Layout', draw: 'Draw', caption: 'Caption', print: 'Print' };
 
@@ -34,8 +36,13 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
             h('span', { class: 'dots', 'aria-label': STAGES.map((s) => `${STAGE_LABEL[s]} ${['to do', 'in progress', 'done'][p.state[s]]}`).join(', ') },
               STAGES.map((s) => h('i', { class: ['', 'wip', 'done'][p.state[s]] ?? '' })))));
       }),
-      h('button', { class: 'card new pagecard', type: 'button', onclick: () => { const p = studio.addPage(); go(`#desk/${book.id}/${p.id}/script`); } },
-        h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New page')),
+      h('div', { class: 'new-page-card' },
+        h('button', { class: 'card new pagecard', type: 'button', onclick: () => { const p = studio.addPage(); go(`#desk/${book.id}/${p.id}/script`); } },
+          h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New page')),
+        h('button', { class: 'btn', type: 'button', onclick: () => openPageTemplates(book.pages.at(-1)!, (template) => {
+          const p = studio.addPage(undefined, (next) => applyPageTemplate(next, template));
+          go(`#desk/${book.id}/${p.id}/layout`);
+        }, false) }, 'From template')),
     );
   };
 

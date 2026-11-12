@@ -1,4 +1,4 @@
-import { pagePixels, type Book } from '../doc/model';
+import { allLayers, pagePixels, type Book } from '../doc/model';
 import type { BookFile } from '../doc/schema';
 import { newPageArt, storedPageArt, type PageArt } from '../draw/residency';
 
@@ -20,7 +20,9 @@ export function loadBookFile(file: BookFile): Loaded {
     const { width, height } = pagePixels(page, book.dpi);
     const label = `Page ${i + 1}`;
     const keys = file.art[page.id];
-    art.set(page.id, keys && Object.keys(keys).length ? storedPageArt(page.id, label, width, height, keys) : newPageArt(page.id, label, width, height));
+    const bitmap = keys && Object.keys(keys).length ? storedPageArt(page.id, label, width, height, keys) : newPageArt(page.id, label, width, height);
+    for (const l of allLayers(page)) if (l.image) bitmap.planeSizes[l.id] = { width: l.image.pixelWidth, height: l.image.pixelHeight };
+    art.set(page.id, bitmap);
   });
   return { book, art };
 }

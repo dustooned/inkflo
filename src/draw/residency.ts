@@ -45,6 +45,8 @@ export interface PageArt {
   height: number;
   /** Layer bitmaps by layer id. A layer has no canvas until something is drawn on it. */
   planes: Record<string, HTMLCanvasElement | null>;
+  /** Imported source bitmaps keep their own dimensions when parked and loaded. */
+  planeSizes: Record<string, { width: number; height: number }>;
   /** Per-layer revision, bumped on every pixel change. */
   revs: Record<string, number>;
   /** Page revision (any layer changed): thumbnails and covers. */
@@ -57,7 +59,7 @@ export interface PageArt {
 
 /** A page with nothing drawn yet. */
 export function newPageArt(id: string, label: string, width: number, height: number): PageArt {
-  return { id, label, width, height, planes: {}, revs: {}, rev: 0, parked: null, saved: {}, thumb: null, thumbRev: -1 };
+  return { id, label, width, height, planes: {}, planeSizes: {}, revs: {}, rev: 0, parked: null, saved: {}, thumb: null, thumbRev: -1 };
 }
 
 /** A page whose layers are stored as assets and not decoded yet (how a book opens). */
@@ -292,13 +294,17 @@ export class Residency {
       const layer = layers[i]!;
       // a layer that had a canvas or stored pixels gets its canvas back; a blank one stays null
       if (!p.planes[layer] && !art.planes[layer]) continue;
-      const c = (art.planes[layer] ??= this.ops.newCanvas(art.width, art.height));
-      this.ops.resize(c, art.width, art.height);
+      const { width, height } = art.planeSizes[layer] ?? art;
+      const c = (art.planes[layer] ??= this.ops.newCanvas(width, height));
+      this.ops.resize(c, width, height);
       const b = bytes[i];
       if (b) await this.decode(art, c, b, layer);
     }
     // canvases of layers drawn after parking was decided (none normally) come back blank
-    for (const [layer, c] of Object.entries(art.planes)) if (c && !(layer in p.planes)) this.ops.resize(c, art.width, art.height);
+    for (const [layer, c] of Object.entries(art.planes)) {
+      const { width, height } = art.planeSizes[layer] ?? art;
+      if (c && !(layer in p.planes)) this.ops.resize(c, width, height);
+    }
     art.parked = null;
     // What we just decoded is exactly what is stored, so the next save can skip it.
     for (const layer of layers) {
