@@ -6,7 +6,7 @@ import { LETTER_SIZES, TAIL_JOINS, type BalloonStyle, type CaptionSpec, type Let
 import { panelAt } from '../../geom/carve';
 import { assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
 import { applyFix, letterPt, readabilityAll, safeFixes, snapScale, targetsFor, type FixId, type Level } from '../../geom/readability';
-import { hitLetter, letterBox, letterOutline } from '../../render/caption';
+import { hitLetter, letterBodyBox, letterBodyOutline } from '../../render/caption';
 import { boxHandles, resizeBox, rotateAround, type Bounds, type ResizeSide } from '../../geom/resizebox';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { askText, h, seg, toast } from '../dom';
@@ -52,8 +52,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   const H = page.heightIn;
   const toPt = (p: Pt): Pt => ({ x: p.x * PT, y: p.y * PT });
   const sel = () => page.balloons.find((b) => b.id === selId) ?? null;
-  const outline = (l: Letter) => letterOutline(l, sheet(), W, H);
-  const box = (l: Letter) => letterBox(l, sheet(), W, H);
+  const outline = (l: Letter) => letterBodyOutline(l, sheet(), W, H);
+  const box = (l: Letter) => letterBodyBox(l, sheet(), W, H);
   const localBox = (l: Letter) => box({ ...l, rotation: undefined });
   const frame = (b: Bounds, k: number): Bounds => ({ x0: b.x0 - 5 / k, y0: b.y0 - 5 / k, x1: b.x1 + 5 / k, y1: b.y1 + 5 / k });
   const rotationAt = (b: Bounds, pixelsPerPoint: number): Pt => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / pixelsPerPoint });
@@ -244,28 +244,29 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const q = toPt(p);
       const s = sel();
       if (s) {
-        const r = (e.pointerType === 'touch' ? 14 : 9) / (ctx.scale() / PT);
+        const k = ctx.scale() / PT;
+        const r = (e.pointerType === 'touch' ? 14 : 9) / k;
         const distance = (a: Pt) => Math.hypot(a.x - q.x, a.y - q.y);
-        const ti = s.cap.style === 'sfx' ? -1 : s.cap.tails.findIndex((tail) => distance(tail) <= r);
         const start = () => {
           studio.drawing = true;
           return { start: q, orig: structuredClone(s.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
         };
-        if (ti >= 0) {
-          drag = { id: s.id, grab: { kind: 'tail', index: ti }, ...start() };
+        const bounds = localBox(s);
+        const frameBounds = frame(bounds, k);
+        const tail = s.cap.style === 'sfx' ? undefined : s.cap.tails.map((at, index) => ({ index, d: distance(at) })).sort((a, b) => a.d - b.d)[0];
+        const rotateDistance = distance(onPage(rotationAt(frameBounds, k), s));
+        const handle = boxHandles(frameBounds).map((side) => ({ side, d: distance(onPage(side.at, s)) })).sort((a, b) => a.d - b.d)[0]!;
+        if (tail && tail.d <= Math.min(r, rotateDistance, handle.d)) {
+          drag = { id: s.id, grab: { kind: 'tail', index: tail.index }, ...start() };
           return;
         }
-        const bounds = localBox(s);
-        const frameBounds = frame(bounds, ctx.scale() / PT);
-        if (distance(onPage(rotationAt(frameBounds, ctx.scale() / PT), s)) <= r) {
+        if (rotateDistance <= Math.min(r, handle.d)) {
           drag = { id: s.id, grab: { kind: 'rotate', angle: s.rotation ?? 0 }, ...start() };
           return;
         }
-        const hdDistance = (handle: { at: Pt }) => distance(onPage(handle.at, s));
-        const handle = boxHandles(frameBounds).sort((a, b) => hdDistance(a) - hdDistance(b))[0]!;
-        if (hdDistance(handle) <= r) {
+        if (handle.d <= r) {
           const natural = localBox({ ...s, cap: { ...s.cap, minSize: undefined } });
-          drag = { id: s.id, grab: { kind: 'size', side: handle, box: bounds, minimum: { x: Math.max(2, natural.x1 - natural.x0), y: Math.max(2, natural.y1 - natural.y0) } }, ...start() };
+          drag = { id: s.id, grab: { kind: 'size', side: handle.side, box: bounds, minimum: { x: Math.max(2, natural.x1 - natural.x0), y: Math.max(2, natural.y1 - natural.y0) } }, ...start() };
           return;
         }
       }
@@ -312,7 +313,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         clampLetter(l, page);
       } else if (drag.grab.kind === 'tail') {
         const i = drag.grab.index;
-        l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, x: q.x, y: q.y } : t)) };
+        l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, x: t.x + dx, y: t.y + dy } : t)) };
       } else if (drag.grab.kind === 'rotate') {
         const angle = (point: Pt) => Math.atan2(point.y - o.y, point.x - o.x);
         let degrees = drag.grab.angle + (angle(q) - angle(drag.start)) * 180 / Math.PI;

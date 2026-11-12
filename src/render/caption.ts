@@ -9,7 +9,7 @@ import { alongPath, balloonOutline, balloonProfile, balloonShapes, fitCaption, i
 import { freshState, hasBold, runsOf, stripMarkup } from '../engine/lettering/markup';
 import { captionValue, type CaptionSpec } from '../engine/lettering/spec';
 import { letterFont, letterFontReady } from './fonts';
-import { rotateAround } from '../geom/resizebox';
+import { rotateAround, type Bounds } from '../geom/resizebox';
 
 /** Type size in points (house size × the balloon's own scale). */
 export function sizePt(c: CaptionSpec, sheet: LetterSheet = DEFAULT_SHEET): number {
@@ -89,13 +89,18 @@ function curvePath(c: CaptionSpec, lay: CaptionLayout): Pt[] | null {
   return p.length >= 2 ? p : null;
 }
 
-/** The balloon (with tails) of a caption in pixels. */
-export function captionBalloon(c: CaptionSpec, size: number, pageW: number, pageH: number) {
+/** The primary balloon's contour around (0, 0), without tail geometry. */
+function captionBody(c: CaptionSpec, size: number, pageW: number, pageH: number) {
   const lay = captionLayout(c, size, pageW, pageH);
   const seed = [...c.text].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
   const curved = curvePath(c, lay);
-  // outlines are around (0, 0); balloonShapes moves them to the caption's centre
   const outline = curved ? pathBand(curved, lay.size * 0.8) : balloonOutline(c.style, lay.fit.a, lay.fit.b, seed, c.path, c.look);
+  return { lay, outline };
+}
+
+/** The balloon (with tails) of a caption in pixels. */
+export function captionBalloon(c: CaptionSpec, size: number, pageW: number, pageH: number) {
+  const { lay, outline } = captionBody(c, size, pageW, pageH);
   return { lay, outline, shapes: balloonShapes(outline, c.style === 'sfx' ? [] : c.tails, c.x, c.y, lay.size) };
 }
 
@@ -358,22 +363,40 @@ export function captionWithLocalTails(c: CaptionSpec, rotation = 0): CaptionSpec
   }) };
 }
 
-/** A letter's outline in points (hit testing, safe area, selection boxes). */
-export function letterOutline(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): Pt[] {
-  // laid out at 4 px per pt, then scaled back, so text is measured at a realistic size
-  const k = 4;
-  const { shapes } = captionBalloon(toPx(l.cap, k), sizePt(l.cap, sheet) * k, pageWIn * PT * k, pageHIn * PT * k);
-  return shapes.outline.map((p) => rotateAround({ x: p.x / k, y: p.y / k }, l.cap, l.rotation ?? 0));
+// Lay out at 4 px per pt, then scale back, so text is measured at a realistic size.
+const MEASURE_SCALE = 4;
+
+/** Body contour in page points. Tail position never affects the transform frame. */
+export function letterBodyOutline(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): Pt[] {
+  const k = MEASURE_SCALE;
+  const { outline } = captionBody(toPx(l.cap, k), sizePt(l.cap, sheet) * k, pageWIn * PT * k, pageHIn * PT * k);
+  return outline.map((p) => rotateAround({ x: l.cap.x + p.x / k, y: l.cap.y + p.y / k }, l.cap, l.rotation ?? 0));
 }
 
-export function letterBox(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): { x0: number; y0: number; x1: number; y1: number } {
-  const o = letterOutline(l, sheet, pageWIn, pageHIn);
-  const xs = o.map((p) => p.x);
-  const ys = o.map((p) => p.y);
+export function letterBodyBox(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): Bounds {
+  return boundsOf(letterBodyOutline(l, sheet, pageWIn, pageHIn));
+}
+
+function letterOutlines(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): Pt[][] {
+  const k = MEASURE_SCALE;
+  const rotation = l.rotation ?? 0;
+  const c = captionWithLocalTails(toPx(l.cap, k), rotation);
+  const { shapes } = captionBalloon(c, sizePt(c, sheet) * k, pageWIn * PT * k, pageHIn * PT * k);
+  // Match paintLetter, including merged tails that use a separate joined outline.
+  return [shapes.outline, ...shapes.joined].map((path) => path.map((p) => rotateAround({ x: p.x / k, y: p.y / k }, l.cap, rotation)));
+}
+
+function boundsOf(pts: Pt[]): Bounds {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
   return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+
+export function letterBox(l: Letter, sheet: LetterSheet, pageWIn: number, pageHIn: number): Bounds {
+  return boundsOf(letterOutlines(l, sheet, pageWIn, pageHIn).flat());
 }
 
 /** Does a point (pt) hit a letter's balloon? */
 export function hitLetter(l: Letter, sheet: LetterSheet, p: Pt, pageWIn: number, pageHIn: number): boolean {
-  return inside(letterOutline(l, sheet, pageWIn, pageHIn), p);
+  return letterOutlines(l, sheet, pageWIn, pageHIn).some((outline) => inside(outline, p));
 }
