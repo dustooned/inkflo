@@ -733,3 +733,6 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .psd-thumb { grid-row: 1 / span 4; }
 .page-range { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .page-range input { min-width: 0; flex: 1 1 52px; }
+.fine-tune { border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 10px; margin-top: 6px; }
+.fine-tune > summary { cursor: pointer; font-size: 12px; color: var(--text-soft); padding: 4px 0; }
+.fine-tune[open] { padding-bottom: 8px; display: grid; gap: 4px; }

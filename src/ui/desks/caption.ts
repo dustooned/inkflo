@@ -359,6 +359,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   }
 
   let lastTap: { at: number; id: string; point: Pt } | null = null;
+  let fineTuneOpen = false;
   const mode: DeskMode = {
     id: 'caption',
     actions: [
@@ -876,6 +877,13 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       input.addEventListener('change', () => live((x) => set(x, Number(input.value)), true, label));
       return h('label', { class: 'mini' }, label, input, out);
     };
+    const fineTune = (label: string, ...rows: (HTMLElement | null)[]) => {
+      const d = h('details', { class: 'fine-tune' }, h('summary', {}, label), ...rows.filter((r): r is HTMLElement => !!r));
+      // stay open across inspector refreshes while the student is adjusting
+      d.open = fineTuneOpen;
+      d.addEventListener('toggle', () => { fineTuneOpen = d.open; });
+      return d;
+    };
     const fill = h('input', { type: 'color', value: c.fill, 'aria-label': 'Balloon fill' });
     fill.addEventListener('change', () => editCap('Balloon fill', (x) => ({ ...x, fill: fill.value })));
     const ink = h('input', { type: 'color', value: c.ink, 'aria-label': 'Balloon ink' });
@@ -908,12 +916,17 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       kinds,
       lookPicker,
       c.style !== 'sfx' ? h('div', { style: 'display:flex;gap:10px' }, h('label', { class: 'mini' }, 'Fill', fill), h('label', { class: 'mini' }, 'Ink', ink)) : null,
-      c.style !== 'sfx' ? slider('Border', 0, 0.4, 0.01, c.inkWidth, (x, v) => ({ ...x, inkWidth: v })) : slider('Outline', 0, 0.5, 0.01, c.textOutlineWidth, (x, v) => ({ ...x, textOutlineWidth: v, textOutline: x.textOutline ?? '#111111' })),
-      slider('Width', 0.5, 2.5, 0.05, c.shape ?? 1, (x, v) => ({ ...x, shape: v })),
-      c.style === 'speech' || c.style === 'whisper' ? slider('Roundness', 2, 8, 0.1, look.round ?? 2.7, (x, v) => ({ ...x, look: { ...x.look, round: v } })) : null,
-      c.style === 'shout' ? slider('Spikes', 4, 40, 1, look.spikes ?? 14, (x, v) => ({ ...x, look: { ...x.look, spikes: v } })) : null,
-      c.style === 'thought' ? slider('Bumps', 4, 30, 1, look.bumps ?? 10, (x, v) => ({ ...x, look: { ...x.look, bumps: v } })) : null,
-      c.style !== 'sfx' && c.style !== 'box' ? slider('Hand-drawn', 0, 1, 0.05, look.wobble ?? 0, (x, v) => ({ ...x, look: { ...x.look, wobble: v } })) : null,
+      // the presets above cover most needs; every number stays one fold away
+      fineTune('Fine-tune the shape',
+        c.style !== 'sfx' ? slider('Border', 0, 0.4, 0.01, c.inkWidth, (x, v) => ({ ...x, inkWidth: v })) : slider('Outline', 0, 0.5, 0.01, c.textOutlineWidth, (x, v) => ({ ...x, textOutlineWidth: v, textOutline: x.textOutline ?? '#111111' })),
+        slider('Width', 0.5, 2.5, 0.05, c.shape ?? 1, (x, v) => ({ ...x, shape: v })),
+        c.style === 'speech' || c.style === 'whisper' ? slider('Roundness', 2, 8, 0.1, look.round ?? 2.7, (x, v) => ({ ...x, look: { ...x.look, round: v } })) : null,
+        c.style === 'shout' ? slider('Spikes', 4, 40, 1, look.spikes ?? 14, (x, v) => ({ ...x, look: { ...x.look, spikes: v } })) : null,
+        c.style === 'shout' ? slider('Spike depth', 0.05, 1, 0.05, look.spikeDepth ?? 0.26, (x, v) => ({ ...x, look: { ...x.look, spikeDepth: v } })) : null,
+        c.style === 'thought' ? slider('Bumps', 4, 30, 1, look.bumps ?? 10, (x, v) => ({ ...x, look: { ...x.look, bumps: v } })) : null,
+        c.style === 'thought' ? slider('Bump depth', 0.04, 0.5, 0.01, look.bumpDepth ?? 0.16, (x, v) => ({ ...x, look: { ...x.look, bumpDepth: v } })) : null,
+        c.style !== 'sfx' && c.style !== 'box' ? slider('Hand-drawn', 0, 1, 0.05, look.wobble ?? 0, (x, v) => ({ ...x, look: { ...x.look, wobble: v } })) : null,
+        c.tails.length ? slider('Tail width', 0.4, 3, 0.1, c.tails[0]!.width ?? 1.2, (x, v) => ({ ...x, tails: x.tails.map((t) => ({ ...t, width: v })) })) : null),
       c.minSize ? h('button', { class: 'btn', type: 'button', onclick: () => editCap('Fit to words', (x) => { const { minSize: _m, ...rest } = x; return rest; }) }, 'Fit to words') : null));
 
     // Tails

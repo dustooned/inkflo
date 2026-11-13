@@ -817,3 +817,7 @@ an iPad pays for on every frame:
   of layout and lettering.
 - The page-range fields in Export files stay on one line.
 - Checks in Chrome: every preview rendered. Swatches are exempt from the icon decorator.
+- **Caption fine-tuning:** the shape sliders sit under a **Fine-tune the shape** fold, below the
+  picture presets, and the fold stays open while you adjust. New controls: **Spike depth**
+  (shout), **Bump depth** (thought) and **Tail width** (all tails). Their defaults match the
+  renderer (0.26, 0.16, 1.2).
