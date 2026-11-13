@@ -1,12 +1,13 @@
 import type { Layer as PsdLayer, Psd } from 'ag-psd';
 import type { Studio } from '../app/studio';
-import { pagePixels, sheetOf, TYPE_DEFAULTS, type Book, type Layer, type LayerGroup, type Page } from '../doc/model';
+import { pagePixels, PT, sheetOf, TYPE_DEFAULTS, type Book, type Layer, type LayerGroup, type Page } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { derivePanels, panelAt } from '../geom/carve';
 import { groupLabel, syncGroups } from '../geom/groups';
+import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
-import { drawBalloons, drawGutters, drawPagePaper, panelPath, renderPage } from '../render/page';
+import { clearGutterPaper, drawBalloons, drawGutters, drawPagePaper, panelPath, renderPage } from '../render/page';
 import { makeCanvas } from './canvasops';
 import type { Progress } from './exports';
 import { pagesIn, type PageRange } from './printexport';
@@ -61,6 +62,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     ...(art?.planes[l.id]?.width ? painted(l.name, () => {
       const only = { ...grp, visible: true, opacity: 1, layers: [{ ...l, visible: true, opacity: 1 }] };
       renderPage(g, { ...source, groups: [only] }, art, { scale: dpi, panels, frame: false, balloons: false });
+      if (grp.kind === 'background' || (grp.kind === 'panel' && !l.overFrame)) clearGutterPaper(g, page, panels, dpi);
     }) : { name: l.name }),
     hidden: !l.visible,
     opacity: l.opacity * grp.opacity,
@@ -99,15 +101,24 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
       opened: !grp.collapsed,
     };
   };
+  const lettering = captionGroups(page.balloons);
+  const letteringLayer: PsdLayer = lettering.some((group) => group.length > 1)
+    ? { name: 'Lettering', children: lettering.map((group, i) => {
+      const root = group[0]!;
+      const panel = panelAt(panels, { x: root.cap.x / PT, y: root.cap.y / PT });
+      const label = groupWords(group).replace(/\s+/g, ' ').slice(0, 44) || `Caption ${i + 1}`;
+      return painted((panel ? `Panel ${panel.index + 1} · ` : '') + label, () => drawBalloons(g, { ...page, balloons: group }, dpi, sheet));
+    }).reverse() }
+    : page.balloons.length ? painted('Lettering', () => drawBalloons(g, page, dpi, sheet)) : { name: 'Lettering' };
   const children: (PsdLayer | null)[] = [
-    page.balloons.length ? painted('Lettering', () => drawBalloons(g, page, dpi, sheet)) : { name: 'Lettering' },
+    letteringLayer,
     ...source.groups.filter((grp) => grp.kind === 'over').map((grp) => group(grp)),
     ...source.groups.filter((grp) => grp.kind === 'panel').map((grp) => group(grp, true)),
     ...source.groups.filter((grp) => grp.kind === 'gutter').map((grp) => group(grp)),
     painted('Panel borders and gutters', () => drawGutters(g, page, dpi)),
     ...source.groups.filter((grp) => grp.kind === 'panel').map((grp) => group(grp)),
     ...source.groups.filter((grp) => grp.kind === 'background').map((grp) => group(grp)),
-    painted('Paper', () => drawPagePaper(g, page, panels, dpi)),
+    painted('Paper', () => drawPagePaper(g, page, panels, dpi, false, true)),
   ];
   renderPage(g, page, mode === 'art' ? art : null, { scale: dpi, panels, sheet });
   const imageData = g.getImageData(0, 0, width, height);

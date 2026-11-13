@@ -24,6 +24,22 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('round-trips a continuation balloon and rejects missing parents', () => {
+    const f = file();
+    const page = f.book.pages[0]!;
+    page.balloons.push({ id: 'part-2', cap: defaultCaption(144, 100), continuation: { after: 'l1', join: 'separate' } });
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    page.balloons[1]!.continuation!.after = 'missing';
+    expect(() => parseBookFile(JSON.stringify(f))).toThrow(/continuation/);
+  });
+  it('round-trips smudge and transform operations together', () => {
+    const f = file();
+    ink(f).pixelTransforms = [
+      { kind: 'smudge', points: [{ x: 1, y: 1, pressure: 0.2 }, { x: 2, y: 1, pressure: 0.9 }], size: 0.2, strength: 0.6, strokes: 1, fills: 0 },
+      { polygon: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }], matrix: [1, 0, 0, 1, 0.5, 2], strokes: 1, fills: 0 },
+    ];
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+  });
   it('retains pixel transforms and checks their place in the paint history', () => {
     const f = file();
     const op = { polygon: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }], matrix: [1, 0, 0, 1, 0.5, 2] as const, strokes: 1, fills: 0 };

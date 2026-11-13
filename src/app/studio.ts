@@ -85,9 +85,10 @@ export class Studio {
     return this.store.listBooks();
   }
 
-  async createBook(title: string, author: string): Promise<Book> {
+  async createBook(title: string, author: string, setup?: (book: Book) => void): Promise<Book> {
     await this.close();
     const book = newBook(title || 'Untitled book', author);
+    setup?.(book);
     this.attach(book, new Map());
     this.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: '', book, art: {} }), false);
     await this.store.putSetting('lastBook', book.id);
@@ -259,6 +260,10 @@ export class Studio {
     if (size) {
       page.widthIn = size.widthIn;
       page.heightIn = size.heightIn;
+      if (b.print?.binding === 'web') {
+        const { panelCorners: _corners, ...sectionStyle } = layoutOf(size);
+        page.layout = sectionStyle;
+      }
     }
     if (b.fixedGrid) {
       page.cuts = gridCuts(page, b.fixedGrid);
@@ -323,7 +328,7 @@ export class Studio {
         const sx = t.w / p.widthIn;
         const sy = t.h / p.heightIn;
         const sc = (q: { x: number; y: number }) => ({ x: q.x * sx, y: q.y * sy });
-        p.cuts = p.cuts.map((c) => ({ ...c, pts: c.pts.map(sc), ...(c.extended ? { extended: c.extended.map(sc) } : {}) }));
+        p.cuts = p.cuts.map((c) => ({ ...c, pts: c.pts.map(sc), ...(c.extended ? { extended: c.extended.map(sc) } : {}), ...(c.handles ? { handles: [sc(c.handles[0]), sc(c.handles[1])] } : {}) }));
         p.balloons = p.balloons.map((l) => ({ ...l, cap: { ...l.cap, x: l.cap.x * sx, y: l.cap.y * sy, tails: l.cap.tails.map((t2) => ({ ...t2, x: t2.x * sx, y: t2.y * sy })) } }));
         for (const g of p.groups) if (g.anchor) g.anchor = sc(g.anchor);
         p.widthIn = t.w;

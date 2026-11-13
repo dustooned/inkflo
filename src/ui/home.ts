@@ -2,6 +2,8 @@ import type { Studio } from '../app/studio';
 import { STAGES } from '../doc/model';
 import { askText, h, pickFile, toast } from './dom';
 import { displayButton } from './popover';
+import { kindById, specFor } from '../geom/printkinds';
+import { DEFAULT_LAYOUT } from '../geom/carve';
 
 /** Home: the library of books on this device. */
 export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: string) => void): Promise<void> {
@@ -31,8 +33,22 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     }
   };
 
+  const newScroll = async () => {
+    const title = await askText('New vertical comic', 'Title', 'Untitled episode', 'Create');
+    if (title === null) return;
+    const kind = kindById('webtoon')!;
+    const book = await studio.createBook(title, '', (b) => {
+      b.print = specFor(kind);
+      b.dpi = kind.dpi;
+      b.pages[0]!.widthIn = kind.w;
+      b.pages[0]!.heightIn = kind.h;
+      b.pages[0]!.layout = { ...DEFAULT_LAYOUT, gutter: 0.6, border: 0, gutterPaper: '#ffffff' };
+    });
+    go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
+  };
   const grid = h('div', { class: 'books' },
     h('button', { class: 'card new', type: 'button', onclick: newBook }, h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New book'), h('small', {}, 'One page, ready to script')),
+    h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
     books.map((b) =>
       h('button', { class: 'card', type: 'button', onclick: () => go(`#book/${b.id}`) },
         h('div', { class: 'sheet' }, cover(b.cover)),

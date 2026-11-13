@@ -5,6 +5,7 @@ import { assignDialoguePanel, bindDialogue, centreIn, dialogueText, letterForLin
 import { preflightPage } from './preflight';
 import { applyFix, contrast, readability, readabilityAll, safeFixes, snapScale, TARGETS } from './readability';
 import { comicInfo } from '../io/exports';
+import { balloonGroup, balloonPaintOrder, firstBalloon } from './captiongroup';
 
 function page(): Page {
   const p = newPage(0);
@@ -26,6 +27,21 @@ const at = (book: Book, p: Page, xIn: number, yIn: number, beat: string, line: n
 };
 
 describe('script lines', () => {
+  it('keeps continuation words in one script line and restores its split on script edits', () => {
+    const p = page(), book = bookWith(p);
+    const root = at(book, p, 1, 1, 'a', 0);
+    const next = newLetter(book, { x: 72, y: 110 }, 'speech');
+    next.continuation = { after: root.id, join: 'stack' };
+    next.cap.text = 'Then two.';
+    p.balloons = [root, next];
+    expect(firstBalloon(p.balloons, next)).toBe(root);
+    expect(balloonPaintOrder(balloonGroup(p.balloons, root))).toEqual([next, root]);
+    expect(syncScriptFromLetter(p, root)).toBe(true);
+    expect(p.beats[0]!.lines[0]).toBe('MAYA: One. Then two.');
+    p.beats[0]!.lines[0] = 'MAYA: First. Now three words.';
+    expect(syncLettersFromScript(p)).toBe(true);
+    expect(p.balloons.map((l) => l.cap.text)).toEqual(['First.', 'Now three words.']);
+  });
   it('reads speakers, captions, sound effects and how a line is said', () => {
     expect(parseLine('MAYA: Too late.')).toEqual({ speaker: 'MAYA', text: 'Too late.', style: 'speech' });
     expect(parseLine('CAPTION: Midnight.')).toEqual({ speaker: null, text: 'Midnight.', style: 'box' });

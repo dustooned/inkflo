@@ -416,3 +416,34 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Shift constrains the angle or proportions. **Keep round** makes an ellipse a circle and keeps
   it round while resizing. Apply shape makes one undoable edit, and Cancel leaves the snapped
   stroke in place. This works with raster brushes and Vector Pen.
+
+## Smudge and drawn balloons
+
+- **Draw → Smudge** blends pixels on one paint layer with Size and Strength controls. Stylus
+  pressure modulates strength. A stroke is one undo step. Smudges replay with raster transforms,
+  save in book schema 7, and appear in the same layers in PSD exports.
+- **Caption → Draw balloon** accepts closed outlines independently from click-to-place lettering.
+  The start marker helps close the stroke. Open gestures leave no balloon. **Keep drawn outline**
+  preserves the hand-drawn contour as a custom balloon.
+
+## Caption groups
+
+- The **+** beside a selected balloon adds a continuation to the same dialogue line. Use
+  **Split words into next balloon** to continue existing words from the cursor.
+- Continuations can merge, sit underneath the preceding balloon, or remain separate.
+  Each balloon can move on its own and have its own tails. Shift-drag moves the whole group.
+- Groups stay linked to the first balloon's panel and script line. Layered PSD export puts each
+  dialogue group on one named layer under Lettering. 2Dope exports grouped dialogue as one
+  rendered layer so it retains the joins and stacking.
+
+## Storyboard and vertical comics
+
+- Script opens in storyboard view. Cards show the planned panel or a saved sketch, scene
+  description, and ordered dialogue with a balloon type per row. Add a dialogue row after
+  any existing line or insert a panel after any card. The beat list remains available.
+- New vertical comic starts a phone-width book. Send to Layout stacks beats in one column.
+  Scroll preview shows a continuous phone-width view, and Export → Vertical scroll
+  packages numbered 800 × up to 1280 PNG strips, a responsive static reader, and episode.json.
+- Layout defaults to white gutters and offers transparent or custom paper. Set a page corner radius
+  or override it on an individual panel. Curve edges edits the two Bézier handles on a shared gutter, and Knife
+  resamples freehand cuts to reduce small pen wobbles.

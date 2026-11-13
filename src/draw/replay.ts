@@ -10,6 +10,7 @@ import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { fillRefLayers } from '../geom/groups';
 import { liftPixels, paintPixelTransform } from './pixeltransform';
+import { smudgeSegment } from './smudge';
 
 /**
  * Rebuild layer bitmaps from the page's data (strokes and fills).
@@ -191,8 +192,13 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
     };
     for (const edit of layer.pixelTransforms ?? []) {
       replayTo(edit.strokes, edit.fills);
-      const lifted = liftPixels(canvas, edit.polygon, dpi);
-      if (lifted) paintPixelTransform(canvas.getContext('2d')!, lifted, edit.matrix, dpi);
+      const g = canvas.getContext('2d')!;
+      if ('kind' in edit) {
+        for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
+      } else {
+        const lifted = liftPixels(canvas, edit.polygon, dpi);
+        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi);
+      }
     }
     replayTo(layer.strokes.length, layer.fills.length);
   }

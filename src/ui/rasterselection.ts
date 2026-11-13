@@ -86,7 +86,7 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       g.putImageData(before, x, y);
       throw error;
     }
-    const write = (pixels: ImageData, operations: PixelTransform[] | undefined) => {
+    const write = (pixels: ImageData, operations: Layer['pixelTransforms']) => {
       g.putImageData(pixels, x, y);
       const match = findLayer(page, id);
       if (match) {

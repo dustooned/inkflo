@@ -1,7 +1,8 @@
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
-import { derivePanels, gutterPaths, layoutOf, panelAt, type Panel } from '../geom/carve';
-import { paintLetter } from './caption';
+import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelAt, type Panel } from '../geom/carve';
+import { paintBalloonGroup } from './caption';
+import { captionGroups } from '../geom/captiongroup';
 
 /**
  * The one page renderer (rule 5). Screen, thumbnails, covers, print PNGs and every export draw
@@ -14,7 +15,7 @@ import { paintLetter } from './caption';
  */
 
 export const COLORS = {
-  gutter: '#EFE7D6',
+  gutter: '#FFFFFF',
   panel: '#FFFDF7',
   ink: '#191A1F',
 };
@@ -81,14 +82,62 @@ export function gutterBandPath(page: Page, s: number): Path2D {
   return p;
 }
 
+/** Cut away convex corners, including at junctions, without changing panel ownership. */
+function roundedPanelPath(panel: Panel, scale: number, radius: number): Path2D {
+  const path = new Path2D();
+  const pts = panel.pts;
+  const winding = Math.sign(area(pts));
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[(i + pts.length - 1) % pts.length]!, b = pts[i]!, c = pts[(i + 1) % pts.length]!;
+    const u = Math.hypot(a.x - b.x, a.y - b.y), v = Math.hypot(c.x - b.x, c.y - b.y);
+    const turn = ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)) / (u * v);
+    const cut = turn * winding > 0.17 ? Math.min(radius, u / 2, v / 2) : 0;
+    const start = cut ? { x: b.x + (a.x - b.x) * cut / u, y: b.y + (a.y - b.y) * cut / u } : b;
+    const end = cut ? { x: b.x + (c.x - b.x) * cut / v, y: b.y + (c.y - b.y) * cut / v } : b;
+    if (i) path.lineTo(start.x * scale, start.y * scale);
+    else path.moveTo(start.x * scale, start.y * scale);
+    if (cut) path.quadraticCurveTo(b.x * scale, b.y * scale, end.x * scale, end.y * scale);
+  }
+  path.closePath();
+  return path;
+}
+
+export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, paper: string | null, edges = false): boolean {
+  const { cornerRadius = 0, border, panelCorners } = layoutOf(page);
+  if (!cornerRadius && !panelCorners?.length) return false;
+  const radii = panels.map((panel) => cornerOverrides(page, panel).at(-1)?.radius ?? cornerRadius);
+  if (!radii.some(Boolean)) return false;
+  const round = new Path2D();
+  const outside = new Path2D();
+  outside.rect(0, 0, page.widthIn * s, page.heightIn * s);
+  panels.forEach((panel, i) => round.addPath(roundedPanelPath(panel, s, radii[i]!)));
+  outside.addPath(round);
+  g.save();
+  if (paper === null) g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = paper ?? '#000';
+  g.fill(outside, 'evenodd');
+  g.restore();
+  if (edges && border) {
+    g.save();
+    g.clip(outside, 'evenodd');
+    g.lineWidth = border * 2 * s;
+    g.lineJoin = 'round';
+    g.strokeStyle = COLORS.ink;
+    g.stroke(round);
+    g.restore();
+  }
+  return true;
+}
+
 /** Gutter bands and trim border, on top of the panel art. */
-export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean; whitePaper?: boolean } = {}): void {
-  const { gutter, border } = layoutOf(page);
+export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean; whitePaper?: boolean; panels?: Panel[] } = {}): void {
+  const { gutter, border, gutterPaper = COLORS.gutter } = layoutOf(page);
   const path = gutterBandPath(page, s);
   g.save();
   g.beginPath();
   g.rect(0, 0, page.widthIn * s, page.heightIn * s);
   g.clip();
+  const rounded = roundCorners(g, page, opts.panels ?? derivePanels(page), s, opts.paper === false ? null : opts.whitePaper ? '#fff' : gutterPaper, true);
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.strokeStyle = COLORS.ink;
@@ -96,17 +145,17 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
     g.lineWidth = (gutter + border * 2) * s;
     g.stroke(path);
   }
-  if (opts.paper === false) {
+  if (opts.paper === false || (!opts.whitePaper && gutterPaper === null)) {
     g.globalCompositeOperation = 'destination-out';
     g.strokeStyle = '#000';
-  } else g.strokeStyle = opts.whitePaper ? '#FFFFFF' : COLORS.gutter;
+  } else g.strokeStyle = opts.whitePaper ? '#FFFFFF' : gutterPaper ?? COLORS.gutter;
   if (gutter) {
     g.lineWidth = gutter * s;
     g.stroke(path);
   }
   g.globalCompositeOperation = 'source-over';
   g.strokeStyle = COLORS.ink;
-  if (border) {
+  if (border && !rounded) {
     g.lineWidth = border * s * 2;
     g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
   }
@@ -114,14 +163,34 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
 }
 
 export function drawBalloons(g: CanvasRenderingContext2D, page: Page, s: number, sheet: LetterSheet = DEFAULT_SHEET, skip?: string): void {
-  for (const l of page.balloons) if (l.id !== skip) paintLetter(g, l, sheet, s, page.widthIn, page.heightIn);
+  for (const group of captionGroups(page.balloons)) {
+    const visible = group.filter((l) => l.id !== skip);
+    if (visible.length) paintBalloonGroup(g, visible, sheet, s, page.widthIn, page.heightIn);
+  }
 }
 
-export function drawPagePaper(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, white = false): void {
-  g.fillStyle = white ? '#FFFFFF' : COLORS.gutter;
+export function drawPagePaper(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, white = false, cutout = false): void {
+  const { gutterPaper: color } = layoutOf(page);
+  g.fillStyle = white ? '#FFFFFF' : color ?? COLORS.gutter;
   g.fillRect(0, 0, page.widthIn * s, page.heightIn * s);
   g.fillStyle = white ? '#FFFFFF' : COLORS.panel;
   for (const p of panels) g.fill(panelPath(p.pts, s));
+  if (cutout && !white) clearGutterPaper(g, page, panels, s);
+}
+
+/** Apply the transparent paper cutout to an exported layer below the frame. */
+export function clearGutterPaper(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number): void {
+  const { gutter, gutterPaper } = layoutOf(page);
+  if (gutterPaper !== null) return;
+  if (gutter) {
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.lineCap = g.lineJoin = 'round';
+    g.lineWidth = gutter * s;
+    g.stroke(gutterBandPath(page, s));
+    g.restore();
+  }
+  roundCorners(g, page, panels, s, null, false);
 }
 
 /** Should this layer draw under these options? */
@@ -196,7 +265,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
     drawLayers(g, grp, art, opts, W, H, 'framed');
     g.restore();
   }
-  if (frame) drawGutters(g, page, s, { whitePaper: opts.whitePaper });
+  if (frame) drawGutters(g, page, s, { whitePaper: opts.whitePaper, panels });
   // the Gutters group: art in the gutters and margins (borderless pages), over the gutter paper
   for (const grp of page.groups.filter((x) => x.kind === 'gutter')) {
     if (!grp.layers.some((l) => shows(l, grp, opts))) continue;

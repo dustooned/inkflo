@@ -1,18 +1,57 @@
 import type { Beat, Letter } from '../../doc/model';
-import { dialogueText, linesFromDialogueText, reconcileDialogue, replaceDialogue } from '../../geom/lettering';
+import { bindDialogue, dialogueText, formatDialogueLine, linesFromDialogueText, parseLine, reconcileDialogue, replaceDialogue } from '../../geom/lettering';
 import { newId } from '../../doc/model';
-import { cutsForCount } from '../../geom/carve';
+import { cutsForCount, derivePanels, type Panel } from '../../geom/carve';
 import { downbeatPanel, revealIssues } from '../../geom/composition';
 import { printOf, readerSpreads } from '../../geom/printkinds';
 import type { DeskCtx, DeskMode } from '../desk';
 import { h, toast } from '../dom';
 import { openDialogue } from '../dialogue';
 import { cardCanvas, sketchCard } from '../notecard';
+import { panelPath } from '../../render/page';
+
+const TYPES = [['speech', 'Speech'], ['box', 'Caption'], ['thought', 'Thought'], ['whisper', 'Whisper'], ['shout', 'Shout'], ['sfx', 'Sound effect']] as const;
+
+function storyboardThumb(panel: Panel | undefined, styles: string[]): HTMLCanvasElement {
+  const c = h('canvas', { class: 'card-sketch', 'aria-label': 'Panel thumbnail', role: 'img' });
+  c.width = 420;
+  c.height = 206;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#e8e8e2'; g.fillRect(0, 0, c.width, c.height);
+  const { x0, x1, y0, y1 } = panel?.bbox ?? { x0: 0, y0: 0, x1: 2.1, y1: 1 };
+  const s = Math.min(392 / (x1 - x0), 176 / (y1 - y0));
+  const dx = (420 - (x1 - x0) * s) / 2, dy = (206 - (y1 - y0) * s) / 2;
+  const points = panel?.pts.map((p) => ({ x: (p.x - x0) * s + dx, y: (p.y - y0) * s + dy }))
+    ?? [{ x: dx, y: dy }, { x: 420 - dx, y: dy }, { x: 420 - dx, y: 206 - dy }, { x: dx, y: 206 - dy }];
+  const frame = panelPath(points, 1);
+  g.fillStyle = '#fffdf8'; g.fill(frame);
+  g.strokeStyle = '#383d43'; g.lineWidth = 2; g.stroke(frame);
+  g.save(); g.clip(frame);
+  g.strokeStyle = '#b8bdb8'; g.lineWidth = 1; g.setLineDash([5, 5]);
+  g.beginPath(); g.moveTo(210, dy + 10); g.lineTo(210, 196 - dy); g.moveTo(dx + 10, 103); g.lineTo(410 - dx, 103); g.stroke();
+  g.setLineDash([]);
+  styles.slice(0, 5).forEach((style, i) => {
+    const x = 210 + ((i % 2 ? 1 : -1) * (420 - 2 * dx)) / 6, y = dy + (i + 1) * (206 - 2 * dy) / (Math.min(5, styles.length) + 1);
+    g.fillStyle = '#fff'; g.strokeStyle = '#5f6966';
+    g.beginPath();
+    if (style === 'box' || style === 'sfx') g.roundRect(x - 23, y - 9, 46, 18, style === 'box' ? 2 : 7);
+    else g.ellipse(x, y, 23, 10, 0, 0, Math.PI * 2);
+    g.fill(); g.stroke();
+  });
+  g.restore();
+  return c;
+}
 
 /** Script: the page as a list of beats. Each beat becomes a panel; its lines become balloons. */
 export function scriptDesk(ctx: DeskCtx): DeskMode {
   const { studio, book, page } = ctx;
-  let cards = false;
+  const vertical = printOf(book).kind === 'webtoon';
+  let cards = true;
+  function addPanel(at: number): void {
+    const id = newId('bt');
+    change('Add panel beat', () => page.beats.splice(at, 0, { id, desc: '', lines: [] }));
+    ctx.stage.querySelector<HTMLTextAreaElement>('[data-beat-description="' + id + '"]')?.focus();
+  }
 
   /**
    * Edit beats live while typing; one undo step per finished edit. Balloons linked to a line take
@@ -45,6 +84,47 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
   const setupValue = (pageId: string, beatId: string) => JSON.stringify([pageId, beatId]);
   const pageIndex = book.pages.indexOf(page);
   const dragType = 'application/x-inkflo-beat';
+
+  function dialogueCards(beat: Beat, panel: number): HTMLElement {
+    const add = (at: number) => {
+      change('Add dialogue', () => {
+        const meta = bindDialogue(page, beat);
+        beat.lines.splice(at, 0, '');
+        meta.splice(at, 0, { id: newId('dl') });
+      });
+      ctx.stage.querySelector<HTMLTextAreaElement>(`[data-dialogue="${beat.id}-${at}"]`)?.focus();
+    };
+    return h('div', { class: 'story-dialogue' }, h('h5', {}, 'Dialogue'),
+      beat.lines.map((raw, i) => {
+        const parsed = parseLine(raw);
+        const prefix = h('input', { value: parsed.speaker ?? '', placeholder: 'Speaker', 'aria-label': `Panel ${panel} speaker ${i + 1}` });
+        const kind = h('select', { 'aria-label': `Panel ${panel} balloon type ${i + 1}` },
+          TYPES.map(([id, name]) => h('option', { value: id, selected: id === parsed.style }, name)));
+        const text = h('textarea', { rows: 2, 'aria-label': `Panel ${panel} dialogue ${i + 1}`, 'data-dialogue': `${beat.id}-${i}`, placeholder: 'Write dialogue…' });
+        text.value = parsed.text;
+        const save = () => {
+          const style = TYPES.find(([id]) => id === kind.value)?.[0] ?? 'speech';
+          const value = formatDialogueLine(prefix.value.trim(), style, text.value.trim());
+          if (beat.lines[i] === value) return;
+          begin(); beat.lines[i] = value; commit('Edit dialogue');
+          const thumb = ctx.stage.querySelector<HTMLCanvasElement>(`[data-story-thumbnail="${beat.id}"] canvas`);
+          if (thumb && !beat.card) {
+            const panels = page.cuts.length ? ctx.panels() : derivePanels({ ...page, cuts: cutsForCount(page, page.beats.length, vertical) });
+            thumb.replaceWith(storyboardThumb(panels[panel - 1], beat.lines.map((line) => parseLine(line).style)));
+          }
+        };
+        prefix.addEventListener('change', save); kind.addEventListener('change', save); text.addEventListener('change', save);
+        return h('div', { class: 'story-line' },
+          h('div', { class: 'story-line-fields' }, kind, prefix,
+            h('button', { type: 'button', title: 'Insert dialogue after this line', 'aria-label': `Add dialogue after line ${i + 1}`, onclick: () => add(i + 1) }, '+'),
+            h('button', { type: 'button', 'aria-label': `Remove dialogue line ${i + 1}`, onclick: () => change('Remove dialogue', () => {
+              const meta = bindDialogue(page, beat);
+              beat.lines.splice(i, 1);
+              meta.splice(i, 1);
+            }) }, '×')), text);
+      }),
+      beat.lines.length ? null : h('button', { class: 'btn', type: 'button', onclick: () => add(0) }, '+ Dialogue'));
+  }
 
   function revealControl(b: Beat, index: number): HTMLElement {
     const picked = b.reveal ? setupValue(b.reveal.pageId, b.reveal.beatId) : '';
@@ -100,11 +180,13 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
     tool: '',
     pane(el) {
       const panels = ctx.panels();
+      const planned = page.cuts.length ? panels : derivePanels({ ...page, cuts: cutsForCount(page, page.beats.length, vertical) });
       const downbeat = downbeatPanel(page, panels);
       const issues = new Map(revealIssues(book, page, panels).map(({ index, text }) => [index, text]));
       const list = h('div', { class: cards ? 'beats notecards' : 'beats' });
       page.beats.forEach((b, i) => {
-        const desc = h('input', { value: b.desc, placeholder: 'What we see: a wide shot of the rooftop at night…', 'aria-label': `Panel ${i + 1} description`, 'data-beat-description': b.id });
+        const desc = h('textarea', { rows: 2, placeholder: 'What we see: a wide shot of the rooftop at night…', 'aria-label': `Panel ${i + 1} description`, 'data-beat-description': b.id });
+        desc.value = b.desc;
         desc.addEventListener('focus', begin);
         desc.addEventListener('input', () => (b.desc = desc.value));
         desc.addEventListener('change', () => commit('Edit beat'));
@@ -133,12 +215,16 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
               h('button', { type: 'button', 'aria-label': `Move panel ${i + 1} up`, disabled: i === 0, onclick: () => reorder(i, i - 1) }, '↑'),
               h('button', { type: 'button', 'aria-label': `Move panel ${i + 1} down`, disabled: i === page.beats.length - 1, onclick: () => reorder(i, i + 1) }, '↓'),
               h('button', { type: 'button', 'aria-label': `Delete panel ${i + 1}`, onclick: () => change('Delete beat', () => page.beats.splice(i, 1)) }, '✕')),
-            cards && b.card ? cardCanvas(b.card) : null,
+            cards ? h('div', { class: 'story-thumbnail', 'data-story-thumbnail': b.id },
+              b.card ? cardCanvas(b.card) : storyboardThumb(planned[i], b.lines.map((line) => parseLine(line).style))) : null,
             cards ? h('button', { class: 'btn', type: 'button', onclick: () => sketchCard(b.card ?? { ratio: Math.max(0.25, Math.min(4, actual ?? 1.5)), strokes: [] },
               (card) => change('Edit notecard sketch', () => { b.card = card; })) }, b.card ? 'Edit sketch' : 'Sketch beat') : null,
             cards && b.card && actual && (b.card.ratio / actual > 1.35 || actual / b.card.ratio > 1.35)
               ? h('p', { class: 'note' }, 'This card’s shape differs from the panel slot.') : null,
-            desc, lines, revealControl(b, i),
+            cards ? h('label', { class: 'field' }, 'Scene description', desc) : desc,
+            cards ? dialogueCards(b, i + 1) : lines,
+            cards ? h('button', { class: 'btn story-insert', type: 'button', onclick: () => addPanel(i + 1) }, '+ Panel after') : null,
+            cards ? h('details', {}, h('summary', {}, 'Reveal settings'), revealControl(b, i)) : revealControl(b, i),
             warning ? h('p', { class: 'warnline', role: 'status' }, warning) : null,
             canMove && destination !== undefined ? h('button', { class: 'btn', type: 'button', onclick: () => moveReveal(b, destination) }, 'Move reveal to page ' + (destination + 1)) : null,
             target && !canMove ? h('a', { href: '#desk/' + book.id + '/' + target.id + '/script' }, 'Review page ' + (destination! + 1) + ' for this reveal') : null);
@@ -158,18 +244,20 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       const actions = h('div', { class: 'beat-actions' },
         h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
           h('button', { class: 'btn', type: 'button', onclick: () => {
-            const id = newId('bt');
-            change('Add beat', () => page.beats.push({ id, desc: '', lines: [] }));
-            ctx.stage.querySelector<HTMLInputElement>('[data-beat-description="' + id + '"]')?.focus();
+            addPanel(page.beats.length);
           } }, '+ Add panel beat'),
+          vertical ? h('button', { class: 'btn', type: 'button', onclick: () => {
+            const next = studio.addPage(page);
+            location.hash = `#desk/${book.id}/${next.id}/script`;
+          } }, '+ Scroll section') : null,
           h('span', { class: 'spacer' }),
           h('button', { class: 'btn primary', type: 'button', disabled: !page.beats.length, onclick: sendToLayout }, 'Send to Layout →')),
-        h('p', { class: 'note' }, 'One line per balloon. Start a line with a name and a colon (“MAYA: …”) to name the speaker; “CAPTION:” makes a caption box. Caption pulls these lines into balloons, so nothing is typed twice.'),
+        cards ? null : h('p', { class: 'note' }, 'One line per balloon. Start a line with a name and a colon (“MAYA: …”) to name the speaker; “CAPTION:” makes a caption box.'),
       );
       el.replaceChildren(list, actions);
     },
     ctx(bar) {
-      bar.append(h('button', { class: 'btn', type: 'button', 'aria-pressed': String(cards), onclick: () => { cards = !cards; ctx.chrome(); } }, cards ? 'Show beat list' : 'Show notecards'));
+      bar.append(h('button', { class: 'btn', type: 'button', 'aria-pressed': String(cards), onclick: () => { cards = !cards; ctx.chrome(); } }, cards ? 'Show beat list' : 'Show storyboard'));
       bar.append(h('button', { class: 'btn', type: 'button', onclick: () => openDialogue(ctx) }, 'Dialogue & panels'));
       bar.append(h('span', { class: 'hint' }, `${page.beats.length} beat${page.beats.length === 1 ? '' : 's'} · ${page.beats.reduce((n, b) => n + b.lines.length, 0)} lines`));
     },
@@ -193,7 +281,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       location.hash = `#desk/${ctx.book.id}/${page.id}/layout`;
       return;
     }
-    studio.editPage(page, 'Beats to panels', ['cuts'], (p) => (p.cuts = cutsForCount(p, p.beats.length)));
+    studio.editPage(page, 'Beats to panels', ['cuts'], (p) => (p.cuts = cutsForCount(p, p.beats.length, vertical)));
     studio.markStage(page, 'script', 2);
     location.hash = `#desk/${ctx.book.id}/${page.id}/layout`;
   }

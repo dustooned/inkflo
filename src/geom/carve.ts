@@ -26,6 +26,10 @@ export interface Panel {
   bbox: { x0: number; y0: number; x1: number; y1: number };
 }
 
+export function cornerOverrides(page: Page, panel: Panel): NonNullable<PageLayout['panelCorners']> {
+  return (layoutOf(page).panelCorners ?? []).filter(({ at }) => pointInPoly({ x: at.x * page.widthIn, y: at.y * page.heightIn }, panel.pts));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Vector helpers (proto space unless noted)
 
@@ -282,6 +286,16 @@ function trimProto(page: Page): Pt[] {
 
 /** The full path a cut splits along, in proto space. */
 function cutPathProto(c: Cut, curve: number): Pt[] {
+  if (c.handles) {
+    const endpoints = c.mode === 'panel' && c.extended?.length ? c.extended : c.pts;
+    const [a, b, d, e] = toProto([endpoints[0]!, ...c.handles, endpoints.at(-1)!]);
+    const path = Array.from({ length: 65 }, (_, i) => {
+      const t = i / 64, u = 1 - t;
+      return { x: u ** 3 * a!.x + 3 * u * u * t * b!.x + 3 * u * t * t * d!.x + t ** 3 * e!.x,
+        y: u ** 3 * a!.y + 3 * u * u * t * b!.y + 3 * u * t * t * d!.y + t ** 3 * e!.y };
+    });
+    return c.mode === 'panel' ? path : extendEnds(path);
+  }
   if (c.mode === 'panel' && c.extended && c.extended.length >= 2) return toProto(c.extended);
   return extendEnds(simplify(chaikin(toProto(c.pts), curve), 0.65));
 }
@@ -402,6 +416,7 @@ export function shiftCut(c: Cut, axis: 'x' | 'y', d: number): Cut {
   const move = (p: Pt) => (axis === 'x' ? { x: p.x + d, y: p.y } : { x: p.x, y: p.y + d });
   const out: Cut = { ...c, pts: c.pts.map(move) };
   if (c.extended) out.extended = c.extended.map(move);
+  if (c.handles) out.handles = [move(c.handles[0]), move(c.handles[1])];
   return out;
 }
 
@@ -437,7 +452,7 @@ export function nearestCut(page: Page, pt: Pt): NearCut | null {
 }
 
 function gridAxis(c: Cut): 'x' | 'y' | undefined {
-  if (c.mode !== 'across') return;
+  if (c.mode !== 'across' || c.handles) return;
   const first = c.pts[0]!;
   if (c.pts.every((p) => Math.abs(p.x - first.x) < 1e-6)) return 'x';
   if (c.pts.every((p) => Math.abs(p.y - first.y) < 1e-6)) return 'y';
@@ -491,7 +506,7 @@ export function presetCuts(page: Page, preset: Preset): Cut[] {
  * Cuts for `n` panels in rows of at most two (Script → Layout). The first row is a single wide
  * establishing panel when `n` is odd. Panel-mode vertical cuts keep each row independent.
  */
-export function cutsForCount(page: Page, n: number): Cut[] {
+export function cutsForCount(page: Page, n: number, vertical = false): Cut[] {
   if (n <= 1) return [];
   const rows: number[] = [];
   let left = n;
@@ -500,8 +515,9 @@ export function cutsForCount(page: Page, n: number): Cut[] {
     left -= 1;
   }
   while (left > 0) {
-    rows.push(Math.min(2, left));
-    left -= 2;
+    const count = Math.min(vertical ? 1 : 2, left);
+    rows.push(count);
+    left -= count;
   }
   const W = page.widthIn;
   const H = page.heightIn;

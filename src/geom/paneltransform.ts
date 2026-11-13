@@ -37,14 +37,14 @@ function retarget(endpoint: Pt, inner: Pt, boundary: Pt[]): Pt {
 }
 
 /** Move shared cuts and keep later panel-only cuts connected at their original junctions. */
-export function movePanelCuts(page: Page, shifts: ReadonlyMap<string, Shift>, layout: PageLayout = layoutOf(page)): Cut[] {
+export function movePanelCuts(page: Page, shifts: ReadonlyMap<string, Shift>, layout: PageLayout = layoutOf(page), replacements = new Map<string, Cut>()): Cut[] {
   const { widthIn: w, heightIn: h } = page;
   const trim = [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }, { x: 0, y: 0 }];
   const boundaries: { before: Pt[]; after: Pt[] }[] = [{ before: trim, after: trim }];
   const styledPage = { ...page, layout };
   return page.cuts.map((cut) => {
     const shift = shifts.get(cut.id);
-    let next = shift?.by ? shiftCut(cut, shift.axis, shift.by) : cut;
+    let next = replacements.get(cut.id) ?? (shift?.by ? shiftCut(cut, shift.axis, shift.by) : cut);
     const before = cut.extended;
     const after = next.extended;
     if (cut.mode === 'panel' && before && after && after.length >= 2) {

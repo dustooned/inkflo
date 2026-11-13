@@ -34,6 +34,8 @@ export interface Cut {
   pts: Pt[];
   /** Frozen path for mode "panel"; absent for "across". */
   extended?: Pt[];
+  /** Two cubic handles between the first and last boundary points. */
+  handles?: [Pt, Pt];
 }
 
 export interface Beat {
@@ -67,6 +69,8 @@ export const PT = 72;
 export interface Letter {
   id: string;
   cap: CaptionSpec;
+  /** Continuation of another balloon on the same page. Only the first balloon owns the script line. */
+  continuation?: { after: string; join: 'merge' | 'stack' | 'separate' };
   /** Clockwise degrees around the caption centre. Tail tips stay in page coordinates. */
   rotation?: number;
   /** The script line this lettering comes from: beat id and line index. */
@@ -187,6 +191,17 @@ export interface PixelTransform {
   fills: number;
 }
 
+export interface SmudgeStroke {
+  kind: 'smudge';
+  points: (Pt & { pressure: number })[];
+  size: number;
+  strength: number;
+  strokes: number;
+  fills: number;
+}
+
+export type PixelEdit = PixelTransform | SmudgeStroke;
+
 export interface Layer {
   id: string;
   name: string;
@@ -209,7 +224,7 @@ export interface Layer {
   image?: PlacedImage;
   strokes: Stroke[];
   fills: Fill[];
-  pixelTransforms?: PixelTransform[];
+  pixelTransforms?: PixelEdit[];
 }
 
 /** `gutter`: art in the gutters and margins, clipped to outside the panels (borderless pages). */
@@ -265,6 +280,10 @@ export interface PageLayout {
   gutter: number;
   border: number;
   curve: number;
+  /** White by default. Null means transparent. */
+  gutterPaper?: string | null;
+  cornerRadius?: number;
+  panelCorners?: { at: Pt; radius: number }[];
 }
 
 export interface ModularGrid {

@@ -34,6 +34,20 @@ function cut(p: Page, pts: Pt[], mode: 'across' | 'panel' = 'across', straight =
 }
 
 describe('carving', () => {
+  it('stacks every webtoon beat in one column', () => {
+    const p = { ...newPage(), widthIn: 8, heightIn: 32 };
+    p.cuts = cutsForCount(p, 4, true);
+    expect(p.cuts).toHaveLength(3);
+    expect(derivePanels(p).map(({ bbox }) => bbox.x1 - bbox.x0)).toEqual([8, 8, 8, 8]);
+  });
+
+  it('keeps a cubic edge shared by two panels', () => {
+    const p = { ...newPage(), widthIn: 8, heightIn: 32 };
+    const [cut] = cutsForCount(p, 2, true);
+    p.cuts = [{ ...cut!, handles: [{ x: 8 / 3, y: 13 }, { x: 16 / 3, y: 13 }] }];
+    expect(derivePanels(p)).toHaveLength(2);
+    expect(gutterPaths(p)[0]!.points.some((q) => q.y < 15)).toBe(true);
+  });
   it('an uncut page is one panel, the whole trim', () => {
     const ps = derivePanels(page());
     expect(ps).toHaveLength(1);

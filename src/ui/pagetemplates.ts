@@ -27,7 +27,7 @@ function readTemplates(): PageTemplate[] {
         if (!valid(entry.grid.columns) || !valid(entry.grid.rows) || !range(entry.grid.gutter, 0.6)) return false;
       }
       const points = (value: unknown) => Array.isArray(value) && value.length >= 2 && value.every((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y));
-      return entry.cuts.every((c) => c && (c.mode === 'panel' || c.mode === 'across') && points(c.pts) && (!c.extended || points(c.extended)));
+      return entry.cuts.every((c) => c && (c.mode === 'panel' || c.mode === 'across') && points(c.pts) && (!c.extended || points(c.extended)) && (!c.handles || (points(c.handles) && c.handles.length === 2)));
     });
   } catch {
     return [];

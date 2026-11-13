@@ -10,6 +10,7 @@ import { freshState, hasBold, runsOf, stripMarkup } from '../engine/lettering/ma
 import { captionValue, type CaptionSpec } from '../engine/lettering/spec';
 import { letterFont, letterFontReady } from './fonts';
 import { rotateAround, type Bounds } from '../geom/resizebox';
+import { balloonPaintOrder } from '../geom/captiongroup';
 
 /** Type size in points (house size × the balloon's own scale). */
 export function sizePt(c: CaptionSpec, sheet: LetterSheet = DEFAULT_SHEET): number {
@@ -145,8 +146,19 @@ const pathOf = (g: CanvasRenderingContext2D, pts: Pt[], close = true) => {
   if (close) g.closePath();
 };
 
+function clipOutside(g: CanvasRenderingContext2D, pieces: Pt[][]): void {
+  const far = 1e6;
+  for (const p of pieces) {
+    g.beginPath();
+    g.rect(-far, -far, 2 * far, 2 * far);
+    p.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
+    g.closePath();
+    g.clip('evenodd');
+  }
+}
+
 /** Draw one caption (in pixels). */
-export function paintCaption(g: CanvasRenderingContext2D, c: CaptionSpec, size: number, pageW: number, pageH: number): void {
+export function paintCaption(g: CanvasRenderingContext2D, c: CaptionSpec, size: number, pageW: number, pageH: number, seamsToHide: Pt[][] = []): void {
   const { lay, shapes } = captionBalloon(c, size, pageW, pageH);
   const links = captionLinks(c, size, pageW, pageH);
   const balloonA = captionValue(c, 'balloonOpacity') / 100;
@@ -177,26 +189,18 @@ export function paintCaption(g: CanvasRenderingContext2D, c: CaptionSpec, size: 
     g.fillStyle = c.fill;
     fillAll(0, 0);
     if (c.inkWidth > 0) {
+      g.save();
+      clipOutside(g, seamsToHide);
       g.strokeStyle = c.ink;
       g.lineWidth = c.inkWidth * size;
       g.lineJoin = 'round';
       g.lineCap = 'round';
       const whisper = c.style === 'whisper' ? [size * 0.45, size * 0.3] : null;
       if (whisper) g.setLineDash(whisper);
-      const outside = (pieces: Pt[][]) => {
-        const far = 1e6;
-        for (const p of pieces) {
-          g.beginPath();
-          g.rect(-far, -far, 2 * far, 2 * far);
-          p.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y)));
-          g.closePath();
-          g.clip('evenodd');
-        }
-      };
       if (union.length > 1) {
         // pieces that share one outline: stroke each twice as wide, outside all of them
         g.save();
-        outside(union);
+        clipOutside(g, union);
         g.lineWidth = c.inkWidth * size * 2;
         for (const p of union) {
           pathOf(g, p);
@@ -210,7 +214,7 @@ export function paintCaption(g: CanvasRenderingContext2D, c: CaptionSpec, size: 
       g.setLineDash(whisper ?? []);
       if (shapes.seams.length) {
         g.save();
-        outside(union);
+        clipOutside(g, union);
         g.lineWidth = c.inkWidth * size * 2;
         for (const p of shapes.seams) {
           pathOf(g, p);
@@ -229,7 +233,7 @@ export function paintCaption(g: CanvasRenderingContext2D, c: CaptionSpec, size: 
         pathOf(g, z, false);
         g.stroke();
       });
-      g.setLineDash([]);
+      g.restore();
     }
   }
   if (textA > 0) {
@@ -340,16 +344,49 @@ function drawOnPath(g: CanvasRenderingContext2D, c: CaptionSpec, lay: CaptionLay
 // Page-level helpers (points in, pixels out)
 
 /** Draw a page's letter at `s` px per inch. */
-export function paintLetter(g: CanvasRenderingContext2D, l: Letter, sheet: LetterSheet, s: number, pageWIn: number, pageHIn: number): void {
+export function paintLetter(g: CanvasRenderingContext2D, l: Letter, sheet: LetterSheet, s: number, pageWIn: number, pageHIn: number, seamsToHide: Pt[][] = []): void {
   const k = s / PT;
   const c = toPx(l.cap, k);
-  if (!l.rotation) { paintCaption(g, c, sizePt(c, sheet) * k, pageWIn * s, pageHIn * s); return; }
+  if (!l.rotation) { paintCaption(g, c, sizePt(c, sheet) * k, pageWIn * s, pageHIn * s, seamsToHide); return; }
   g.save();
   g.translate(c.x, c.y);
   g.rotate(l.rotation * Math.PI / 180);
   g.translate(-c.x, -c.y);
-  paintCaption(g, captionWithLocalTails(c, l.rotation), sizePt(c, sheet) * k, pageWIn * s, pageHIn * s);
+  paintCaption(g, captionWithLocalTails(c, l.rotation), sizePt(c, sheet) * k, pageWIn * s, pageHIn * s,
+    seamsToHide.map((outline) => outline.map((p) => rotateAround(p, c, -l.rotation!))));
   g.restore();
+}
+
+/** Paint a dialogue group together. Only merged edges suppress the adjoining outlines. */
+export function paintBalloonGroup(g: CanvasRenderingContext2D, group: Letter[], sheet: LetterSheet, scale: number, w: number, h: number): void {
+  if (group.length === 1) { paintLetter(g, group[0]!, sheet, scale, w, h); return; }
+  const k = scale / PT;
+  const bodies = new Map(group.map((l) => [l, letterBodyOutline(l, sheet, w, h).map((p) => ({ x: p.x * k, y: p.y * k }))]));
+  const hidden = new Map(group.map((l) => [l, [] as Pt[][]]));
+  for (const l of group) {
+    if (l.continuation?.join !== 'merge' || l.cap.style === 'sfx') continue;
+    const parent = group.find((p) => p.id === l.continuation!.after);
+    if (!parent || parent.cap.style === 'sfx') continue;
+    const a = bodies.get(parent)!, b = bodies.get(l)!;
+    const size = sizePt(l.cap, sheet) * k;
+    const start = { x: parent.cap.x * k, y: parent.cap.y * k }, end = { x: l.cap.x * k, y: l.cap.y * k };
+    const neck = neckBetween(start, end, size * 1.5);
+    g.save();
+    g.globalAlpha *= captionValue(l.cap, 'balloonOpacity') / 100;
+    g.fillStyle = l.cap.fill;
+    pathOf(g, neck); g.fill();
+    if (l.cap.inkWidth > 0) {
+      clipOutside(g, [a, b]);
+      g.strokeStyle = l.cap.ink;
+      g.lineWidth = l.cap.inkWidth * size;
+      g.lineJoin = 'round';
+      pathOf(g, neck); g.stroke();
+    }
+    g.restore();
+    hidden.get(parent)!.push(neck, b);
+    hidden.get(l)!.push(neck, a);
+  }
+  for (const l of balloonPaintOrder(group)) paintLetter(g, l, sheet, scale, w, h, hidden.get(l));
 }
 
 /** Counter-rotate tail tips and bend controls before rotating the whole lettering layer. */

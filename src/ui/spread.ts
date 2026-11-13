@@ -2,12 +2,15 @@ import type { Studio } from '../app/studio';
 import type { Page, Stage } from '../doc/model';
 import { printOf, readerSpreads } from '../geom/printkinds';
 import { renderSeparation } from '../io/printexport';
+import { DEFAULT_SCROLL_GAP, SCROLL_WIDTH } from '../io/scroll';
 import { drawComposition } from './composition';
 import { h } from './dom';
 import { prefs } from './prefs';
 
 export function spreadButton(studio: Studio, page: Page | undefined, stage: Stage, go: (hash: string) => void, compact = false): HTMLButtonElement {
-  return h('button', { class: compact ? 'icon' : 'btn', type: 'button', title: 'Spread preview', 'aria-label': 'Spread preview', onclick: () => openSpread(studio, page, stage, go) }, compact ? '◫' : 'Spread');
+  const vertical = studio.book && printOf(studio.book).binding === 'web';
+  const label = vertical ? 'Scroll preview' : 'Spread preview';
+  return h('button', { class: compact ? 'icon' : 'btn', type: 'button', title: label, 'aria-label': label, onclick: () => openSpread(studio, page, stage, go) }, compact ? vertical ? '↧' : '◫' : vertical ? label : 'Spread');
 }
 
 function openSpread(studio: Studio, page: Page | undefined, stage: Stage, go: (hash: string) => void): void {
@@ -24,11 +27,13 @@ function openSpread(studio: Studio, page: Page | undefined, stage: Stage, go: (h
   const back = h('button', { class: 'btn', type: 'button', onclick: () => turn(-1) }, 'Previous');
   const next = h('button', { class: 'btn', type: 'button', onclick: () => turn(1) }, 'Next');
   const guide = h('input', { type: 'checkbox', disabled: prefs().guide === 'off' });
+  let scrolling = printOf(book).binding === 'web';
+  const view = h('button', { class: 'btn', type: 'button', onclick: () => { scrolling = !scrolling; void draw(); } }, 'Vertical scroll');
   guide.addEventListener('change', () => void draw());
   const d = h('dialog', { class: 'spread-dialog', 'aria-label': 'Spread preview' },
     h('header', {}, heading),
     h('div', { class: 'content' }, viewport),
-    h('footer', {}, back, next, h('label', { class: 'mini' }, guide, 'Show composition guides'), status,
+    h('footer', {}, view, back, next, h('label', { class: 'mini' }, guide, 'Show composition guides'), status,
       h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')));
   function turn(delta: number): void {
     const to = index + delta;
@@ -37,7 +42,7 @@ function openSpread(studio: Studio, page: Page | undefined, stage: Stage, go: (h
     void draw();
   }
   d.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (!scrolling && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       turn((e.key === 'ArrowRight' ? 1 : -1) * (rtl ? -1 : 1));
     }
@@ -47,6 +52,34 @@ function openSpread(studio: Studio, page: Page | undefined, stage: Stage, go: (h
   d.showModal();
   const draw = async (): Promise<void> => {
     const id = ++revision;
+    view.textContent = scrolling ? 'Show spreads' : 'Vertical scroll';
+    heading.textContent = scrolling ? 'Vertical scroll preview' : 'Spread preview';
+    back.hidden = next.hidden = scrolling;
+    guide.disabled = scrolling || prefs().guide === 'off';
+    if (scrolling) {
+      viewport.setAttribute('aria-busy', 'true');
+      status.textContent = '';
+      const column = h('div', { class: 'scroll-preview', tabindex: 0, 'aria-label': 'Scroll comic preview' });
+      viewport.replaceChildren(column);
+      try {
+        for (const [i, p] of book.pages.entries()) {
+          if (id !== revision) return;
+          const art = studio.ensureArt(p);
+          try {
+            await studio.residency.pin(art);
+            const canvas = await renderSeparation(p, art, Math.min(380 / p.widthIn, 2400 / p.heightIn), book, 'all');
+            canvas.setAttribute('aria-label', 'Page ' + studio.pageNumber(p));
+            if (id === revision) {
+              if (i) column.append(h('div', { 'aria-hidden': 'true', style: `flex:none;aspect-ratio:${SCROLL_WIDTH}/${DEFAULT_SCROLL_GAP}` }));
+              column.append(canvas);
+            }
+          } finally { studio.residency.unpin(art); }
+        }
+      } catch (error) {
+        if (id === revision) column.append(h('p', { role: 'alert' }, error instanceof Error ? error.message : String(error)));
+      } finally { if (id === revision) viewport.setAttribute('aria-busy', 'false'); }
+      return;
+    }
     const pair = spreads[index]!;
     back.disabled = index === 0;
     next.disabled = index + 1 === spreads.length;

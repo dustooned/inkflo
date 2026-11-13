@@ -286,7 +286,19 @@ h4.label { margin: 0 0 6px; font: 650 10px/1 var(--ui); letter-spacing: .14em; t
 .spread-view { display: grid; justify-items: center; gap: 10px; }
 .spread-view canvas { display: block; max-width: 100%; max-height: 68dvh; object-fit: contain; box-shadow: 0 6px 24px #0003; }
 .spread-links { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.beats.notecards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 225px), 1fr)); align-items: start; gap: 12px; }
+.beats.notecards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: 16px; }
+.notecards .beat { border-radius: 14px; padding: 14px; }
+.story-thumbnail { border-radius: 7px; overflow: hidden; background: #e8e8e2; }
+.story-thumbnail .card-sketch { width: 100%; max-height: 162px; border: 0; }
+.story-dialogue { display: grid; gap: 7px; }
+.story-dialogue h5 { margin: 2px 0; }
+.story-line { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.story-line-fields { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(54px, 1fr) auto auto; gap: 4px; align-items: center; }
+.story-line-fields input, .story-line-fields select { width: 100%; min-width: 0; }
+.story-line textarea { min-height: 52px; }
+.story-insert { justify-self: start; }
+.scroll-preview { display: flex; flex-direction: column; width: min(380px,100%); max-height: 66dvh; overflow: auto; background: white; border: 1px solid var(--line); }
+.scroll-preview canvas { flex: none; width: 100%; height: auto; max-height: none; box-shadow: none; }
 .beat-actions { max-width: 880px; margin: 12px auto; }
 .card-grip { cursor: grab; font-size: 20px; padding-inline: 6px; }
 .card-sketch { display: block; max-width: 100%; max-height: 170px; margin-inline: auto; border: 1px solid var(--line); background: #fffcf2; object-fit: contain; }

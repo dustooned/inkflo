@@ -6,12 +6,13 @@ import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
 import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, pagesIn, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { exportPsd, type PsdMode } from '../io/psd';
+import { DEFAULT_SCROLL_GAP, exportScroll, type ScrollOptions } from '../io/scroll';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
 import { download, h, seg, slug } from './dom';
 
-type Tab = 'print' | 'files' | 'apps';
+type Tab = 'print' | 'files' | 'apps' | 'scroll';
 
 const PRINT_MODES: { id: PrintMode; title: string; body: string }[] = [
   { id: 'shop', title: 'Print shop', body: 'A PDF of single pages with bleed and crop marks, trim and bleed boxes set. Blank pages are added if the binding needs them.' },
@@ -113,6 +114,31 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   let dpi = book.dpi;
   const motion: MotionOptions = { ...DEFAULT_MOTION };
   const currentPage = Math.max(1, book.pages.findIndex((p) => p.id === book.lastPageId) + 1);
+  const scroll: ScrollOptions = { range: { from: 1, to: book.pages.length }, gap: DEFAULT_SCROLL_GAP, background: '#ffffff' };
+  function scrollTab(): HTMLElement {
+    const field = (label: string, value: number, min: number, max: number, apply: (v: number) => void) => {
+      const input = h('input', { type: 'number', value, min, max, step: 1, 'aria-label': label });
+      input.addEventListener('change', () => {
+        const v = Math.round(Math.max(min, Math.min(max, input.valueAsNumber || min)));
+        input.value = String(v); apply(v);
+      });
+      return h('label', { class: 'field' }, label, input);
+    };
+    const color = h('input', { type: 'color', value: scroll.background ?? '#ffffff', 'aria-label': 'Scroll background colour' });
+    color.addEventListener('change', () => (scroll.background = color.value));
+    return h('div', { class: 'stack' },
+      h('h3', {}, 'Vertical scroll'),
+      h('p', { class: 'note' }, 'Stack pages into one episode. The ZIP includes numbered PNG strips, a responsive index.html, and an episode.json for custom sites.'),
+      h('div', { class: 'export-app-fields' },
+        field('First page', scroll.range.from, 1, book!.pages.length, (v) => (scroll.range.from = v)),
+        field('Last page', scroll.range.to, 1, book!.pages.length, (v) => (scroll.range.to = v)),
+        field('Space between pages (px)', scroll.gap, 0, 960, (v) => (scroll.gap = v))),
+      h('div', { class: 'spread-links' },
+        select('Scroll background', [['white', 'White'], ['transparent', 'Transparent PNG'], ['custom', 'Custom colour']], scroll.background === null ? 'transparent' : scroll.background === '#ffffff' ? 'white' : 'custom', (v) => {
+          scroll.background = v === 'transparent' ? null : v === 'white' ? '#ffffff' : '#d9e2df'; render();
+        }), scroll.background && scroll.background !== '#ffffff' ? color : null),
+      btn('Download scroll package', () => void run('Vertical scroll', () => exportScroll(studio, { ...scroll, range: { ...scroll.range } }, (m) => (progress.textContent = m)), `${name}-scroll.zip`), true));
+  }
   const psd = { mode: 'art' as PsdMode, dpi: book.dpi, from: currentPage, to: currentPage };
   function appsTab(): HTMLElement {
     const pageInput = (label: string, key: 'from' | 'to') => {
@@ -257,8 +283,8 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   function render(): void {
     buttons.length = 0;
     body.replaceChildren(
-      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }, { id: 'apps', label: 'Open in another app' }], tab, (v) => { tab = v; render(); }, 'Export center'),
-      tab === 'print' ? printTab() : tab === 'apps' ? appsTab() : filesTab(),
+      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }, { id: 'scroll', label: 'Vertical scroll' }, { id: 'apps', label: 'Open in another app' }], tab, (v) => { tab = v; render(); }, 'Export center'),
+      tab === 'print' ? printTab() : tab === 'apps' ? appsTab() : tab === 'scroll' ? scrollTab() : filesTab(),
       progress,
     );
   }

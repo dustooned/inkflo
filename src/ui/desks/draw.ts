@@ -11,6 +11,7 @@ import { imagePlacement } from '../imageplacement';
 import { vectorSelection } from '../vectorselection';
 import { rasterSelection } from '../rasterselection';
 import { quickShapeEditor } from '../quickshapeedit';
+import { smudgeTool } from '../smudgetool';
 import { popover } from '../popover';
 import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, type FillPaint, type LinePass } from '../../draw/replay';
 import { FILL_THRESHOLD, FillKit, flatColours, openEnds } from '../../draw/fillkit';
@@ -268,6 +269,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function setTarget(next: LayerTarget): void {
     pixels.clear();
+    smudge.clear();
     shapeEditor.clear();
     target = next;
     targetByPage.set(page.id, next);
@@ -1129,7 +1131,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     return [...layers.filter(inContext), ...layers.filter((l) => !inContext(l))];
   }, editVector);
 
-  const pixels = rasterSelection(ctx, (p) => {
+  const rasterLayersAt = (p: Pt) => {
     const allowed = (l: Layer) => l.visible && !l.locked && !l.vector && !l.image && (state.showPencil || l.type !== 'pencil');
     if (target === 'layer') {
       const a = active();
@@ -1138,7 +1140,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const group = groupAt(page, ctx.panels(), p);
     if (!group.visible || group.locked) return [];
     return group.layers.filter(allowed).sort((a, b) => Number(b.overFrame) - Number(a.overFrame));
-  }, keepResident);
+  };
+  const pixels = rasterSelection(ctx, rasterLayersAt, keepResident);
+  const smudge = smudgeTool(ctx, rasterLayersAt, keepResident);
+  let smudgeSize = 18;
+  let smudgeStrength = 0.55;
+  const smudgePoint = (p: Pt, e: PointerEvent) => ({ ...p, pressure: e.pointerType === 'pen' ? e.pressure : 1 });
 
   function hitVector(p: Pt): { layer: Layer; index: number; at: number } | null {
     const reach = 8 / ctx.scale();
@@ -1356,6 +1363,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     tools: [
       { id: 'pencil', label: 'Pencil', glyph: '✏', key: 'p', group: 'paint' },
       { id: 'ink', label: 'Ink', glyph: '✒', key: 'i', group: 'paint' },
+      { id: 'smudge', label: 'Smudge', glyph: '≈', key: 's', group: 'paint' },
       { id: 'vpen', label: 'Vector pen', glyph: '✑', key: 'v', group: 'paint' },
       { id: 'eraser', label: 'Eraser', glyph: '⌫', key: 'e', group: 'paint', variants: [
         { id: 'ink', label: 'Erase ink', glyph: '⌫' },
@@ -1393,6 +1401,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' || shapeEditor.active() ? 'move' : ['fill', 'lines', 'vedit', 'selection', 'pixels'].includes(mode.tool) ? 'cross' : 'brush'),
     ctx(bar) {
       if (mode.tool !== 'pixels') pixels.clear();
+      if (mode.tool !== 'smudge') smudge.clear();
       refreshShapeActions();
       const bt = brushTool();
       const hasInkColor = bt !== null && currentBrush(bt).pass === 'ink';
@@ -1405,6 +1414,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         if (hasInkColor) bar.append(...colourControls(false));
       }
       showBrushControls(sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null));
+      if (mode.tool === 'smudge') bar.append(
+        brushControl('Size', 'pt', smudgeSize, 1, 72, 0.5, (v) => { smudgeSize = v; ctx.request(); }, () => {}),
+        brushControl('Strength', '%', smudgeStrength * 100, 1, 100, 1, (v) => { smudgeStrength = v / 100; }, () => {}),
+        h('span', { class: 'hint' }, 'Drag through paint to blend it'),
+      );
       if (bt) {
         bar.append(slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { ink.stabilize[bt] = v; }, () => saveInk()));
         bar.append(slider('Correct', 0, 1, 0.05, ink.correct, (v) => (v ? `${Math.round(v * 100)}%` : 'off'), (v) => { ink.correct = v; }, () => saveInk()));
@@ -1530,6 +1544,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         contextGroupId = null;
       }
       if (mode.tool === 'pixels') { pixels.down(p, e, variantOf(mode, 'pixels') === 'freehand'); return; }
+      if (mode.tool === 'smudge') { smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength); return; }
       if (mode.tool === 'fill') {
         preview = null;
         fillDown(p, e);
@@ -1560,6 +1575,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'image') { images.move(p); return; }
       if (mode.tool === 'selection') { selection.move(p, e); return; }
       if (mode.tool === 'pixels') { pixels.move(p, e); return; }
+      if (mode.tool === 'smudge') { smudge.move(smudgePoint(p, e)); return; }
       if (pour || sweep) {
         fillMove(p, e);
         return;
@@ -1587,6 +1603,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'image') { if (e.type !== 'pointercancel') images.move(p); images.end(e.type === 'pointercancel'); return; }
       if (mode.tool === 'selection') { selection.up(p, e); return; }
       if (mode.tool === 'pixels') { pixels.up(p, e); return; }
+      if (mode.tool === 'smudge') {
+        if (e.type !== 'pointercancel' && e.pointerType !== 'pen') smudge.move(smudgePoint(p, e));
+        smudge.up(e.type === 'pointercancel');
+        return;
+      }
       if (pour || sweep) {
         fillUp();
         return;
@@ -1617,7 +1638,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       constrainTouch = active;
       if (live?.shape) adjustShape(live.shape.at, live.shape.shift);
     },
-    live: () => shapeEditor.active() ? shapeEditor.live() : mode.tool === 'pixels' ? pixels.live() : mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
+    live: () => shapeEditor.active() ? shapeEditor.live() : mode.tool === 'smudge' ? smudge.live() : mode.tool === 'pixels' ? pixels.live() : mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
     placement: () => mode.tool === 'image' ? images.preview() : undefined,
     types: () => ({ pencil: state.showPencil }),
     overlay(g, s) {
@@ -1640,8 +1661,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         g.restore();
       }
       const t = sizeTool();
-      if (!hover || !t || pickingColor) return;
-      const r = Math.max(2, (sizeIn(t) * s) / 2);
+      if (!hover || (!t && mode.tool !== 'smudge') || pickingColor) return;
+      const r = Math.max(2, ((t ? sizeIn(t) : smudgeSize / PT) * s) / 2);
       g.save();
       g.lineWidth = 1;
       g.strokeStyle = 'rgba(255,255,255,.9)';
@@ -1656,6 +1677,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
+      if (mode.tool === 'smudge' && e.key === 'Escape') { smudge.clear(); ctx.request(); return true; }
       if (shapeEditor.available() && e.key === 'Escape') { shapeEditor.cancel(); return true; }
       if (shapeEditor.available() && e.key === 'Enter' && !(e.target instanceof Element && e.target.closest('button, a, [role="button"]'))) {
         if (shapeEditor.active()) shapeEditor.apply();
@@ -1697,6 +1719,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       clearTimeout(holdTimer);
       selection.dispose();
       pixels.clear();
+      smudge.clear();
       shapeEditor.clear();
       if (live) endStroke(false);
     },

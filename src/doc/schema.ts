@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PixelTransform, PlacedImage } from './model';
+import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -17,7 +17,7 @@ import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, 
  */
 
 export const FORMAT = 'inkflo-book';
-export const SCHEMA = 6;
+export const SCHEMA = 7;
 
 /** Asset keys of one page's layer bitmaps, by layer id (`null` = blank, nothing stored). */
 export type PageArtKeys = Record<string, string | null>;
@@ -101,6 +101,11 @@ function cut(v: unknown, path: string): Cut {
   const c: Cut = { id: str(o.id, `${path}.id`), mode: oneOf(o.mode, ['across', 'panel'] as const, `${path}.mode`), pts: pts(o.pts, `${path}.pts`) };
   if (c.pts.length < 2) fail(`${path}.pts`, 'needs at least two points');
   if (o.extended !== undefined && o.extended !== null) c.extended = pts(o.extended, `${path}.extended`);
+  if (o.handles !== undefined) {
+    const handles = pts(o.handles, `${path}.handles`);
+    if (handles.length !== 2) fail(`${path}.handles`, 'needs two control points');
+    c.handles = [handles[0]!, handles[1]!];
+  }
   return c;
 }
 
@@ -235,20 +240,31 @@ function layer(v: unknown, path: string): Layer {
     const entries = arr(o.pixelTransforms, `${path}.pixelTransforms`);
     if (entries.length && (l.vector || l.image)) fail(`${path}.pixelTransforms`, 'requires a raster layer');
     let lastStroke = 0, lastFill = 0;
-    l.pixelTransforms = entries.map((v, i): PixelTransform => {
+    l.pixelTransforms = entries.map((v, i): PixelEdit => {
       const p = `${path}.pixelTransforms[${i}]`;
       const op = obj(v, p);
+      const strokes = num(op.strokes, `${p}.strokes`), fills = num(op.fills, `${p}.fills`);
+      if (!Number.isInteger(strokes) || strokes < lastStroke || strokes > l.strokes.length) fail(`${p}.strokes`, 'has an invalid stroke index');
+      if (!Number.isInteger(fills) || fills < lastFill || fills > l.fills.length) fail(`${p}.fills`, 'has an invalid fill index');
+      lastStroke = strokes;
+      lastFill = fills;
+      if (op.kind === 'smudge') {
+        const raw = arr(op.points, `${p}.points`);
+        if (raw.length < 2 || raw.length > 8192) fail(`${p}.points`, 'needs 2 to 8192 points');
+        const points = raw.map((v, j) => {
+          const q = `${p}.points[${j}]`;
+          return { ...pt(v, q), pressure: unit(obj(v, q).pressure, `${q}.pressure`, 1) };
+        });
+        const size = pos(op.size, `${p}.size`);
+        if (size > 1) fail(`${p}.size`, 'should be no more than one inch');
+        return { kind: 'smudge', points, size, strength: unit(op.strength, `${p}.strength`, 0.5), strokes, fills };
+      }
       const polygon = pts(op.polygon, `${p}.polygon`);
       if (polygon.length < 3 || polygon.length > 8192) fail(`${p}.polygon`, 'needs 3 to 8192 points');
       const raw = arr(op.matrix, `${p}.matrix`);
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      const strokes = num(op.strokes, `${p}.strokes`), fills = num(op.fills, `${p}.fills`);
-      if (!Number.isInteger(strokes) || strokes < lastStroke || strokes > l.strokes.length) fail(`${p}.strokes`, 'has an invalid stroke index');
-      if (!Number.isInteger(fills) || fills < lastFill || fills > l.fills.length) fail(`${p}.fills`, 'has an invalid fill index');
-      lastStroke = strokes;
-      lastFill = fills;
       return { polygon, matrix, strokes, fills };
     });
   }
@@ -362,7 +378,18 @@ function layout(v: unknown, path: string): PageLayout | undefined {
   if (gutter < 0 || gutter > 2) fail(`${path}.gutter`, 'should be from 0 to 2 inches');
   if (border < 0 || border > 0.5) fail(`${path}.border`, 'should be from 0 to 0.5 inches');
   if (!Number.isInteger(curve) || curve < 0 || curve > 5) fail(`${path}.curve`, 'should be a whole number from 0 to 5');
-  return { gutter, border, curve };
+  const gutterPaper = o.gutterPaper === null ? null : optStr(o.gutterPaper, `${path}.gutterPaper`);
+  if (typeof gutterPaper === 'string' && !/^#[0-9a-f]{6}$/i.test(gutterPaper)) fail(`${path}.gutterPaper`, 'should be a six-digit hex colour');
+  const cornerRadius = o.cornerRadius === undefined ? undefined : num(o.cornerRadius, `${path}.cornerRadius`);
+  if (cornerRadius !== undefined && (cornerRadius < 0 || cornerRadius > 0.5)) fail(`${path}.cornerRadius`, 'should be from 0 to 0.5 inches');
+  const panelCorners = o.panelCorners === undefined ? undefined : arr(o.panelCorners, `${path}.panelCorners`).map((value, i) => {
+    const entry = `${path}.panelCorners[${i}]`;
+    const item = obj(value, entry);
+    const radius = num(item.radius, `${entry}.radius`);
+    if (radius < 0 || radius > 0.5) fail(`${entry}.radius`, 'should be from 0 to 0.5 inches');
+    return { at: relativePoint(item.at, `${entry}.at`), radius };
+  });
+  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}) };
 }
 
 function source(o: Obj, path: string): Letter['src'] | undefined {
@@ -408,6 +435,10 @@ function letterOf(v: unknown, path: string): Letter {
     const rotation = num(o.rotation, `${path}.rotation`);
     if (rotation < -180 || rotation > 180) fail(`${path}.rotation`, 'should be from -180 to 180 degrees');
     if (rotation) l.rotation = rotation;
+  }
+  if (o.continuation !== undefined) {
+    const c = obj(o.continuation, `${path}.continuation`);
+    l.continuation = { after: str(c.after, `${path}.continuation.after`), join: oneOf(c.join, ['merge', 'stack', 'separate'], `${path}.continuation.join`) };
   }
   const src = source(o, path);
   if (src) l.src = src;
@@ -488,6 +519,13 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   if (o.grid !== undefined) pg.grid = modularGrid(o.grid, `${path}.grid`);
   if (o.downbeat !== undefined) pg.downbeat = relativePoint(o.downbeat, `${path}.downbeat`);
   if (o.autoLetter === true) pg.autoLetter = true;
+  const earlier = new Set<string>();
+  const grouped = pg.balloons.some((l) => l.continuation);
+  for (const [i, l] of pg.balloons.entries()) {
+    if (grouped && earlier.has(l.id)) fail(`${path}.balloons[${i}].id`, 'should be unique on this page');
+    if (l.continuation && (!earlier.has(l.continuation.after) || l.src)) fail(`${path}.balloons[${i}].continuation`, 'should follow an earlier balloon and share its script line');
+    earlier.add(l.id);
+  }
   groupOf(pg, 'over');
   groupOf(pg, 'background');
   return pg;

@@ -3,6 +3,7 @@ import { BALLOON_STYLES, defaultCaption, type BalloonStyle, type CaptionSpec } f
 import { applyStyle, captureStyle, type CaptionStyle } from '../engine/lettering/styles';
 import { panelAt, pointInPoly, type Panel } from './carve';
 import { anchorFor } from './groups';
+import { balloonGroup, groupWords, setGroupWords } from './captiongroup';
 
 /**
  * Lettering that follows the script (EXPLORE-DESK-UI §6, §16): script lines become letters,
@@ -17,6 +18,7 @@ export interface ParsedLine {
 }
 
 const SCRIPT_LINE = /^\s*([A-Za-z][\w .'-]{0,30}?)\s*(\((?:[^)]{1,20})\))?\s*:\s*([\s\S]*)$/;
+const ANONYMOUS_LINE = /^\s*\((whisper|shout|thought)\)\s*:\s*([\s\S]*)$/i;
 
 export function dialogueText(lines: string[]): string {
   return lines.map((line) => line.replaceAll('\\', '\\\\').replaceAll('\n', '\\n')).join('\n');
@@ -28,6 +30,8 @@ export function linesFromDialogueText(text: string): string[] {
 
 /** "MAYA: Too late." → speaker MAYA; "CAPTION: Midnight." → a caption box; "SFX: KRAK" → a sound effect. */
 export function parseLine(line: string): ParsedLine {
+  const anonymous = ANONYMOUS_LINE.exec(line);
+  if (anonymous) return { speaker: null, text: anonymous[2]!.trim(), style: anonymous[1]!.toLowerCase() as BalloonStyle };
   const m = SCRIPT_LINE.exec(line);
   if (!m) return { speaker: null, text: line.trim(), style: 'speech' };
   const who = m[1]!.trim();
@@ -43,12 +47,19 @@ export function parseLine(line: string): ParsedLine {
 
 /** The script line for a letter (inverse of parseLine). */
 export function lineFor(l: Letter): string {
-  const t = l.cap.text;
-  if (l.cap.style === 'box') return `CAPTION: ${t}`;
-  if (l.cap.style === 'sfx') return `SFX: ${t}`;
-  if (!l.speaker) return t;
-  const how = l.cap.style === 'whisper' || l.cap.style === 'shout' || l.cap.style === 'thought' ? ` (${l.cap.style})` : '';
-  return `${l.speaker}${how}: ${t}`;
+  return lineForWords(l, l.cap.text);
+}
+
+export function formatDialogueLine(speaker: string | null, style: BalloonStyle, text: string): string {
+  if (style === 'box') return `CAPTION: ${text}`;
+  if (style === 'sfx') return `SFX: ${text}`;
+  const how = style === 'whisper' || style === 'shout' || style === 'thought' ? `(${style})` : '';
+  const head = [speaker, how].filter(Boolean).join(' ');
+  return head ? `${head}: ${text}` : text;
+}
+
+function lineForWords(l: Letter, t: string): string {
+  return formatDialogueLine(l.speaker ?? null, l.cap.style, t);
 }
 
 export const speakerKey = (s: string) => s.trim().toUpperCase();
@@ -189,10 +200,7 @@ export function syncLettersFromScript(page: Page): boolean {
       changed = true;
     }
     const p = parseLine(raw);
-    if (l.cap.text !== p.text) {
-      l.cap = { ...l.cap, text: p.text };
-      changed = true;
-    }
+    if (setGroupWords(balloonGroup(page.balloons, l), p.text)) changed = true;
     const speaker = p.speaker ?? undefined;
     if (l.speaker !== speaker) {
       if (speaker) l.speaker = speaker;
@@ -213,9 +221,11 @@ export function syncScriptFromLetter(page: Page, l: Letter): boolean {
   if (old === undefined) return false;
   const parsed = parseLine(old);
   const sameSpeaker = (parsed.speaker ?? '') === (l.speaker ?? '');
-  if (sameSpeaker && parsed.text === l.cap.text) return false;
+  const group = balloonGroup(page.balloons, l);
+  const words = group.length === 1 ? l.cap.text : groupWords(group);
+  if (sameSpeaker && parsed.text === words) return false;
   const colon = SCRIPT_LINE.test(old) ? old.indexOf(':') : -1;
-  const next = sameSpeaker ? (colon < 0 ? l.cap.text : old.slice(0, colon + 1) + ' ' + l.cap.text) : lineFor(l);
+  const next = sameSpeaker ? (colon < 0 ? words : old.slice(0, colon + 1) + ' ' + words) : lineForWords(l, words);
   beat.lines[i] = next;
   return true;
 }
@@ -338,7 +348,11 @@ export function assignDialoguePanel(page: Page, panels: Panel[], beat: Beat, ind
   } else delete line.panel;
   const l = letterForLine(page, beat, index);
   const next = dialoguePanel(page, panels, beat, index);
-  if (l && next && panelAt(panels, centreIn(l)) !== next) moveLetter(l, availablePosition(page, panels, next, 0, 1, l));
+  if (l && next && panelAt(panels, centreIn(l)) !== next) {
+    const to = availablePosition(page, panels, next, 0, 1, l);
+    const delta = { x: to.x - l.cap.x, y: to.y - l.cap.y };
+    for (const part of balloonGroup(page.balloons, l)) moveLetter(part, { x: part.cap.x + delta.x, y: part.cap.y + delta.y });
+  }
 }
 
 export function omitDialogue(page: Page, l: Letter): void {

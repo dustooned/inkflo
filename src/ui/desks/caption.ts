@@ -1,9 +1,11 @@
 import { newId, PT, sheetOf, type Letter, type Pt } from '../../doc/model';
 import { BUNDLED_FONTS } from '../../engine/lettering/fonts';
-import { detectBalloon, readBalloon } from '../../engine/lettering/geometry';
+import { readBalloon, shapeForText } from '../../engine/lettering/geometry';
+import { resample } from '../../engine/core/quickshape';
 import { applyStyle, captureStyle } from '../../engine/lettering/styles';
 import { LETTER_SIZES, TAIL_JOINS, type BalloonStyle, type CaptionSpec, type LetterSize, type TailJoin } from '../../engine/lettering/spec';
 import { panelAt } from '../../geom/carve';
+import { balloonGroup, balloonPaintOrder, captionGroups, firstBalloon } from '../../geom/captiongroup';
 import { assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
 import { applyFix, letterPt, readabilityAll, safeFixes, snapScale, targetsFor, type FixId, type Level } from '../../geom/readability';
 import { hitLetter, letterBodyBox, letterBodyOutline } from '../../render/caption';
@@ -30,11 +32,11 @@ const LEVEL_COLOR: Record<Level, string> = { good: '#3E6B3A', risk: '#C98A1B', b
 const LEVEL_TEXT: Record<Level, string> = { good: 'Reads well', risk: 'At risk', bad: 'Won’t read well' };
 
 /** Session settings for the desk. */
-const state = { keepReadable: true, fromCenter: true };
+const state = { keepReadable: true, fromCenter: true, keepDrawnOutline: false };
 
 /**
- * Caption: letter the page from the script. Click inside a panel to letter its next line, or
- * draw a loop to make a balloon in that shape. Words stay linked to the script both ways.
+ * Caption: click inside a panel to letter its next line, or use Draw balloon for a custom outline.
+ * Words stay linked to the script both ways.
  * Positions are points (1/72 in) on the page.
  */
 export function captionDesk(ctx: DeskCtx): DeskMode {
@@ -58,6 +60,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   const frame = (b: Bounds, k: number): Bounds => ({ x0: b.x0 - 5 / k, y0: b.y0 - 5 / k, x1: b.x1 + 5 / k, y1: b.y1 + 5 / k });
   const rotationAt = (b: Bounds, pixelsPerPoint: number): Pt => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / pixelsPerPoint });
   const onPage = (p: Pt, l: Letter): Pt => rotateAround(p, l.cap, l.rotation ?? 0);
+  const rootOf = (l: Letter) => firstBalloon(page.balloons, l);
+  const groupOf = (l: Letter) => balloonGroup(page.balloons, rootOf(l));
+  const plusAt = (l: Letter, k: number): Pt => {
+    const b = box(l);
+    const margin = 18 / k;
+    const right = b.x1 + margin;
+    const x = right <= W * PT - margin / 2 ? right : b.x0 - margin;
+    return { x: Math.max(margin / 2, Math.min(W * PT - margin / 2, x)), y: Math.max(margin, Math.min(H * PT - margin, (b.y0 + b.y1) / 2)) };
+  };
 
   /** One undo step over lettering and (linked) script lines. */
   const commit = (label: string, beforeLetters: Letter[], beforeBeats: string) => {
@@ -115,25 +126,44 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
 
   /** A drawn loop becomes a balloon of the shape it looks like (2Dope's detector). */
   function fromLoop(pts: Pt[]): boolean {
-    const raw = pts.map(toPt);
-    if (detectBalloon(raw) === 'open') return false;
+    const length = pts.reduce((total, p, i) => i ? total + Math.hypot(p.x - pts[i - 1]!.x, p.y - pts[i - 1]!.y) : total, 0);
+    const end = pts.at(-1)!;
+    const start = pts[0]!;
+    const gap = Math.hypot(end.x - start.x, end.y - start.y);
+    if (length * ctx.scale() < 24 || gap > Math.min(length * 0.16, 14 / ctx.scale())) return false;
+    const raw = resample(pts.map(toPt), 96);
+    // Reject a doubled-back stroke or a figure eight before feeding the closed-outline fitter.
+    let area = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const a = raw[i]!, b = raw[(i + 1) % raw.length]!;
+      area += (a.x - raw[0]!.x) * (b.y - raw[0]!.y) - (b.x - raw[0]!.x) * (a.y - raw[0]!.y);
+    }
+    if (Math.abs(area) < 32) return false;
     const read = readBalloon(raw);
-    if (!read) return false;
+    if (!read || Math.min(read.width, read.height) < 4) return false;
     const panels = ctx.panels();
     const panel = panelAt(panels, { x: read.centre.x / PT, y: read.centre.y / PT });
     const style = read.style === 'custom' ? 'speech' : read.style;
     const l = newLetter(book, read.centre, style, nextPanelLine(page, panels, panel));
     l.cap = { ...l.cap, style: read.style, shape: Math.max(0.5, Math.min(2.5, read.shape)), minSize: [read.width / 2, read.height / 2] };
-    if (read.style === 'custom' && read.outline) l.cap = { ...l.cap, look: { ...(l.cap.look ?? {}), outline: read.outline } };
-    if (read.tail) l.cap = { ...l.cap, tails: [{ x: read.tail.x, y: read.tail.y, join: 'merged', width: 1.2 }] };
-    else if (style !== 'box') l.cap = { ...l.cap, tails: [] };
+    if (state.keepDrawnOutline) {
+      const xs = raw.map((p) => p.x), ys = raw.map((p) => p.y);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      l.cap = { ...l.cap, style: 'custom', x: (x0 + x1) / 2, y: (y0 + y1) / 2, minSize: [(x1 - x0) / 2, (y1 - y0) / 2], look: { ...l.cap.look, outline: shapeForText(raw, false) }, tails: [] };
+    } else {
+      if (read.style === 'custom' && read.outline) l.cap = { ...l.cap, look: { ...l.cap.look, outline: read.outline } };
+      l.cap = { ...l.cap, tails: read.tail ? [{ x: read.tail.x, y: read.tail.y, join: 'merged', width: 1.2 }] : [] };
+    }
+    clampLetter(l, page);
     edit(`Drawn ${KIND_LABEL[read.style]?.toLowerCase() ?? 'balloon'}`, () => page.balloons.push(l));
     selId = l.id;
+    ctx.request();
     ctx.chrome();
     return true;
   }
 
   function cycleLine(l: Letter): void {
+    if (groupOf(l).length > 1) return;
     const panels = ctx.panels();
     const line = nextPanelLine(page, panels, panelAt(panels, centreIn(l)));
     if (!line) return;
@@ -155,8 +185,42 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   };
   const openScript = () => openDialogue(ctx, selectLetter);
 
+  function addContinuation(l: Letter, splitAt?: number): void {
+    if (l.cap.style === 'sfx') return;
+    const b = box(l);
+    const root = rootOf(l);
+    const panel = panelAt(ctx.panels(), centreIn(root));
+    const { minSize: _min, path: _path, links: _links, ...cap } = l.cap;
+    const width = Math.max(22, Math.min(55, (b.x1 - b.x0) * 0.4));
+    const bottom = (panel?.bbox.y1 ?? H) * PT;
+    const top = (panel?.bbox.y0 ?? 0) * PT;
+    const y = b.y1 + 9 < bottom - 8 ? b.y1 + 9 : Math.max(top + 8, b.y0 - 9);
+    const text = splitAt === undefined ? '' : l.cap.text.slice(splitAt).trimStart();
+    const part: Letter = { id: newId('letter'), continuation: { after: l.id, join: 'merge' },
+      cap: { ...cap, x: l.cap.x, y, text, minSize: [width / 2, 11], tails: [] } };
+    edit('Add continuation balloon', () => {
+      delete root.generated;
+      if (splitAt !== undefined) l.cap = { ...l.cap, text: l.cap.text.slice(0, splitAt).trimEnd() };
+      const i = page.balloons.indexOf(l);
+      for (const next of page.balloons) if (next.continuation?.after === l.id) next.continuation.after = part.id;
+      page.balloons.splice(i + 1, 0, part);
+    });
+    selectLetter(part.id);
+    ctx.stage.closest('.screen')?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Words"]')?.focus();
+  }
+
   function removeLetter(l: Letter): void {
-    omitDialogue(page, l);
+    const group = groupOf(l);
+    const replacement = l.continuation?.after ?? group[1]?.id;
+    if (!l.continuation && group[1]) {
+      const first = group[1];
+      delete first.continuation;
+      first.src = l.src;
+      first.speaker = l.speaker;
+    } else if (!l.continuation) omitDialogue(page, l);
+    for (const part of group) {
+      if (part.continuation?.after === l.id && replacement) part.continuation.after = replacement;
+    }
     page.balloons = page.balloons.filter((x) => x.id !== l.id);
   }
 
@@ -201,11 +265,17 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     tools: [
       { id: 'select', label: 'Select', glyph: '➤', key: 'v', group: 'edit' },
       { id: 'letter', label: 'Letter', glyph: '💬', group: 'make', variants: KINDS.map((k) => ({ id: k.id, label: k.label, glyph: k.glyph, key: k.key })) },
+      { id: 'draw-balloon', label: 'Draw balloon', glyph: '◌', key: 'd', group: 'make' },
     ],
     tool: 'letter',
     cursor: () => (mode.tool === 'select' ? 'move' : 'cross'),
     skipBalloon: () => undefined,
     ctx(bar) {
+      if (mode.tool === 'draw-balloon') {
+        const preserve = h('input', { type: 'checkbox', checked: state.keepDrawnOutline });
+        preserve.addEventListener('change', () => { state.keepDrawnOutline = preserve.checked; });
+        bar.append(h('label', { class: 'mini' }, preserve, 'Keep drawn outline'));
+      }
       const panels = ctx.panels();
       const left = page.beats.reduce((n, beat) => n + beat.lines.filter((raw, i) => parseLine(raw).text && !beat.dialogue?.[i]?.omit && dialoguePanel(page, panels, beat, i) && !letterForLine(page, beat, i)).length, 0);
       const keep = h('input', { type: 'checkbox', checked: state.keepReadable });
@@ -215,7 +285,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const find = h('select', { 'aria-label': 'Find a balloon', class: 'balloon-jump' },
         h('option', { value: '' }, 'Page checks'),
         page.balloons.map((l, index) => {
-          const panel = panelAt(panels, centreIn(l));
+          const panel = panelAt(panels, centreIn(rootOf(l)));
           const words = l.cap.text.replace(/\s+/g, ' ').slice(0, 45);
           return h('option', { value: l.id, selected: l.id === selId }, (panel ? 'Panel ' + (panel.index + 1) : 'Page') + ' · ' + (words || 'Balloon ' + (index + 1)));
         }));
@@ -229,7 +299,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         h('button', { class: 'btn', type: 'button', onclick: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) }, 'Style sheet…'),
         h('span', { class: 'hint' }, mode.tool === 'select'
           ? 'Drag body to move · edges to resize · top stem to rotate · yellow dots aim tails'
-          : `Click in a panel to letter its next line, or draw a loop for a balloon of that shape · ${left} line${left === 1 ? '' : 's'} left`),
+          : mode.tool === 'draw-balloon' ? 'Draw a closed outline. Return to the starting point to finish.'
+            : `Click in a panel to letter its next line · ${left} line${left === 1 ? '' : 's'} left`),
       );
     },
     inspector(el) {
@@ -240,6 +311,11 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       if (l) el.append(presetControls(l));
     },
     down(p, e) {
+      if (mode.tool === 'draw-balloon') {
+        loop = [p];
+        lastTap = null;
+        return;
+      }
       const now = performance.now();
       const q = toPt(p);
       const s = sel();
@@ -247,6 +323,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         const k = ctx.scale() / PT;
         const r = (e.pointerType === 'touch' ? 14 : 9) / k;
         const distance = (a: Pt) => Math.hypot(a.x - q.x, a.y - q.y);
+        if (s.cap.style !== 'sfx' && distance(plusAt(s, k)) <= 12 / k) { addContinuation(s); return; }
         const start = () => {
           studio.drawing = true;
           return { start: q, orig: structuredClone(s.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
@@ -270,7 +347,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           return;
         }
       }
-      const hit = [...page.balloons].reverse().find((b) => hitLetter(b, sheet(), q, W, H));
+      const hit = captionGroups(page.balloons).flatMap(balloonPaintOrder).reverse().find((b) => hitLetter(b, sheet(), q, W, H));
       if (hit) {
         selId = hit.id;
         if (lastTap?.id === hit.id && now - lastTap.at < 320 && Math.hypot(p.x - lastTap.point.x, p.y - lastTap.point.y) * ctx.scale() < 8) {
@@ -289,15 +366,18 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       void e;
-      loop = [p];
       downAt = p;
     },
     move(p, e) {
       if (loop) {
         const last = loop[loop.length - 1]!;
-        if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() > 2) loop.push(p);
+        if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() > 2) {
+          if (loop.length >= 4096) loop = loop.filter((_, i) => i % 2 === 0);
+          loop.push(p);
+        }
         return;
       }
+      if (downAt && Math.hypot(p.x - downAt.x, p.y - downAt.y) * ctx.scale() > 7) downAt = null;
       if (!drag) return;
       const l = page.balloons.find((x) => x.id === drag!.id);
       if (!l) return;
@@ -311,6 +391,14 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         // the tails stay on their speakers; the balloon (and its joined balloons) move
         l.cap = { ...o, x: o.x + dx, y: o.y + dy, ...(o.links ? { links: o.links.map((k) => ({ ...k, x: k.x + dx, y: k.y + dy })) } : {}) };
         clampLetter(l, page);
+        const dxGroup = l.cap.x - o.x, dyGroup = l.cap.y - o.y;
+        for (const part of groupOf(l)) {
+          if (part.id === l.id) continue;
+          const previous = drag.before.find((b) => b.id === part.id);
+          if (!previous) continue;
+          part.cap = e.shiftKey ? { ...previous.cap, x: previous.cap.x + dxGroup, y: previous.cap.y + dyGroup,
+            links: previous.cap.links?.map((k) => ({ ...k, x: k.x + dxGroup, y: k.y + dyGroup })) } : previous.cap;
+        }
       } else if (drag.grab.kind === 'tail') {
         const i = drag.grab.index;
         l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, x: t.x + dx, y: t.y + dy } : t)) };
@@ -346,11 +434,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     up(p, e) {
       if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
       if (loop) {
-        const pts = loop;
+        const pts = [...loop, p];
         loop = null;
-        const travel = pts.reduce((n, q, i) => (i ? n + Math.hypot(q.x - pts[i - 1]!.x, q.y - pts[i - 1]!.y) : 0), 0);
-        if (travel * ctx.scale() > 40 && fromLoop(pts)) return;
-        place(downAt ?? p, variantOf(mode, 'letter') as BalloonStyle);
+        if (!fromLoop(pts)) toast('Close the outline to create a balloon.');
+        return;
+      }
+      if (downAt) {
+        const at = downAt;
+        downAt = null;
+        if (mode.tool === 'letter' && Math.hypot(p.x - at.x, p.y - at.y) * ctx.scale() <= 7) place(at, variantOf(mode, 'letter') as BalloonStyle);
         return;
       }
       if (!drag) return;
@@ -383,7 +475,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         }
       }
       const l = sel();
-      if (l) {
+      if (l && mode.tool !== 'draw-balloon') {
         g.strokeStyle = '#B8432F';
         g.lineWidth = 1.5;
         g.beginPath();
@@ -423,6 +515,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         }
         for (const hd of handles) dot(onPage(hd.at, l), '#FFFDF7');
         if (l.cap.style !== 'sfx') for (const tail of l.cap.tails) dot(tail, '#F2C230');
+        if (l.cap.style !== 'sfx') {
+          const p = plusAt(l, k);
+          dot(p, '#FFFDF7');
+          g.strokeStyle = '#191A1F';
+          g.beginPath();
+          g.moveTo(p.x * k - 2.5, p.y * k); g.lineTo(p.x * k + 2.5, p.y * k);
+          g.moveTo(p.x * k, p.y * k - 2.5); g.lineTo(p.x * k, p.y * k + 2.5);
+          g.stroke();
+        }
       }
       if (loop && loop.length > 1) {
         g.strokeStyle = '#B8432F';
@@ -431,6 +532,13 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         g.beginPath();
         loop.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
         g.stroke();
+        g.setLineDash([]);
+        const start = loop[0]!;
+        const end = loop.at(-1)!;
+        g.fillStyle = Math.hypot(end.x - start.x, end.y - start.y) * s < 14 ? '#2F6F7E' : '#B8432F';
+        g.beginPath();
+        g.arc(start.x * s, start.y * s, 4, 0, Math.PI * 2);
+        g.fill();
       }
       g.restore();
     },
@@ -482,12 +590,36 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       if (before) commit('Edit words', before.letters, before.beats);
       before = null;
     });
-    const beatIdx = l.src ? page.beats.findIndex((x) => x.id === l.src!.beat) : -1;
-    const panel = beatIdx >= 0 && l.src ? dialoguePanel(page, ctx.panels(), page.beats[beatIdx]!, sourceIndex(page.beats[beatIdx]!, l.src)) : null;
+    let splitCursor: number | undefined;
+    const splitButton = h('button', { class: 'btn', type: 'button', onclick: () => {
+      const at = splitCursor ?? text.selectionStart;
+      const words = l.cap.text;
+      const rest = /\S+/.exec(words.slice(at));
+      const split = rest && (at === 0 || /\s/.test(words[at - 1] ?? '') || /\s/.test(words[at] ?? '')) ? at + rest.index : -1;
+      if (split < 1 || !words.slice(0, split).trim()) { toast('Place the text cursor before the words to continue.'); return; }
+      addContinuation(l, split);
+    } }, 'Split words into next balloon');
+    splitButton.addEventListener('pointerdown', () => { splitCursor = text.selectionStart; });
+    const group = groupOf(l);
+    const root = group[0]!;
+    const beatIdx = root.src ? page.beats.findIndex((x) => x.id === root.src!.beat) : -1;
+    const panel = beatIdx >= 0 && root.src ? dialoguePanel(page, ctx.panels(), page.beats[beatIdx]!, sourceIndex(page.beats[beatIdx]!, root.src)) : panelAt(ctx.panels(), centreIn(root));
+    if (c.style !== 'sfx' || group.length > 1) {
+      const join = l.continuation;
+      el.append(sec('Caption group',
+        group.length > 1 ? h('p', { class: 'note' }, `Balloon ${group.indexOf(l) + 1} of ${group.length}${panel ? ' · Panel ' + (panel.index + 1) : ''}`) : null,
+        group.length > 1 ? seg(group.map((part, i) => ({ id: part.id, label: String(i + 1) })), l.id, selectLetter, 'Select balloon in group') : null,
+        join ? seg([{ id: 'merge', label: 'Merge' }, { id: 'stack', label: 'Underneath' }, { id: 'separate', label: 'Separate' }], join.join,
+          (v) => edit('Set balloon connection', () => { join.join = v; }), 'Balloon connection') : null,
+        c.style !== 'sfx' ? h('button', { class: 'btn', type: 'button', onclick: () => addContinuation(l) }, '+ Add balloon') : null,
+        group.length > 1 ? h('p', { class: 'note' }, 'Shift-drag a balloon to move the whole group.') : null,
+      ));
+    }
     el.append(sec('Words', text,
-      h('p', { class: 'note' }, beatIdx >= 0 ? `Beat ${beatIdx + 1}, line ${l.src!.line + 1}${panel ? ' · Panel ' + (panel.index + 1) : ''}. Text edits update the script.` : 'Free text.'),
+      c.style !== 'sfx' ? splitButton : null,
+      h('p', { class: 'note' }, beatIdx >= 0 ? `Beat ${beatIdx + 1}, line ${root.src!.line + 1}${panel ? ' · Panel ' + (panel.index + 1) : ''}. Text edits update the script.` : 'Free text.'),
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
-        l.src ? h('button', { class: 'btn', type: 'button', onclick: () => cycleLine(l) }, 'Next line') : null,
+        l.src && group.length === 1 ? h('button', { class: 'btn', type: 'button', onclick: () => cycleLine(l) }, 'Next line') : null,
         l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => { omitDialogue(page, l); delete l.src; delete l.generated; }) }, 'Unlink') : null,
         h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete balloon', () => removeLetter(l)); selId = null; ctx.chrome(); } }, 'Delete'))));
 

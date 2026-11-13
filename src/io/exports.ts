@@ -5,9 +5,10 @@ import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { derivePanels, layoutOf, panelAt } from '../geom/carve';
 import { groupPanels } from '../geom/groups';
-import { captionWithLocalTails, paintLetter, sizePt, toPx } from '../render/caption';
+import { captionWithLocalTails, paintBalloonGroup, sizePt, toPx } from '../render/caption';
+import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
-import { COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, panelPath, renderPage } from '../render/page';
+import { COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, panelPath, renderPage, roundCorners } from '../render/page';
 import { assetKey } from './capture';
 import { encodePng, makeCanvas } from './canvasops';
 import { DEFAULT_MOTION, motionProject, twoDopeCaption, type LayerArt, type MotionOptions, type MotionPage } from './to2dope';
@@ -116,8 +117,11 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       const panels = derivePanels(page);
       // paper
       const pg = clear(fill);
-      pg.fillStyle = COLORS.gutter;
-      pg.fillRect(0, 0, W, H);
+      const gutterPaper = layoutOf(page).gutterPaper;
+      if (gutterPaper !== null) {
+        pg.fillStyle = gutterPaper ?? COLORS.gutter;
+        pg.fillRect(0, 0, W, H);
+      }
       // gutter art (borderless pages) belongs to the paper: outside the panels, under them all
       for (const grp of page.groups.filter((x) => x.kind === 'gutter')) {
         if (grp.mask) inGutterBands(pg, page, s, W, H, (o) => paintLayers(o, grp, art, W, H, s, () => true));
@@ -138,6 +142,7 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
         f.fill(path);
         for (const g of [...bg, ...mine]) paintLayers(f, g, art, W, H, s, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
         cutBands(f, page, s);
+        roundCorners(f, page, [p], s, null);
         f.restore();
         const l = clear(line);
         l.save();
@@ -172,16 +177,17 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       }
       // balloons
       const balloons: MotionPage['balloons'] = [];
-      for (const [bi, b] of page.balloons.entries()) {
-        const base = { name: balloonName(page, bi), panelIndex: panelAt(panels, centreIn(b))?.index ?? null, text: b.cap.text };
-        if (opt.captions === 'live') {
+      for (const group of captionGroups(page.balloons)) {
+        const b = group[0]!;
+        const base = { name: balloonName(page, page.balloons.indexOf(b)), panelIndex: panelAt(panels, centreIn(b))?.index ?? null, text: groupWords(group) };
+        if (opt.captions === 'live' && group.length === 1) {
           // a live 2Dope caption, in the comp's pixels: editable and animatable in 2Dope
           const k = s / PT;
           const pixels = captionWithLocalTails(toPx(b.cap, k), b.rotation);
           const caption = twoDopeCaption(pixels as unknown as Record<string, unknown> & { size: string }, sizePt(b.cap, sheet) * k, H);
           balloons.push({ ...base, art: { line: null, fill: null }, caption, ...(b.rotation ? { rotation: { degrees: b.rotation, pivot: [pixels.x, pixels.y] } } : {}) });
         } else {
-          paintLetter(clear(line), b, sheet, s, page.widthIn, page.heightIn);
+          paintBalloonGroup(clear(line), group, sheet, s, page.widthIn, page.heightIn);
           balloons.push({ ...base, art: { line: await store(line), fill: null } });
         }
       }
