@@ -35,6 +35,18 @@ describe('fill kit', () => {
     expect(m.res.count).toBeGreaterThan(70 * 70);
   });
 
+  it('two carved panels that share a cut edge are walled from each other', () => {
+    // the starter page shape: panels meet on the cut with no gap between their polygons
+    const left = panel(0, 0, 5, 10, 0);
+    const right = panel(5, 0, 10, 10, 1);
+    // ink started off the page crosses the left panel and stops partway into the right one
+    const k = kit(lines([0, 50, 70, 52]), [left, right]);
+    const m = k.mask(fill(2, 2))!;
+    expect(m.res.x1).toBeLessThan(52); // never enters the right panel
+    expect(m.res.y1).toBeLessThan(52); // and does not go round the stroke's end
+    expect(k.mask(fill(2, 8))!.res.y0).toBeGreaterThan(50);
+  });
+
   it('a Gutters fill stays in its region (the gutter bands)', () => {
     const band = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 48; x <= 52; x++) band[y * W + x] = 1; // a vertical band

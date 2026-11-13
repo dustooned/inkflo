@@ -568,3 +568,13 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
     matched the moved panel's pixel bounds.
 - **Not checked:** how Procreate, Photoshop, Affinity and Clip Studio Paint apply the group masks.
   The dialog says to check clipping in the target app.
+
+## Bucket fills stop at panel seams, 2026-11-13
+
+- Carved panels share their cut edge, so the old fill walls (everything outside the panel union)
+  left neighbouring panels connected. A bucket fill ran across the cut and around ink that left
+  the page or stopped short in the next panel. `panelSeams` in `draw/fillkit.ts` now makes the
+  pixels where two panels meet a wall, except in the Gutters group, which fills its own bands.
+- Checks: a new test in `fillkit.test.ts` (fails on the old walls). In the browser, a stroke that
+  started off the page across panel 1 into panel 2 now splits panel 1, and the fill stays in it.
+- Saved colour pixels are not refilled, so fills made before this change keep their old shape.

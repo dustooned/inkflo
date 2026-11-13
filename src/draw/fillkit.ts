@@ -41,6 +41,32 @@ export function panelUnion(panels: readonly Panel[], dpi: number, w: number, h: 
   return out;
 }
 
+/**
+ * Pixels where two panels meet (1 = a 4-neighbour belongs to another panel). Carved panels share
+ * their cut edge, so without this the panel union is one region and a fill runs from one panel
+ * into the next, and around any ink that stops short of the far side.
+ */
+export function panelSeams(panels: readonly Panel[], dpi: number, w: number, h: number): Uint8Array {
+  const id = new Uint16Array(w * h);
+  panels.forEach((p, n) => {
+    const a = polygonMask(p.pts.map((q) => [q.x * dpi, q.y * dpi] as const), w, h);
+    if (!a) return;
+    for (let y = a.y0; y <= a.y1; y++) for (let x = a.x0; x <= a.x1; x++) {
+      const i = y * w + x;
+      if (a.mask[i] && !id[i]) id[i] = n + 1;
+    }
+  });
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    const v = id[i]!;
+    if (!v) continue;
+    if ((x > 0 && id[i - 1] && id[i - 1] !== v) || (x < w - 1 && id[i + 1] && id[i + 1] !== v)
+      || (y > 0 && id[i - w] && id[i - w] !== v) || (y < h - 1 && id[i + w] && id[i + w] !== v)) out[i] = 1;
+  }
+  return out;
+}
+
 /** Grow (n > 0) or shrink (n < 0) a fill by |n| pixels; growth stays inside `inside`. */
 export function scaleMask(r: FillResult, n: number, w: number, h: number, inside: Uint8Array): FillResult | null {
   if (!n) return r;
@@ -112,13 +138,17 @@ export class FillKit {
     return (this.union ??= this.region ?? panelUnion(this.panels, this.dpi, this.w, this.h));
   }
 
-  /** Line alpha with everything outside the panels made solid. */
+  /** Line alpha with everything outside the panels, and the seams between them, made solid. */
   walls(refer: Refer): Uint8Array {
     let a = this.walled.get(refer);
     if (!a) {
       const inside = this.inside();
       a = Uint8Array.from(this.alphaOf(refer));
       for (let i = 0; i < a.length; i++) if (!inside[i]) a[i] = 255;
+      if (!this.region) {
+        const seams = panelSeams(this.panels, this.dpi, this.w, this.h);
+        for (let i = 0; i < a.length; i++) if (seams[i]) a[i] = 255;
+      }
       this.walled.set(refer, a);
     }
     return a;
