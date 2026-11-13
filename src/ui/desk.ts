@@ -11,6 +11,7 @@ import { drawComposition } from './composition';
 import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
 import { glyphEl, icon } from './icons';
+import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
 import { h, slider, toast } from './dom';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
@@ -96,6 +97,10 @@ export interface DeskMode {
   key?(e: KeyboardEvent): boolean;
   /** Right-click on the canvas: this desk's actions for the point under the pointer. */
   contextMenu?(p: Pt): MenuItem[];
+  /** What Copy takes from this desk right now (a selection), or null. */
+  copy?(): ClipPayload | null;
+  /** Paste here, centred at `at` (page inches). False when this desk can't take that kind. */
+  paste?(clip: ClipPayload, at: Pt): boolean;
   dispose?(): void;
 }
 
@@ -160,6 +165,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   const message = messageBar();
   let raf = 0;
+  /** Where the pointer last was on the page: keyboard pastes land there. */
+  let lastPointer: Pt | null = null;
   let fullFrame = true;
   let pageCache: HTMLCanvasElement | null = null;
   const ctx: DeskCtx = {
@@ -379,6 +386,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     openCanvasMenu(ctx.toPage(e), e.clientX, e.clientY);
   });
   stageEl.addEventListener('pointermove', (e) => {
+    if (!mode.pane) lastPointer = ctx.toPage(e);
     if (longPress && e.pointerId === longPress.id && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 10) {
       if (longPress.opened) closePopover();
       cancelLongPress();
@@ -534,9 +542,52 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     return [...mode.tools].sort((a, b) => rank(a.id) - rank(b.id)).filter((t) => t.id === mode.tool || !(tp.hidden ?? []).includes(t.id));
   }
 
+  const CLIP_NAMES: Record<ClipPayload['kind'], string> = { pixels: 'pixels', image: 'image', strokes: 'lines', balloons: 'lettering', text: 'text' };
+  function pastePoint(): Pt {
+    const p = lastPointer;
+    return p && p.x >= 0 && p.y >= 0 && p.x <= page.widthIn && p.y <= page.heightIn ? p : { x: page.widthIn / 2, y: page.heightIn / 2 };
+  }
+  async function copyNow(): Promise<boolean> {
+    const clip = mode.copy?.();
+    if (!clip) {
+      ctx.hint(stage === 'caption' ? 'Select a balloon to copy.' : stage === 'draw' ? 'Select pixels (Transform), lines (Select lines) or an image (Position image) to copy.' : 'Nothing to copy here. Copy from Draw or Caption.', { timeout: 3500 });
+      return false;
+    }
+    const where = await copyToClipboard(clip);
+    ctx.hint('Copied ' + CLIP_NAMES[clip.kind] + (where === 'system' ? '. Paste it on any page, in another book, or in another app.' : '. Paste it on any page or in another book.'), { timeout: 3000 });
+    return true;
+  }
+  function pasteNow(clip: ClipPayload | null, at: Pt): void {
+    if (!clip) { ctx.hint('The clipboard is empty.', { timeout: 2500 }); return; }
+    if (mode.paste?.(clip, at)) { ctx.request(); return; }
+    const where = clip.kind === 'balloons' || clip.kind === 'text' ? 'Caption' : 'Draw';
+    ctx.hint('Paste ' + CLIP_NAMES[clip.kind] + ' in the ' + where + ' desk.', { tone: 'warn', timeout: 3500 });
+  }
+  const typingIn = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+  const onCopy = (e: ClipboardEvent) => {
+    if (typingIn(e.target) || document.querySelector('dialog[open]') || mode.pane) return;
+    const clip = mode.copy?.();
+    if (!clip) return;
+    e.preventDefault();
+    void copyNow();
+  };
+  const onPaste = (e: ClipboardEvent) => {
+    if (typingIn(e.target) || document.querySelector('dialog[open]') || mode.pane) return;
+    e.preventDefault();
+    const text = e.clipboardData?.getData('text/plain') ?? null;
+    const files = [...(e.clipboardData?.files ?? [])];
+    const at = pastePoint();
+    void readClipboard(text, files).then((clip) => pasteNow(clip, at));
+  };
+  window.addEventListener('copy', onCopy);
+  window.addEventListener('paste', onPaste);
+
   function openCanvasMenu(p: Pt, x: number, y: number): void {
     const items: MenuItem[] = [
       ...(mode.contextMenu?.(p) ?? []),
+      'sep',
+      ...(mode.copy ? [{ label: 'Copy', key: 'Ctrl+C', run: () => void copyNow() }] : []),
+      ...(mode.paste ? [{ label: 'Paste here', key: 'Ctrl+V', run: () => void pasteFromSystem().then((clip) => pasteNow(clip, p)) }] : []),
       'sep',
       { label: 'Undo', key: 'Ctrl+Z', disabled: !studio.history.canUndo, run: () => studio.undo() },
       { label: 'Redo', key: 'Ctrl+Shift+Z', disabled: !studio.history.canRedo, run: () => studio.redo() },
@@ -988,6 +1039,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     offHistory();
     closePopover();
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('copy', onCopy);
+    window.removeEventListener('paste', onPaste);
     window.removeEventListener('keyup', onKeyUp);
     mode.dispose?.();
     studio.residency.unpin(art);

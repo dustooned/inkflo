@@ -130,6 +130,21 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       }
       marquee.up(p, false);
     },
+    /** The selected lines on the page (a moved panel's placement applied), for the clipboard. */
+    clipboard(): { type: Layer['type']; strokes: Stroke[]; centre: Pt } | null {
+      const sel = current();
+      if (!sel) return null;
+      const layer = findLayer(page, sel.id)?.layer;
+      if (!layer) return null;
+      const m = sel.place?.m, k = sel.place?.k ?? 1;
+      const strokes = [...sel.indices].map((i) => sel.source[i]!).map((st) => ({ ...st, w: st.w * k, pts: st.pts.map((q) => {
+        if (!m) return { ...q };
+        const [x, y] = applyPoint(m, q.x, q.y);
+        return { ...q, x, y };
+      }) }));
+      const xs = strokes.flatMap((st) => st.pts.map((q) => q.x)), ys = strokes.flatMap((st) => st.pts.map((q) => q.y));
+      return { type: layer.type, strokes, centre: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 } };
+    },
     hover: marquee.hover,
     closePolygon: marquee.closePolygon,
     resetMarquee: marquee.clear,

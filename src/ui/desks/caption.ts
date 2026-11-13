@@ -1,4 +1,5 @@
 import { newId, PT, sheetOf, type Letter, type Pt } from '../../doc/model';
+import { relabelLetters, type ClipPayload } from '../../app/clipboard';
 import { BUNDLED_FONTS } from '../../engine/lettering/fonts';
 import { readBalloon, shapeForText } from '../../engine/lettering/geometry';
 import { resample } from '../../engine/core/quickshape';
@@ -414,6 +415,31 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       if (l) inspectLetter(el, l);
       else inspectPage(el);
       if (l) el.append(presetControls(l));
+    },
+    copy(): ClipPayload | null {
+      const l = sel();
+      if (!l) return null;
+      const letters = groupOf(l).map((x) => structuredClone(x));
+      const xs = letters.map((x) => x.cap.x), ys = letters.map((x) => x.cap.y);
+      return { kind: 'balloons', letters, centre: { x: (Math.min(...xs) + Math.max(...xs)) / 2 / PT, y: (Math.min(...ys) + Math.max(...ys)) / 2 / PT } };
+    },
+    paste(clip, at) {
+      if (clip.kind === 'text') {
+        // text from another app: a speech balloon with those words where the pointer is
+        place(at, 'speech');
+        const l = sel();
+        if (l) edit('Paste text', () => { l.cap = { ...l.cap, text: clip.text }; });
+        return true;
+      }
+      if (clip.kind !== 'balloons') return false;
+      const delta = { x: (at.x - clip.centre.x) * PT, y: (at.y - clip.centre.y) * PT };
+      const letters = relabelLetters(clip.letters, delta, () => newId('lt'));
+      for (const l of letters) clampLetter(l, page);
+      edit('Paste lettering', () => page.balloons.push(...letters));
+      selId = letters[0]?.id ?? null;
+      ctx.chrome();
+      ctx.request();
+      return true;
     },
     contextMenu(p) {
       const q = toPt(p);

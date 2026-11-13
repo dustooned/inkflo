@@ -176,6 +176,20 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       }
       marquee.up(p, false);
     },
+    /** The selected pixels as a clipboard piece: size in inches, centre on the page. */
+    clipboard(): { name: string; canvas: HTMLCanvasElement; widthIn: number; heightIn: number; centre: Pt } | null {
+      const sel = current();
+      if (!sel) return null;
+      const { rect, pixels } = sel.lifted;
+      const canvas = document.createElement('canvas');
+      canvas.width = pixels.width;
+      canvas.height = pixels.height;
+      canvas.getContext('2d')!.drawImage(pixels, 0, 0);
+      const mid = { x: (rect.x + rect.w / 2) / dpi, y: (rect.y + rect.h / 2) / dpi };
+      const centre = sel.place ? (() => { const [x, y] = applyPoint(sel.place!.m, mid.x, mid.y); return { x, y }; })() : mid;
+      const k = sel.place?.k ?? 1;
+      return { name: sel.name + ' piece', canvas, widthIn: rect.w / dpi * k, heightIn: rect.h / dpi * k, centre };
+    },
     hover: marquee.hover,
     closePolygon: marquee.closePolygon,
     resetMarquee: marquee.clear,

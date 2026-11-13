@@ -206,8 +206,19 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
   }
 
   const handle = (image: PlacedImage) => imagePoint(image, image.width / 2, image.height / 2);
+  /** The selected image (with its cut) as a clipboard piece, its centre on the page. */
+  function clipboard(): { name: string; canvas: HTMLCanvasElement; image: PlacedImage; centre: Pt } | null {
+    const item = get();
+    const source = item && art.planes[item.layer.id];
+    if (!item || !source?.width) return null;
+    const canvas = makeCanvas(source.width, source.height);
+    canvas.getContext('2d')!.drawImage(source, 0, 0);
+    const centre = mapPanelPoint({ x: item.image.x, y: item.image.y }, matrixForGroup(item.group) ?? null);
+    return { name: item.layer.name, canvas, image: structuredClone(item.image), centre };
+  }
+
   return {
-    open, options,
+    open, options, clipboard,
     start(p: Pt) {
       if (cutting) { cutPoint = p; marquee.down(p, 'freehand'); return; }
       let item = get();

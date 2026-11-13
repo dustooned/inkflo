@@ -12,7 +12,8 @@ import { vectorSelection } from '../vectorselection';
 import { rasterSelection } from '../rasterselection';
 import { quickShapeEditor } from '../quickshapeedit';
 import { smudgeTool } from '../smudgetool';
-import { placementOf, type Placement } from '../placement';
+import { placementOf, toSource, type Placement } from '../placement';
+import { moveStrokes, type ClipPayload } from '../../app/clipboard';
 import { screentoneTool } from '../screentone';
 import { openAdjustments } from '../adjustments';
 import { openBookAssets } from '../bookassets';
@@ -1675,6 +1676,50 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
           h('button', { class: 'btn', type: 'button', onclick: () => images.open() }, 'Place image')),
       );
       renderLayers(docked, false);
+    },
+    copy(): ClipPayload | null {
+      if (mode.tool === 'pixels') { const c = pixels.clipboard(); if (c) return { kind: 'pixels', ...c }; }
+      if (mode.tool === 'selection') { const c = selection.clipboard(); if (c) return { kind: 'strokes', ...c }; }
+      if (mode.tool === 'image') { const c = images.clipboard(); if (c) return { kind: 'image', ...c }; }
+      return null;
+    },
+    paste(clip, at) {
+      if (clip.kind !== 'pixels' && clip.kind !== 'image' && clip.kind !== 'strokes') return false;
+      const group = groupAt(page, ctx.panels(), at);
+      if (!group.visible || group.locked) { ctx.hint('That group is hidden or locked. Paste somewhere else.', { tone: 'warn' }); return true; }
+      const place = placementOf(panelForGroup(ctx.panels(), group)?.transform?.matrix);
+      const k = place?.k ?? 1;
+      if (clip.kind === 'strokes') {
+        const moved = moveStrokes(clip.strokes, { x: at.x - clip.centre.x, y: at.y - clip.centre.y })
+          .map((st) => ({ ...st, w: st.w / k, pts: st.pts.map((q) => ({ ...q, ...toSource(place, q) })) }));
+        const id = layerOfType(group, clip.type, true)?.id ?? addLayer(group, clip.type, true);
+        const layer = findLayer(page, id)!.layer;
+        editVector(id, 'Paste lines', [...layer.strokes, ...moved]);
+        ctx.hint(`Pasted ${moved.length} ${moved.length === 1 ? 'line' : 'lines'}.`, { timeout: 2500 });
+        return true;
+      }
+      // pictures land as an image layer under the pointer: move it, cut it, collage it
+      const centre = toSource(place, at);
+      const layer = newLayer('colour');
+      layer.name = clip.name;
+      layer.fillRef = false;
+      layer.image = clip.kind === 'image'
+        ? { ...structuredClone(clip.image), x: centre.x, y: centre.y, width: clip.image.width / k, height: clip.image.height / k }
+        : { x: centre.x, y: centre.y, width: clip.widthIn / k, height: clip.heightIn / k, rotation: 0, pixelWidth: clip.canvas.width, pixelHeight: clip.canvas.height };
+      const canvas = document.createElement('canvas');
+      canvas.width = clip.canvas.width;
+      canvas.height = clip.canvas.height;
+      canvas.getContext('2d')!.drawImage(clip.canvas, 0, 0);
+      art.planes[layer.id] = canvas;
+      art.planeSizes[layer.id] = { width: canvas.width, height: canvas.height };
+      touchLayer(art, layer.id);
+      studio.editPage(page, 'Paste image', ['groups'], (p) => {
+        const g = p.groups.find((x) => x.id === group.id);
+        if (g) g.layers.splice(insertIndex(g, 'colour'), 0, layer);
+      });
+      selectImage(layer.id);
+      ctx.hint('Pasted as an image. Drag to move it, or cut it out in the inspector.', { timeout: 3000 });
+      return true;
     },
     contextMenu(p) {
       const use = (id: string) => () => { mode.tool = id; ctx.chrome(); ctx.request(); };

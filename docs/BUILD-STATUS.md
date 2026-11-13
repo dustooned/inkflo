@@ -781,3 +781,22 @@ an iPad pays for on every frame:
 - Checks: `collage.test.ts` covers units, torn path, clean-up and save/load. In Chrome, an image
   placed through the dialog and cut with a loop kept its centre and became transparent outside
   the cut; torn 60% and a 0.08″ edge rendered.
+
+## Copy and paste everywhere, 2026-11-13
+
+- **One clipboard** (`app/clipboard.ts`) for pixels (Transform selection), lines (Select lines),
+  placed images with their cut, tear and edge (Position image), and lettering (a selected
+  balloon with its joined group).
+- **Ctrl/⌘+C and Ctrl/⌘+V** in the desks (not while typing), and **Copy** / **Paste here** in the
+  right-click menu. A paste lands under the pointer on any page of any book.
+- **System clipboard:** the copy is also written as an inkflo marker plus, for pictures, a
+  PNG. Other apps get the image; another inkflo tab rebuilds the full piece. Pasting a picture
+  from another app makes an image layer at 150 dpi; pasting text in Caption makes a speech
+  balloon. If the browser blocks system access, the in-app copy still works in this tab.
+- Pasted lettering gets new ids, keeps its joins, and is unlinked from the script. Pasted lines
+  go to the target group's vector layer, created if needed. Moved panels are mapped both ways.
+- **Checks:** `clipboard.test.ts`. In Chrome: a balloon pasted on the same page and into a second
+  book at the pointer; outside text became a balloon; an outside PNG became a 2″ image layer;
+  the cut collage piece crossed books with its cut, 60% tear and paper edge.
+- **Not checked:** Safari's system clipboard, which needs the write inside the key gesture. The
+  in-app copy covers same-tab use.
