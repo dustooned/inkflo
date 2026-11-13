@@ -1,5 +1,6 @@
 import type { Cut, CutMode, PageLayout, Pt } from '../../doc/model';
-import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, nearestCut, newCutId, panelAt, planKnifeCut, presetCuts, type Panel, type Preset } from '../../geom/carve';
+import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, presetCuts, type Panel, type Preset } from '../../geom/carve';
+import { invert } from '../../engine/core/selxform';
 import { anchorFor } from '../../geom/groups';
 import { movePanelCuts, sameGutterTopology } from '../../geom/paneltransform';
 import { inGutter } from '../../geom/gutters';
@@ -178,16 +179,37 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   }
 
   const cutMode = (): CutMode => (variantOf(mode, 'knife') === 'across' ? 'across' : 'panel');
+  /** The moved panel a knife stroke is drawn over (topmost), if any: that panel is cut in place. */
+  /** Halfway along a stroke (a straight cut is just its two ends). */
+  function strokeMid(points: Pt[]): Pt | undefined {
+    if (points.length <= 2) return points.length ? { x: (points[0]!.x + points.at(-1)!.x) / 2, y: (points[0]!.y + points.at(-1)!.y) / 2 } : undefined;
+    return points[Math.floor(points.length / 2)];
+  }
+  function placedUnder(points: Pt[]): Panel | null {
+    const mid = strokeMid(points);
+    if (!mid) return null;
+    return panelStack(ctx.panels()).reverse().find((p) => p.transform && pointInPoly(mid, p.pts)) ?? null;
+  }
   function knifePreview(points: Pt[], isStraight: boolean) {
+    const placed = placedUnder(points);
+    const inverse = placed?.transform ? invert(placed.transform.matrix) : null;
+    // over a moved panel: plan in its own (source) space, cutting only that panel
+    const source = inverse ? points.map((q) => mapPanelPoint(q, inverse)) : points;
     const grid = page.grid ?? book.fixedGrid;
-    const stroke = showGrid && grid ? snapGridCut(page, grid, points, 10 / ctx.scale()) : points;
+    const stroke = !placed && showGrid && grid ? snapGridCut(page, grid, source, 10 / ctx.scale()) : source;
     const length = pathLength(stroke);
     const sampled = !isStraight && stroke.length > 3 && length > 0 ? resample(stroke, Math.max(4, Math.min(220, Math.ceil(length * 18)))) : stroke;
     const clean = sampled.map((p, i) => {
       const a = sampled[i - 1], b = sampled[i + 1];
       return a && b ? { x: (a.x + 2 * p.x + b.x) / 4, y: (a.y + 2 * p.y + b.y) / 4 } : p;
     });
-    return { stroke, plan: planKnifeCut(page, clean, cutMode(), isStraight), gridGutter: stroke !== points ? grid?.gutter : undefined };
+    const mid = strokeMid(points)!;
+    const plan = placed && inverse
+      ? planKnifeCut(page, clean, 'panel', isStraight, mapPanelPoint(mid, inverse))
+      : planKnifeCut(page, clean, cutMode(), isStraight);
+    // the stroke is shown where it was drawn
+    const shown = inverse && placed?.transform ? stroke.map((q) => mapPanelPoint(q, placed.transform!.matrix)) : stroke;
+    return { stroke: shown, plan, placed, gridGutter: !placed && stroke !== points ? grid?.gutter : undefined };
   }
   const templates = () => openPageTemplates(page, (template) => {
     studio.editPage(page, 'Apply ' + template.name, ['cuts', 'layout', 'grid', 'downbeat'], (p) => applyPageTemplate(p, template));
@@ -450,15 +472,22 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         held = null;
         const isStraight = snapped ? snapped.cut.kind === 'line' : straight || heldStraight || e.shiftKey;
         const points = snapped ? adjustCut(snapped.cut, snapped.grab, p, ctx.scale()).pts : isStraight ? [trail[0]!, p] : [...trail, p];
-        const { plan, gridGutter } = knifePreview(points, isStraight);
+        const { plan, gridGutter, placed } = knifePreview(points, isStraight);
         trail = null;
         sel = null; // reading-order indices shift when panels split
         if (plan) {
           const cut = { id: newCutId(), ...plan.cut };
           const useGridGutter = gridGutter !== undefined && !page.cuts.length;
-          studio.editPage(page, cutMode() === 'panel' ? 'Cut panel' : 'Cut across', useGridGutter ? ['cuts', 'layout'] : ['cuts'], (pg) => {
+          studio.editPage(page, placed || cutMode() === 'panel' ? 'Cut panel' : 'Cut across', useGridGutter || placed ? ['cuts', 'layout'] : ['cuts'], (pg) => {
             if (useGridGutter) pg.layout = { ...layoutOf(pg), gutter: gridGutter };
             pg.cuts.push(cut);
+            // both halves of a moved panel keep its move, so the slice stays where it was drawn
+            if (placed?.transform && placed.source) {
+              const t = placed.transform;
+              const extra = derivePanels(pg).filter((q) => !q.transform && pointInPoly(q.centroid, placed.source!.pts))
+                .map((q) => ({ at: { x: q.centroid.x / pg.widthIn, y: q.centroid.y / pg.heightIn }, matrix: [...t.matrix] as typeof t.matrix, order: t.order }));
+              if (extra.length) pg.layout = { ...layoutOf(pg), panelTransforms: [...(layoutOf(pg).panelTransforms ?? []), ...extra] };
+            }
           });
           studio.markStage(page, 'layout', 1);
           ctx.chrome();

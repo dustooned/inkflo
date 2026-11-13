@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, planKnifeCut, presetCuts, shiftCut, sourcePanelAt } from './carve';
+import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, layoutOf, makeCut, mapPanelPoint, nearestCut, panelAt, planKnifeCut, pointInPoly, presetCuts, shiftCut, sourcePanelAt } from './carve';
+import { invert } from '../engine/core/selxform';
 import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
 
@@ -270,5 +271,54 @@ describe('carving', () => {
     const near = nearestCut(p, { x: 2, y: H / 2 + 0.1 });
     expect(near?.d).toBeCloseTo(0.1, 3);
     expect(Math.abs(near!.n.y)).toBeCloseTo(1, 3);
+  });
+});
+
+describe('moved panels', () => {
+  const moved = () => {
+    const p = page();
+    p.cuts = presetCuts(p, 'rows2');
+    // the lower panel, shifted left and turned a little
+    const t = 8 * Math.PI / 180;
+    p.layout = { ...layoutOf(p), gutter: 0.3, panelTransforms: [{ at: { x: 0.5, y: 0.75 }, matrix: [Math.cos(t), Math.sin(t), -Math.sin(t), Math.cos(t), -0.4, 0.2], order: 1 }] };
+    return p;
+  };
+
+  it('keep half the gutter off their shared edges, following the gutter setting', () => {
+    const p = moved();
+    const lower = derivePanels(p).find((q) => q.transform)!;
+    const size = (pts: { x: number; y: number }[]) => Math.abs(pts.reduce((s, a, i) => { const b = pts[(i + 1) % pts.length]!; return s + a.x * b.y - b.x * a.y; }, 0) / 2);
+    const wide = size(lower.pts);
+    p.layout = { ...layoutOf(p), gutter: 0.8 };
+    const narrower = size(derivePanels(p).find((q) => q.transform)!.pts);
+    expect(narrower).toBeLessThan(wide);
+    // the source keeps the full carved shape
+    expect(size(lower.source!.pts)).toBeGreaterThan(wide);
+  });
+
+  it('slices a moved panel where it was drawn, and both halves keep the move', () => {
+    const p = moved();
+    const panels = derivePanels(p);
+    const lower = panels.find((q) => q.transform)!;
+    const inv = invert(lower.transform!.matrix)!;
+    // a vertical stroke across the panel as it appears on the page
+    const c = lower.centroid;
+    const drawn = [{ x: c.x, y: c.y - 3 }, { x: c.x, y: c.y + 3 }];
+    const plan = planKnifeCut(p, drawn.map((q) => mapPanelPoint(q, inv)), 'panel', true, mapPanelPoint(c, inv));
+    expect(plan).not.toBeNull();
+    p.cuts.push({ id: 'slice', ...plan!.cut });
+    const t = lower.transform!;
+    const extra = derivePanels(p).filter((q) => !q.transform && pointInPoly(q.centroid, lower.source!.pts))
+      .map((q) => ({ at: { x: q.centroid.x / p.widthIn, y: q.centroid.y / p.heightIn }, matrix: [...t.matrix] as typeof t.matrix, order: t.order }));
+    p.layout = { ...layoutOf(p), panelTransforms: [...layoutOf(p).panelTransforms!, ...extra] };
+    const after = derivePanels(p);
+    expect(after).toHaveLength(3);
+    const halves = after.filter((q) => q.transform);
+    expect(halves).toHaveLength(2);
+    // the upper panel is untouched, and the halves have a real gutter between them
+    expect(after.filter((q) => !q.transform)[0]!.bbox.y1).toBeCloseTo(H / 2);
+    // the visible halves no longer touch: their nearest corners are about a gutter apart
+    const gap = Math.min(...halves[0]!.pts.flatMap((u) => halves[1]!.pts.map((v) => Math.hypot(u.x - v.x, u.y - v.y))));
+    expect(gap).toBeGreaterThan(0.25);
   });
 });

@@ -354,9 +354,49 @@ export function derivePanels(page: Page): Panel[] {
     const source = { index, pts, centroid: centroid(pts), bbox: bounds(pts) };
     const transform = layoutOf(page).panelTransforms?.filter(({ at }) => pointInPoly({ x: at.x * page.widthIn, y: at.y * page.heightIn }, pts)).at(-1);
     if (!transform) return source;
-    const placed = pts.map((p) => mapPanelPoint(p, transform.matrix));
+    // a moved panel shows the same frame as one in place: half the gutter off every edge it
+    // shares with a neighbour (page edges stay), so gutters keep their width and slider
+    const placed = insetPanel(pts, (layoutOf(page).gutter ?? DEFAULT_LAYOUT.gutter) / 2, page.widthIn, page.heightIn).map((p) => mapPanelPoint(p, transform.matrix));
     return { ...source, pts: placed, centroid: mapPanelPoint(source.centroid, transform.matrix), bbox: bounds(placed), source, transform };
   });
+}
+
+/**
+ * The panel polygon with its shared edges moved inward by `d` inches (page-edge sides stay put):
+ * the visible frame of a carved panel, whose gutter bands are otherwise painted over it.
+ */
+export function insetPanel(pts: readonly Pt[], d: number, w: number, h: number): Pt[] {
+  const n = pts.length;
+  if (d <= 0 || n < 3) return pts.map((p) => ({ ...p }));
+  let area = 0;
+  for (let i = 0; i < n; i++) { const a = pts[i]!, b = pts[(i + 1) % n]!; area += a.x * b.y - b.x * a.y; }
+  const inward = area > 0 ? 1 : -1;
+  const eps = 1e-4;
+  const onTrim = (a: Pt, b: Pt) => (Math.abs(a.x) < eps && Math.abs(b.x) < eps) || (Math.abs(a.x - w) < eps && Math.abs(b.x - w) < eps)
+    || (Math.abs(a.y) < eps && Math.abs(b.y) < eps) || (Math.abs(a.y - h) < eps && Math.abs(b.y - h) < eps);
+  // each edge as a line moved inward (or not), then corners where neighbouring lines meet
+  const lines = pts.map((a, i) => {
+    const b = pts[(i + 1) % n]!;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len * inward, ny = (b.x - a.x) / len * inward;
+    const off = onTrim(a, b) ? 0 : d;
+    return { a: { x: a.x + nx * off, y: a.y + ny * off }, b: { x: b.x + nx * off, y: b.y + ny * off } };
+  });
+  return pts.map((p, i) => {
+    const l1 = lines[(i - 1 + n) % n]!, l2 = lines[i]!;
+    const r = lineMeet(l1.a, l1.b, l2.a, l2.b);
+    // nearly parallel neighbours (a smooth curve): keep the shifted point, no long miter
+    if (!r || Math.hypot(r.x - p.x, r.y - p.y) > d * 4) return l2.a;
+    return r;
+  });
+}
+
+function lineMeet(a: Pt, b: Pt, c: Pt, e: Pt): Pt | null {
+  const d1x = b.x - a.x, d1y = b.y - a.y, d2x = e.x - c.x, d2y = e.y - c.y;
+  const den = d1x * d2y - d1y * d2x;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((c.x - a.x) * d2y - (c.y - a.y) * d2x) / den;
+  return { x: a.x + d1x * t, y: a.y + d1y * t };
 }
 
 export function mapPanelPoint(p: Pt, matrix: PanelTransform['matrix'] | ReturnType<typeof invert>): Pt {
@@ -439,20 +479,25 @@ export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
 }
 
 /** Interactive knife: use the span actually drawn, with both ends beyond its boundary. */
-export function planKnifeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): ReturnType<typeof planCut> {
+/**
+ * `target` (inches), when given, is a point inside the one panel to cut (One panel mode): the
+ * Layout desk passes it for a stroke drawn over a moved panel, already mapped to its source.
+ */
+export function planKnifeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false, target?: Pt): ReturnType<typeof planCut> {
   if (stroke.length < 2) return null;
   const raw = straight ? toProto([stroke[0]!, stroke.at(-1)!]) : simplify(toProto(stroke), 2);
   const drawn = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
   if (drawn.length < 2 || dist(drawn[0]!, drawn.at(-1)!) < 12) return null;
   // As drawn first: a swipe that starts and ends outside behaves exactly as before.
-  const asDrawn = planFrom(page, raw, mode);
+  const aim = target ? toProto([target])[0] : undefined;
+  const asDrawn = planFrom(page, raw, mode, aim);
   if (asDrawn) return asDrawn;
   // A line drawn inside the page continues straight out of its ends, the way a frame-divide
   // tool reads it. One panel cuts the panel the line was drawn in.
   const trim = trimProto(page);
   const inside = (q: Pt) => pointInPoly(q, trim) || onBoundary(q, trim);
   if (!inside(raw[0]!) && !inside(raw.at(-1)!)) return null;
-  const mid = raw[Math.floor((raw.length - 1) / 2)]!;
+  const mid = aim ?? raw[Math.floor((raw.length - 1) / 2)]!;
   return planFrom(page, extendInsideEnds(raw, Math.hypot(page.widthIn, page.heightIn) * K * 1.5, inside), mode, mid);
 }
 

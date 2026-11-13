@@ -875,3 +875,19 @@ an iPad pays for on every frame:
   and the Chapter opening preset set justified text with a 3-line drop cap.
 - **Note:** book faces are the device's system fonts, so a page can set slightly differently on
   another computer. Bundled fonts are identical everywhere.
+
+## Moved panels: gutters and slicing, 2026-11-13
+
+- **Gutters:** a moved (transformed) panel was drawn at its full carved shape, which runs to the
+  middle of each gutter. The Gutter slider had no effect on it, and sliced halves touched. Moved
+  panels now inset half the gutter on every shared edge (page edges stay), like panels in place
+  (`insetPanel`). The gap between moved halves follows the slider: 0.30″ → 0.61″ measured.
+- **Slicing a moved panel:** the Knife planned against the panels' original positions, so a
+  stroke through a moved panel cut something else. Half a sliced panel also lost the move and
+  snapped back. A stroke over a moved panel (topmost under the stroke's midpoint) is now mapped
+  into that panel's own space and cuts only that panel (`planKnifeCut(..., target)`). The new
+  half gets a copy of the move, so both halves stay where they were drawn. Straight
+  (Shift) strokes use their true midpoint.
+- Checks: two `carve.test.ts` cases (gutter-following inset; slice keeps both halves moved with a
+  gutter between). In Chrome, a vertical slice through a rotated lower panel split it in place,
+  left the upper panel alone, and kept both halves rotated.
