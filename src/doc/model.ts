@@ -188,6 +188,16 @@ export interface PlacedImage {
   pixelWidth: number;
   pixelHeight: number;
   credit?: string;
+  /**
+   * Collage cut-out: the piece of the image that shows, as a closed outline in image units
+   * (x and y in −0.5…0.5 of the placed width and height, centre at 0). Non-destructive: the
+   * source pixels stay whole, and the cut moves, scales and turns with the image.
+   */
+  cutout?: Pt[];
+  /** Torn-paper roughness of the cut edge, 0–1. */
+  torn?: number;
+  /** A paper border around the cut piece: width in inches and colour. */
+  edge?: { width: number; color: string };
 }
 
 export interface PixelTransform {

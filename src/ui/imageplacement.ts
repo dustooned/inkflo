@@ -6,6 +6,8 @@ import { fitImage, hitsImage, imageDpi, imagePoint, type PlacementBox } from '..
 import { decodePngInto, makeCanvas } from '../io/canvasops';
 import { IMAGE_ACCEPT, readAssetImage } from '../io/bookassets';
 import { touchLayer } from '../draw/residency';
+import { cleanCutout, toImageUnits } from '../geom/collage';
+import { createMarquee } from './marquee';
 import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
 
@@ -25,6 +27,51 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     const found = id ? findLayer(page, id) : null;
     return found?.layer.image ? { ...found, image: found.layer.image } : null;
   };
+
+  // Collage: draw around the part of the selected image to keep.
+  let cutting = false;
+  let cutPoint: Pt | null = null;
+  const marquee = createMarquee(ctx, (poly) => {
+    cutting = false;
+    const item = get();
+    if (!item) return;
+    const inverse = inverseForGroup(item.group);
+    const cutout = cleanCutout(poly.map((q) => toImageUnits(item.image, mapPanelPoint(q, inverse))));
+    if (!cutout) { toast('Draw a larger outline around the part to keep.'); return; }
+    commit(item.layer.id, { ...item.image, cutout }, 'Cut out piece');
+    ctx.hint('Piece cut out. Tear its edge or add a paper border in the inspector.', { timeout: 3500 });
+  });
+  const startCut = () => {
+    cutting = !cutting;
+    marquee.clear();
+    if (cutting) ctx.hint('Draw around the part of the image to keep. Esc cancels.');
+    ctx.chrome();
+    ctx.request();
+  };
+
+  function duplicatePiece(): void {
+    const item = get();
+    if (!item) return;
+    const { layer, group, image } = item;
+    const source = art.planes[layer.id];
+    if (!source?.width) { toast('This image is not loaded yet. Try again in a moment.'); return; }
+    const copy = newLayer(layer.type);
+    copy.name = layer.name + ' copy';
+    copy.fillRef = false;
+    copy.image = { ...image, ...(image.cutout ? { cutout: image.cutout.map((q) => ({ ...q })) } : {}), x: image.x + 0.2, y: image.y + 0.2 };
+    const canvas = makeCanvas(source.width, source.height);
+    canvas.getContext('2d')!.drawImage(source, 0, 0);
+    art.planes[copy.id] = canvas;
+    art.planeSizes[copy.id] = { width: canvas.width, height: canvas.height };
+    touchLayer(art, copy.id);
+    studio.editPage(page, 'Duplicate piece', ['groups'], (p) => {
+      const g = p.groups.find((x) => x.id === group.id);
+      if (!g) return;
+      const at = g.layers.findIndex((l) => l.id === layer.id);
+      g.layers.splice(Math.max(0, at), 0, copy);
+    });
+    select(copy.id);
+  }
 
   const commit = (id: string, image: PlacedImage, label = 'Position image') => {
     const current = findLayer(page, id);
@@ -131,13 +178,38 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
         field('Centre Y (in)', image.y, -span * 4, span * 5, (y) => ({ y })),
         field('Width (in)', image.width, 0.01, span * 12, (width) => ({ width, height: image.height * width / image.width })),
         field('Rotation (°)', image.rotation, -360, 360, (rotation) => ({ rotation }))),
-      h('label', { class: 'field' }, 'Credit', credit));
+      h('label', { class: 'field' }, 'Credit', credit),
+      collageControls(layer.id, image, locked));
+  }
+
+  function collageControls(id: string, image: PlacedImage, locked: boolean): HTMLElement {
+    const range = (label: string, value: number, max: number, step: number, unit: string, apply: (v: number) => Partial<PlacedImage>, undoLabel: string) => {
+      const input = h('input', { type: 'range', min: 0, max, step, value, disabled: locked, 'aria-label': label });
+      const out = h('b', {}, value.toFixed(step < 1 ? 2 : 0) + unit);
+      input.addEventListener('input', () => (out.textContent = input.valueAsNumber.toFixed(step < 1 ? 2 : 0) + unit));
+      input.addEventListener('change', () => commit(id, { ...image, ...apply(input.valueAsNumber) }, undoLabel));
+      return h('label', { class: 'mini collage-range' }, label, input, out);
+    };
+    const edge = image.edge ?? { width: 0, color: '#ffffff' };
+    const colour = h('input', { type: 'color', value: edge.color, disabled: locked, 'aria-label': 'Paper edge colour' });
+    colour.addEventListener('change', () => commit(id, { ...image, edge: { width: edge.width || 0.04, color: colour.value } }, 'Paper edge colour'));
+    return h('div', { class: 'collage' },
+      h('h4', {}, 'Collage'),
+      h('p', { class: 'note' }, 'Cut out part of the image, tear its edge, give it a paper border, and duplicate pieces to paste up a zine page. The original image stays whole.'),
+      h('div', { class: 'image-placement-actions' },
+        h('button', { class: 'btn', type: 'button', disabled: locked, 'aria-pressed': String(cutting), onclick: startCut }, cutting ? 'Drawing the cut…' : 'Cut out piece'),
+        h('button', { class: 'btn', type: 'button', disabled: locked || !image.cutout, onclick: () => { const { cutout: _c, torn: _t, ...rest } = image; commit(id, rest, 'Reset cut'); } }, 'Reset cut'),
+        h('button', { class: 'btn', type: 'button', disabled: locked, onclick: duplicatePiece }, 'Duplicate piece')),
+      image.cutout ? range('Torn edge', Math.round((image.torn ?? 0) * 100), 100, 1, '%', (v) => ({ torn: v / 100 }), 'Torn edge') : null,
+      image.cutout ? h('div', { class: 'collage-edge' },
+        range('Paper edge', edge.width, 0.2, 0.01, '″', (v) => (v > 0 ? { edge: { width: v, color: edge.color } } : { edge: undefined }), 'Paper edge'), colour) : null);
   }
 
   const handle = (image: PlacedImage) => imagePoint(image, image.width / 2, image.height / 2);
   return {
     open, options,
     start(p: Pt) {
+      if (cutting) { cutPoint = p; marquee.down(p, 'freehand'); return; }
       let item = get();
       let resize = false;
       if (item && item.layer.visible && item.group.visible) {
@@ -157,6 +229,7 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
       drag = { id: item.layer.id, start: mapPanelPoint(p, inverse), before: { ...item.image }, next: { ...item.image }, resize, inverse };
     },
     move(p: Pt) {
+      if (cutting) { cutPoint = p; marquee.move(p); ctx.request(); return; }
       if (!drag) return;
       p = mapPanelPoint(p, drag.inverse);
       const { before, start, resize } = drag;
@@ -172,6 +245,11 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
       }
     },
     end(cancel: boolean) {
+      if (cutting && marquee.active()) {
+        if (cancel) { cutting = false; marquee.clear(); ctx.chrome(); } else marquee.up(cutPoint!, false);
+        return;
+      }
+      if (cutting && cancel) { cutting = false; ctx.chrome(); return; }
       if (!drag) return;
       const { id, next } = drag;
       drag = null;
@@ -198,6 +276,12 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
       g.fillStyle = '#fff';
       g.fillRect(p.x * s - 5, p.y * s - 5, 10, 10);
       g.strokeRect(p.x * s - 5, p.y * s - 5, 10, 10);
+      if (cutting) {
+        g.strokeStyle = '#d24f2a';
+        g.lineWidth = 2;
+        g.setLineDash([6, 4]);
+        marquee.overlay(g, s);
+      }
       g.restore();
     },
   };

@@ -313,7 +313,29 @@ function placedImage(v: unknown, path: string): PlacedImage {
     rotation: num(o.rotation, `${path}.rotation`),
     pixelWidth, pixelHeight,
     ...(o.credit === undefined ? {} : { credit: str(o.credit, `${path}.credit`) }),
+    ...(o.cutout === undefined ? {} : { cutout: cutoutPoints(o.cutout, `${path}.cutout`) }),
+    ...(o.torn === undefined ? {} : { torn: Math.max(0, Math.min(1, num(o.torn, `${path}.torn`))) }),
+    ...(o.edge === undefined ? {} : { edge: paperEdge(o.edge, `${path}.edge`) }),
   };
+}
+
+function cutoutPoints(v: unknown, path: string): Pt[] {
+  if (!Array.isArray(v) || v.length < 3 || v.length > 1024) fail(path, 'needs 3 to 1024 points');
+  return (v as unknown[]).map((q, i) => {
+    const o = obj(q, `${path}[${i}]`);
+    const x = num(o.x, `${path}[${i}].x`), y = num(o.y, `${path}[${i}].y`);
+    if (Math.abs(x) > 4 || Math.abs(y) > 4) fail(`${path}[${i}]`, 'is far outside the image');
+    return { x, y };
+  });
+}
+
+function paperEdge(v: unknown, path: string): { width: number; color: string } {
+  const o = obj(v, path);
+  const width = num(o.width, `${path}.width`);
+  const color = str(o.color, `${path}.color`);
+  if (width < 0 || width > 1) fail(`${path}.width`, 'must be 0 to 1 inch');
+  if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'must be a #rrggbb colour');
+  return { width, color };
 }
 
 function group(v: unknown, path: string): LayerGroup {

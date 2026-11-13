@@ -766,3 +766,18 @@ an iPad pays for on every frame:
 - Checks: `scroll.test.ts` covers sizing and break heights. In Chrome, a 400×60 banner after a
   1230 px page gave 1350 px of strips, split 1280 + 70 across the boundary. The preview showed
   the banner.
+
+## Collage cut-outs, 2026-11-13
+
+- **Draw → Position image → Collage** (image inspector):
+  - **Cut out piece:** draw a freehand loop around the part to keep. The cut is stored in the
+    image's own units (`PlacedImage.cutout`), so it moves, scales and rotates with the piece. The
+    source pixels stay whole, and **Reset cut** brings the full image back.
+  - **Torn edge:** roughens the cut repeatably, like ripped paper.
+  - **Paper edge:** a border of any colour around the piece.
+  - **Duplicate piece:** copies the image layer and its cut, to paste up a zine page.
+- One renderer: `drawLayerBitmap` draws the edge, then clips to the cut, so screen, PSD, print
+  and scroll exports match.
+- Checks: `collage.test.ts` covers units, torn path, clean-up and save/load. In Chrome, an image
+  placed through the dialog and cut with a loop kept its centre and became transparent outside
+  the cut; torn 60% and a 0.08″ edge rendered.

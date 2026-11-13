@@ -704,3 +704,10 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .break-art { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 12px; display: grid; gap: 8px; }
 .break-art legend { padding: 0 4px; font-weight: 650; font-size: 12px; }
 @media (max-width: 620px) { .scroll-tab { grid-template-columns: minmax(0, 1fr); } .scroll-preview { position: static; } }
+
+/* Image inspector: collage controls */
+.collage { display: grid; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-2); }
+.collage h4 { margin: 0; }
+.collage-range { display: grid; grid-template-columns: 72px minmax(0, 1fr) 5ch; }
+.collage-range input[type=range] { width: 100%; }
+.collage-edge { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }

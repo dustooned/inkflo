@@ -1,3 +1,4 @@
+import { cutoutPath } from '../geom/collage';
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack, type Panel } from '../geom/carve';
@@ -268,6 +269,23 @@ export function drawLayerBitmap(g: CanvasRenderingContext2D, canvas: HTMLCanvasE
   g.rotate(image.rotation * Math.PI / 180);
   const width = image.width * scale;
   const height = image.height * scale;
+  const cut = cutoutPath(image, scale);
+  if (cut.length >= 3) {
+    // a collage piece: its paper edge first (outset by the stroke), then only the cut shows
+    const path = new Path2D();
+    cut.forEach((q, i) => (i ? path.lineTo(q.x, q.y) : path.moveTo(q.x, q.y)));
+    path.closePath();
+    if (image.edge && image.edge.width > 0) {
+      g.save();
+      g.fillStyle = g.strokeStyle = image.edge.color;
+      g.lineJoin = 'round';
+      g.lineWidth = image.edge.width * scale * 2;
+      g.fill(path);
+      g.stroke(path);
+      g.restore();
+    }
+    g.clip(path);
+  }
   g.drawImage(canvas, -width / 2, -height / 2, width, height);
   g.restore();
 }
