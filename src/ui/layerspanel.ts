@@ -73,6 +73,30 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
   const iconToggle = (on: boolean, glyphOn: string, glyphOff: string, label: string, onClick: () => void) =>
     h('button', { class: 'lt', type: 'button', 'aria-pressed': String(on), 'aria-label': label, title: label, onclick: (e: Event) => { e.stopPropagation(); onClick(); } }, on ? glyphOn : glyphOff);
 
+  /** Outline: a white or black edge around everything on the layer (or any colour and width). */
+  function outlineControls(l: Layer): HTMLElement {
+    const current = l.outline;
+    const set = (next: Layer['outline'], label: string) => edit(label, withLayer(l.id, (x) => {
+      if (next && next.width > 0) x.outline = next;
+      else delete x.outline;
+    }));
+    const inch = (v: number) => v.toFixed(3) + '\u2033';
+    const width = h('input', { type: 'range', min: 0, max: 0.25, step: 0.005, value: current?.width ?? 0, 'aria-label': 'Outline width' });
+    const readout = h('b', {}, inch(current?.width ?? 0));
+    width.addEventListener('input', () => (readout.textContent = inch(Number(width.value))));
+    width.addEventListener('change', () => set({ width: Number(width.value), color: current?.color ?? '#ffffff' }, 'Outline width'));
+    const colour = h('input', { type: 'color', value: current?.color ?? '#ffffff', 'aria-label': 'Outline colour' });
+    colour.addEventListener('change', () => set({ width: current?.width || 0.03, color: colour.value }, 'Outline colour'));
+    const preset = (label: string, color: string) => h('button', { type: 'button', class: 'outline-swatch', 'aria-label': label + ' outline', title: label + ' outline',
+      'aria-pressed': String(current?.color.toLowerCase() === color), style: '--swatch:' + color,
+      onclick: () => set({ width: current?.width || 0.03, color }, label + ' outline') });
+    return h('div', { class: 'outline-controls' },
+      h('h4', {}, 'Outline'),
+      h('div', { class: 'row' }, preset('White', '#ffffff'), preset('Black', '#000000'), colour,
+        h('button', { type: 'button', class: 'btn', disabled: !current, onclick: () => set(undefined, 'Remove outline') }, 'None')),
+      h('div', { class: 'row' }, h('label', {}, 'Width', width), readout));
+  }
+
   function layerMenu(l: Layer, g: LayerGroup): HTMLElement {
     const i = g.layers.findIndex((x) => x.id === l.id);
     const opacity = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: l.opacity, 'aria-label': 'Opacity' });
@@ -88,6 +112,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       check('Prints', l.prints, (x, v) => (x.prints = v), 'In print and exports'),
       l.image || l.screenTone ? null : check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
       g.kind === 'panel' ? check('Over frame', l.overFrame, (x, v) => (x.overFrame = v), 'Draw above the borders, unmasked (pop-out)') : null,
+      l.screenTone ? null : outlineControls(l),
       h('div', { class: 'sep' }),
       h('h4', {}, 'Type'),
       (l.screenTone ? ['tone' as const] : LAYER_TYPES).map((t) =>

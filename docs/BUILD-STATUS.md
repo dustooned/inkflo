@@ -840,3 +840,16 @@ an iPad pays for on every frame:
   webtoons.
 - **Manual** buttons: home screen, the `?` in each desk header (opens that desk's chapter), the
   Focus overflow menu, and **Open the manual** in the canvas menu.
+
+## Outlines and smaller previews, 2026-11-13
+
+- **Layer outline** (Layers → a layer's ⋯ → Outline): White, Black or any colour, 0–0.25″,
+  around everything on the layer: ink, colour, placed images and collage pieces. It's a border
+  effect like Clip Studio's, to lift art off busy backgrounds or ink a pasted photo.
+  `Layer.outline` is drawn by the shared renderer (a cached silhouette dilation behind the art),
+  so PSD and print exports match. Mid-stroke it draws without the outline to stay fast.
+- The docked Layers panel's options use the same row styles as the popover.
+- Previews are smaller: balloon swatches 58×36 and look presets 50×32, export thumbnails 72 px,
+  scroll preview 140 px, rail icons 18 px.
+- Checks: outline save/load test. In Chrome, a 0.1″ black outline turned the pixels just outside
+  the cut piece black and left the rest alone, and the menu's White preset set the outline.

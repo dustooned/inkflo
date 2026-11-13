@@ -79,7 +79,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const art = opts.art === false ? null : studio.ensureArt(page);
     try {
       if (art) await studio.residency.pin(art);
-      const c = await renderSeparation(page, art, 140 / page.widthIn, book!, sep, opts.background ?? 'white', opts.borders ?? true);
+      const c = await renderSeparation(page, art, 110 / page.widthIn, book!, sep, opts.background ?? 'white', opts.borders ?? true);
       if (opts.colour && sep !== 'all' || opts.colour === 'grey') tone(c, opts.colour ?? 'colour');
       c.classList.add('export-thumb');
       return c;
@@ -166,7 +166,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     async function refreshPreview(): Promise<void> {
       const id = ++revision;
       try {
-        const canvas = await scrollPreview(studio, { ...scroll, range: { ...scroll.range }, breakArt: await breakArt() });
+        const canvas = await scrollPreview(studio, { ...scroll, range: { ...scroll.range }, breakArt: await breakArt() }, 140);
         if (id !== revision || !preview.isConnected) return;
         canvas.setAttribute('role', 'img');
         canvas.setAttribute('aria-label', 'Preview of the first pages of the scroll');

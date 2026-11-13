@@ -114,6 +114,25 @@ print shop can use it without a conversation.
 
 **Done when:** a 6-page comic plays as a motion comic and the same file opens in 2Dope as a scene.
 
+### M7 — Craft assist
+
+Vocabulary for the page, not new drawing tools. Full mapping:
+[research/comics-craft-source-map.md](research/comics-craft-source-map.md); enums in
+[research/craft-taxonomy.json](research/craft-taxonomy.json).
+
+- **Panel intent** — five optional prompts per panel: moment, frame, image, word, flow.
+- **Transition type** per panel (six types) + a page rhythm strip drawn under the page.
+- **Shot** per panel (ten types) with Layout presets.
+- **Word–image relation** per panel; one chip in Caption.
+- **Clarity checks** (hints, dismissible): text repeating the picture, balloon before speaker,
+  unresolved tail, eye path fighting reading order.
+- **Composition**: silhouette preview (fill art black) and an advisory checklist.
+- **Continuity**: screen-direction flip across a cut, with a dismiss.
+- **Study lens**: label a reference page's transitions and shots; export a breakdown sheet.
+
+**Done when:** a page can be read back as a sequence of labelled beats, the rhythm strip shows a
+run of identical transitions, and every check is advisory with a dismiss.
+
 ---
 
 ## 3. Data model

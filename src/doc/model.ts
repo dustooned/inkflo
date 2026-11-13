@@ -270,6 +270,11 @@ export interface Layer {
   vector?: boolean;
   screenTone?: ScreenTone;
   image?: PlacedImage;
+  /**
+   * An outline around everything on the layer (a border effect): white to lift art off a busy
+   * background, black to ink a pasted image so it sits with the line art. Width in inches.
+   */
+  outline?: { width: number; color: string };
   strokes: Stroke[];
   fills: Fill[];
   pixelTransforms?: PixelEdit[];

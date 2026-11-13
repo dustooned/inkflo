@@ -41,3 +41,14 @@ it('keeps a cut, its tear and its paper edge through save and load', async () =>
   const back = parseBookFile(stringifyBookFile({ format: FORMAT, schema: SCHEMA, savedBy: 'test', book, art: {} }));
   expect(back.book.pages[0]!.groups.at(-1)!.layers.at(-1)!.image).toEqual(l.image);
 });
+
+it('keeps a layer outline through save and load', async () => {
+  const { newBook, newLayer } = await import('../doc/model');
+  const { parseBookFile, stringifyBookFile, FORMAT, SCHEMA } = await import('../doc/schema');
+  const book = newBook('Outline');
+  const l = newLayer('ink');
+  l.outline = { width: 0.04, color: '#000000' };
+  book.pages[0]!.groups.at(-1)!.layers.push(l);
+  const back = parseBookFile(stringifyBookFile({ format: FORMAT, schema: SCHEMA, savedBy: 'test', book, art: {} }));
+  expect(back.book.pages[0]!.groups.at(-1)!.layers.at(-1)!.outline).toEqual(l.outline);
+});

@@ -1,0 +1,63 @@
+{
+  "$comment": "inkflo craft taxonomy. Our own wording, derived from the craft literature (McCloud, Mateu-Mestre) and standard comics practice. No source text is reproduced. IDs are stable; labels are UI strings.",
+  "version": 1,
+  "sources": [
+    { "id": "mccloud-making-comics", "title": "Making Comics", "author": "Scott McCloud", "year": 2006, "use": "panel choices, transitions, word-image relations, clarity" },
+    { "id": "mateu-framed-ink", "title": "Framed Ink", "author": "Marcos Mateu-Mestre", "year": 2010, "use": "composition, staging, continuity, panel and page choreography" }
+  ],
+
+  "panelChoices": [
+    { "id": "moment", "label": "Moment", "hint": "Which instant is worth showing?", "inkflo": "Script prompt, panel intent" },
+    { "id": "frame", "label": "Frame", "hint": "How close, from where, in what shape?", "inkflo": "Layout shot + panel shape" },
+    { "id": "image", "label": "Image", "hint": "What is drawn, and how is it rendered?", "inkflo": "Draw; style notes" },
+    { "id": "word", "label": "Word", "hint": "What do words add or replace?", "inkflo": "Caption; word-image relation" },
+    { "id": "flow", "label": "Flow", "hint": "How does the eye travel to the next panel?", "inkflo": "Reading path, transition type" }
+  ],
+
+  "transitions": [
+    { "id": "moment", "label": "Moment to moment", "hint": "A small step in time; holds a beat.", "use": "pacing" },
+    { "id": "action", "label": "Action to action", "hint": "One action to the next; the workhorse.", "use": "pacing" },
+    { "id": "subject", "label": "Subject to subject", "hint": "Same scene, different subject; needs reader fluency.", "use": "pacing" },
+    { "id": "scene", "label": "Scene to scene", "hint": "A jump in place or time; compress.", "use": "pacing" },
+    { "id": "aspect", "label": "Aspect to aspect", "hint": "Wander the scene; mood and place.", "use": "pacing" },
+    { "id": "nonSequitur", "label": "Non sequitur", "hint": "No logical link; used deliberately.", "use": "pacing" }
+  ],
+
+  "shots": [
+    { "id": "establishing", "label": "Establishing", "hint": "Where and when; the world first." },
+    { "id": "wide", "label": "Wide", "hint": "Figures small in their space." },
+    { "id": "full", "label": "Full", "hint": "Whole figure, room to act." },
+    { "id": "medium", "label": "Medium", "hint": "Waist up; dialogue default." },
+    { "id": "close", "label": "Close", "hint": "Face; emotion and reaction." },
+    { "id": "detail", "label": "Detail", "hint": "A hand, an eye, an object; emphasis." },
+    { "id": "pov", "label": "Point of view", "hint": "Reader inside the character's eyes." },
+    { "id": "overShoulder", "label": "Over the shoulder", "hint": "Two-shot with a listener." },
+    { "id": "up", "label": "Upshot", "hint": "Camera below the eyes; power." },
+    { "id": "down", "label": "Downshot", "hint": "Camera above; vulnerability." }
+  ],
+
+  "wordImage": [
+    { "id": "wordSpecific", "label": "Word-specific", "hint": "Pictures illustrate; words carry the meaning." },
+    { "id": "pictureSpecific", "label": "Picture-specific", "hint": "Words are a soundtrack; the image carries it." },
+    { "id": "duo", "label": "Duo-specific", "hint": "Both tell the same story." },
+    { "id": "intersecting", "label": "Additive / intersecting", "hint": "One adds to the other." },
+    { "id": "interdependent", "label": "Interdependent", "hint": "Neither works alone." },
+    { "id": "parallel", "label": "Parallel", "hint": "Words and pictures take different tracks." },
+    { "id": "montage", "label": "Montage", "hint": "Words become part of the picture." }
+  ],
+
+  "checks": [
+    { "id": "readingOrder", "label": "Reading order", "kind": "clarity", "rule": "Eye reaches panels and balloons in the intended order." },
+    { "id": "balloonBeforeSpeaker", "label": "Balloon before speaker", "kind": "clarity", "rule": "A balloon is not read before the panel that introduces its speaker." },
+    { "id": "tailDirection", "label": "Tail points at the speaker", "kind": "clarity", "rule": "Every speech tail resolves to a character in the panel." },
+    { "id": "textImageRedundancy", "label": "Words repeat the picture", "kind": "clarity", "rule": "Flag panels where the caption describes exactly what is drawn." },
+    { "id": "screenDirection", "label": "Screen direction", "kind": "continuity", "rule": "A subject keeps its left/right facing across consecutive panels unless a panel establishes the change." },
+    { "id": "eyeline", "label": "Eyeline match", "kind": "continuity", "rule": "Look directions across a cut plausibly meet." },
+    { "id": "silhouette", "label": "Silhouette", "kind": "composition", "rule": "The panel reads as a shape when filled black." },
+    { "id": "focalPoint", "label": "One focal point", "kind": "composition", "rule": "A single dominant area; competing centres are flagged." },
+    { "id": "negativeSpace", "label": "Negative space", "kind": "composition", "rule": "Empty area is doing work, not left over." },
+    { "id": "scaleMix", "label": "Big / medium / small", "kind": "composition", "rule": "Shapes are not all one size." },
+    { "id": "transitionRhythm", "label": "Transition rhythm", "kind": "pacing", "rule": "Flag runs of the same transition type; suggest a change." },
+    { "id": "revealDistance", "label": "Reveal distance", "kind": "pacing", "rule": "Setup and payoff are not so far apart that the reader loses the thread." }
+  ]
+}

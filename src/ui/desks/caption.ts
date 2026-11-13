@@ -898,7 +898,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const preview = swatchText({ ...c, style: k.id, tails, look: k.id === c.style ? c.look : undefined, ...(k.id === 'sfx' ? { font: 'bangers', textColor: '#f2c230', textOutline: '#111111', textOutlineWidth: 0.12 } : {}) });
       return h('button', { type: 'button', class: 'shape-option', role: 'radio', 'aria-checked': String(k.id === c.style), 'aria-label': k.label, title: k.label,
         onclick: () => { kind.value = k.id; kind.dispatchEvent(new Event('change')); } },
-        balloonSwatch(preview, sheet(), page.widthIn, page.heightIn, 76, 50), h('span', {}, k.label.replace(' balloon', '')));
+        balloonSwatch(preview, sheet(), page.widthIn, page.heightIn, 58, 36), h('span', {}, k.label.replace(' balloon', '')));
     }));
     // Looks for this kind: one click instead of three sliders
     const LOOKS: Partial<Record<BalloonStyle, { label: string; look: NonNullable<CaptionSpec['look']> }[]>> = {
@@ -911,7 +911,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     const lookPicker = looks ? h('div', { class: 'shape-picker looks', role: 'group', 'aria-label': 'Balloon look presets', 'data-noicons': '' }, looks.map((o) =>
       h('button', { type: 'button', class: 'shape-option', 'aria-label': o.label + ' look', title: o.label,
         onclick: () => editCap('Balloon look: ' + o.label, (x) => ({ ...x, look: { ...x.look, ...o.look } })) },
-        balloonSwatch(swatchText({ ...c, look: { ...c.look, ...o.look } }), sheet(), page.widthIn, page.heightIn, 70, 46), h('span', {}, o.label)))) : null;
+        balloonSwatch(swatchText({ ...c, look: { ...c.look, ...o.look } }), sheet(), page.widthIn, page.heightIn, 50, 32), h('span', {}, o.label)))) : null;
     el.append(sec('Balloon',
       kinds,
       lookPicker,

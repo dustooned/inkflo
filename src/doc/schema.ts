@@ -256,6 +256,7 @@ function layer(v: unknown, path: string): Layer {
     ...(o.vector === true ? { vector: true } : {}),
     ...(o.screenTone !== undefined ? { screenTone: screenTone(o.screenTone, `${path}.screenTone`) } : {}),
     ...(o.image !== undefined ? { image: placedImage(o.image, `${path}.image`) } : {}),
+    ...(o.outline !== undefined ? { outline: paperEdge(o.outline, `${path}.outline`) } : {}),
     strokes: arr(o.strokes ?? [], `${path}.strokes`).map((x, i) => stroke(x, `${path}.strokes[${i}]`)),
     fills: arr(o.fills ?? [], `${path}.fills`).map((x, i) => fill(x, `${path}.fills[${i}]`)),
   };

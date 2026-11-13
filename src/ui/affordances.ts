@@ -80,7 +80,7 @@ export function decorate(root: ParentNode = document): void {
     el.querySelector(':scope > svg.ico')?.remove();
     // a menu row's old text glyph gives way to the icon
     const oldGlyph = el.querySelector(':scope > span[aria-hidden="true"]:first-child');
-    if (oldGlyph && el.matches('.pop .item')) oldGlyph.remove();
+    if (oldGlyph && el.matches('.pop .item, .layer-dock .item')) oldGlyph.remove();
     const glyphOnly = el.classList.contains('icon') || (!!el.closest('.bar') && ICON_ONLY.has(label));
     if (glyphOnly) {
       if (own && !el.classList.contains('icon')) el.setAttribute('aria-label', own);

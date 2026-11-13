@@ -290,6 +290,53 @@ export function drawLayerBitmap(g: CanvasRenderingContext2D, canvas: HTMLCanvasE
   g.restore();
 }
 
+const outlineCache = new WeakMap<HTMLCanvasElement, { key: string; canvas: HTMLCanvasElement }>();
+
+/**
+ * The layer with an outline: its silhouette, filled with the outline colour, stamped in a ring of
+ * offsets (a dilation) behind the art. Cached per plane, revision, size and settings, so a
+ * settled page costs one drawImage per outlined layer.
+ */
+function outlinedLayer(plane: HTMLCanvasElement, W: number, H: number, scale: number, image: PlacedImage | undefined, outline: { width: number; color: string }, rev: string): HTMLCanvasElement | null {
+  const w = Math.ceil(W), h = Math.ceil(H);
+  if (w < 1 || h < 1 || w * h > 40_000_000) return null;
+  const key = [w, h, scale, rev, outline.width, outline.color, image ? JSON.stringify(image) : ''].join('|');
+  const hit = outlineCache.get(plane);
+  if (hit && hit.key === key) return hit.canvas;
+  const art = makeCanvasLike(w, h);
+  drawLayerBitmap(art.getContext('2d')!, plane, W, H, scale, image);
+  const shape = makeCanvasLike(w, h);
+  const sg = shape.getContext('2d')!;
+  sg.drawImage(art, 0, 0);
+  sg.globalCompositeOperation = 'source-in';
+  sg.fillStyle = outline.color;
+  sg.fillRect(0, 0, w, h);
+  const out = hit && hit.canvas.width === w && hit.canvas.height === h ? hit.canvas : makeCanvasLike(w, h);
+  const o = out.getContext('2d')!;
+  o.clearRect(0, 0, w, h);
+  const r = Math.max(0.5, outline.width * scale);
+  // two rings keep wide outlines solid; enough steps keep the edge round
+  for (const radius of r > 3 ? [r, r * 0.55] : [r]) {
+    const steps = Math.max(8, Math.min(48, Math.round(2 * Math.PI * radius / 1.5)));
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps * Math.PI * 2;
+      o.drawImage(shape, Math.cos(t) * radius, Math.sin(t) * radius);
+    }
+  }
+  o.drawImage(art, 0, 0);
+  art.width = 0;
+  shape.width = 0;
+  outlineCache.set(plane, { key, canvas: out });
+  return out;
+}
+
+function makeCanvasLike(w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
 /** Draw a group's layers bottom to top (`which` picks masked or over-frame layers). */
 function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt | null, opts: RenderOptions, W: number, H: number, which: 'all' | 'framed' | 'over'): void {
   for (let i = group.layers.length - 1; i >= 0; i--) {
@@ -299,9 +346,16 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
     if (!shows(l, group, opts)) continue;
     g.globalAlpha = l.opacity * group.opacity;
     if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, opts.scale);
-    const c = opts.live?.[l.id] ?? (art && !art.parked ? art.planes[l.id] : null);
+    const live = opts.live?.[l.id];
+    const c = live ?? (art && !art.parked ? art.planes[l.id] : null);
     if (!c || !c.width) continue;
-    drawLayerBitmap(g, c, W, H, opts.scale, opts.placement?.id === l.id ? opts.placement.image : l.image);
+    const image = opts.placement?.id === l.id ? opts.placement.image : l.image;
+    // an outlined layer is drawn whole into its own canvas first (skipped mid-stroke for speed)
+    if (l.outline && l.outline.width > 0 && !live) {
+      const done = outlinedLayer(c, W, H, opts.scale, image, l.outline, String(art?.revs[l.id] ?? 0));
+      if (done) { g.drawImage(done, 0, 0, W, H); continue; }
+    }
+    drawLayerBitmap(g, c, W, H, opts.scale, image);
   }
   g.globalAlpha = 1;
 }

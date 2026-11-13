@@ -22,6 +22,21 @@ from scratch, and produces a **behaviour contract** we can test — not a featur
 
 ---
 
+## Documented sources (craft), not binary REA
+
+Two craft books are used as **documented** evidence, at the taxonomy level only:
+
+- *Making Comics* (McCloud, 2006) — EPUB is page scans with 18–30% OCR. Only chapter locations were
+  read; the scans are not usable and are not quoted.
+- *Framed Ink* (Mateu-Mestre, 2010) — text EPUB; section topics were read, not passages.
+
+Extraction lives in `.rea-work/books/` and is gitignored. Findings are summarised in
+[research/comics-craft-source-map.md](research/comics-craft-source-map.md) and encoded as our own
+enums in [research/craft-taxonomy.json](research/craft-taxonomy.json). Everything derived from them
+is labelled **inkflo choice**, never **observed**: these are ideas, not artifact behaviour.
+
+---
+
 ## Tier 1 — the comic desk
 
 ### 1. Clip Studio Paint 1.5 — `C:\Program Files\CELSYS\CLIP STUDIO 1.5\CLIP STUDIO PAINT\CLIPStudioPaint.exe`
