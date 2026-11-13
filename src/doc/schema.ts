@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage, ScreenTone } from './model';
+import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage, ScreenTone, TextFrame } from './model';
 import { TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -320,6 +320,42 @@ function placedImage(v: unknown, path: string): PlacedImage {
   };
 }
 
+function textFrame(v: unknown, path: string): TextFrame {
+  const o = obj(v, path);
+  const pick = <T extends string>(x: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(x as T) ? (x as T) : fallback);
+  const range = (x: unknown, key: string, lo: number, hi: number, fallback: number) => (x === undefined ? fallback : Math.max(lo, Math.min(hi, num(x, `${path}.${key}`))));
+  const colour = (x: unknown, key: string, fallback: string) => {
+    if (x === undefined) return fallback;
+    const c = str(x, `${path}.${key}`);
+    if (!/^#[0-9a-f]{6}$/i.test(c)) fail(`${path}.${key}`, 'must be a #rrggbb colour');
+    return c;
+  };
+  const text = str(o.text, `${path}.text`);
+  if (text.length > 100_000) fail(`${path}.text`, 'is too long');
+  return {
+    id: str(o.id, `${path}.id`),
+    x: num(o.x, `${path}.x`), y: num(o.y, `${path}.y`), w: pos(o.w, `${path}.w`), h: pos(o.h, `${path}.h`),
+    text,
+    font: str(o.font ?? 'serif', `${path}.font`),
+    size: range(o.size, 'size', 4, 300, 11),
+    leading: range(o.leading, 'leading', 0.7, 3, 1.4),
+    tracking: range(o.tracking, 'tracking', -100, 500, 0),
+    align: pick(o.align, ['left', 'center', 'right', 'justify'] as const, 'left'),
+    valign: pick(o.valign, ['top', 'middle', 'bottom'] as const, 'top'),
+    columns: Math.round(range(o.columns, 'columns', 1, 3, 1)),
+    gutter: range(o.gutter, 'gutter', 0, 2, 0.25),
+    indent: range(o.indent, 'indent', 0, 10, 0),
+    paraSpace: range(o.paraSpace, 'paraSpace', 0, 5, 0),
+    dropCap: Math.round(range(o.dropCap, 'dropCap', 0, 6, 0)),
+    caps: pick(o.caps, ['none', 'all', 'small'] as const, 'none'),
+    bold: o.bold === true, italic: o.italic === true,
+    color: colour(o.color, 'color', '#1d1e22'),
+    background: o.background === null || o.background === undefined ? null : colour(o.background, 'background', '#ffffff'),
+    padding: range(o.padding, 'padding', 0, 2, 0),
+    ...(o.rotation === undefined ? {} : { rotation: num(o.rotation, `${path}.rotation`) }),
+  };
+}
+
 function cutoutPoints(v: unknown, path: string): Pt[] {
   if (!Array.isArray(v) || v.length < 3 || v.length > 1024) fail(path, 'needs 3 to 1024 points');
   return (v as unknown[]).map((q, i) => {
@@ -581,6 +617,7 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   if (o.grid !== undefined) pg.grid = modularGrid(o.grid, `${path}.grid`);
   if (o.downbeat !== undefined) pg.downbeat = relativePoint(o.downbeat, `${path}.downbeat`);
   if (o.autoLetter === true) pg.autoLetter = true;
+  if (o.texts !== undefined) pg.texts = arr(o.texts, `${path}.texts`).map((t, i) => textFrame(t, `${path}.texts[${i}]`));
   const earlier = new Set<string>();
   const grouped = pg.balloons.some((l) => l.continuation);
   for (const [i, l] of pg.balloons.entries()) {

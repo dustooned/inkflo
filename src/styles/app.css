@@ -764,3 +764,12 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .layer-dock .sep { border-top: 1px solid var(--line-2); margin: 6px 4px; }
 .layer-dock h4 { margin: 8px 8px 4px; font: 650 10px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
 .layer-dock .layer-options input[type=range] { flex: 1; min-width: 0; }
+
+/* Type frames inspector */
+.type-text { width: 100%; min-height: 120px; resize: vertical; font: 13px/1.5 var(--serif); border: 1px solid var(--line-2); border-radius: 7px; background: var(--field); color: var(--text); padding: 8px; }
+.type-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.type-presets .btn { min-height: 28px; padding: 4px 9px; }
+.type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.type-range { display: grid; grid-template-columns: 64px minmax(0, 1fr) 5ch; }
+.type-range input { width: 100%; }
+.type-toggles { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

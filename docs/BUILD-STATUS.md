@@ -853,3 +853,25 @@ an iPad pays for on every frame:
   scroll preview 140 px, rail icons 18 px.
 - Checks: outline save/load test. In Chrome, a 0.1″ black outline turned the pixels just outside
   the cut piece black and left the rest alone, and the menu's White preset set the outline.
+
+## Type frames for text-led pages, 2026-11-13
+
+- **Caption → Type (X):** drag a frame of set text, or click for a ready-sized one, or
+  right-click → Type frame here. Drag to move, use the corner to resize, and a red + flags overset text.
+- **Inspector:**
+  - Style presets: Novel body, Chapter opening, Title, Poem, Pull quote, Picture-book.
+  - Text, typeface (system book faces: serif, Georgia, sans, typewriter; plus the bundled comic
+    fonts), size, leading, tracking, bold, italic, capitals and small caps.
+  - Alignment (left, centre, right, justified), vertical alignment, first-line indent,
+    paragraph space, drop cap of 2–4 lines.
+  - Columns 1–3, column gap, inset, rotation, background, delete.
+- `render/typeset.ts`: a pure layout (`layoutType`, measured through a callback) with greedy
+  wrapping, justification except on paragraph-final lines, column flow and overset, drop caps,
+  and vertical alignment. Drawing goes through `renderPage`, after the art and before balloons,
+  and follows the lettering switch, so exports and the lettering separation include it.
+  `Page.texts` is validated with ranges in the schema.
+- Manual: new **Outlines** and **Type frames** sections.
+- Checks: `typeset.test.ts` (6 cases). In Chrome, a frame dragged out with a two-paragraph story
+  and the Chapter opening preset set justified text with a 3-line drop cap.
+- **Note:** book faces are the device's system fonts, so a page can set slightly differently on
+  another computer. Bundled fonts are identical everywhere.

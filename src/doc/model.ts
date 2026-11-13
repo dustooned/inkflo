@@ -371,8 +371,46 @@ export interface Page {
   /** Top of the stack first: Over panels, then panel groups, then Background. */
   groups: LayerGroup[];
   balloons: Letter[];
+  /** Set text (type frames) for text-led pages: novels, picture books, poems. */
+  texts?: TextFrame[];
   state: Record<Stage, StageState>;
   updatedAt: number;
+}
+
+/** A frame of set text on the page. Position and size in inches; type sizes in points. */
+export interface TextFrame {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  /** 'serif' | 'book' | 'sans' | 'mono' (system faces), or a bundled font id. */
+  font: string;
+  size: number;
+  /** Line height as a multiple of the size. */
+  leading: number;
+  /** Letter spacing in thousandths of an em. */
+  tracking: number;
+  align: 'left' | 'center' | 'right' | 'justify';
+  valign: 'top' | 'middle' | 'bottom';
+  columns: number;
+  /** Space between columns, inches. */
+  gutter: number;
+  /** First-line indent of each paragraph after the first, in ems. */
+  indent: number;
+  /** Space between paragraphs, in ems. */
+  paraSpace: number;
+  /** Drop cap height in lines (0 = none). */
+  dropCap: number;
+  caps: 'none' | 'all' | 'small';
+  bold: boolean;
+  italic: boolean;
+  color: string;
+  background: string | null;
+  /** Inset of the text from the frame edge, inches. */
+  padding: number;
+  rotation?: number;
 }
 
 export type Binding = 'saddle' | 'perfect' | 'hardcover' | 'none' | 'web';

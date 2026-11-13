@@ -92,11 +92,13 @@ section[hidden] { display: none; }
     <li class="sub"><a href="#colour">Colour and fills</a></li>
     <li class="sub"><a href="#tone">Screentone and comic lines</a></li>
     <li class="sub"><a href="#selecting">Selecting and transforming</a></li>
+    <li class="sub"><a href="#outline">Outlines</a></li>
     <li><a href="#collage">5. Collage and zines</a></li>
     <li><a href="#caption">6. Caption (lettering)</a></li>
     <li class="sub"><a href="#balloons">Balloon kinds</a></li>
     <li class="sub"><a href="#stylesheet">The style sheet</a></li>
     <li class="sub"><a href="#reading">Reading order and readability</a></li>
+    <li class="sub"><a href="#type">Type frames: text-led pages</a></li>
     <li><a href="#print">7. Print</a></li>
     <li><a href="#export">8. Export and sharing</a></li>
     <li class="sub"><a href="#scroll">Vertical scroll comics</a></li>
@@ -230,6 +232,15 @@ section[hidden] { display: none; }
 <li><strong>Position image</strong> places, moves and resizes imported pictures (see Collage).</li>
 <li>All of these work on panels you have moved or rotated in Layout.</li>
 </ul>
+
+<h3 id="outline">Outlines</h3>
+<p>Open a layer's options in <strong>Layers</strong> (the <strong>⋯</strong> on its row) and choose an <strong>Outline</strong>: <strong>White</strong>, <strong>Black</strong> or any colour, with a width up to a quarter inch. The outline wraps everything on the layer (ink, colour, a pasted photo or a collage piece), so it works like a border effect in other comic apps.</p>
+<ul>
+<li>A <strong>white outline</strong> lifts a character or a sound effect off a busy background so it reads at a glance.</li>
+<li>A <strong>black outline</strong> "inks" a pasted photo or 3D render so it sits with your line art.</li>
+<li>The outline prints and exports exactly as it looks. It pauses while you are drawing a stroke on that layer and comes back when you lift.</li>
+</ul>
+<div class="history">Outlining is an old cartoonist's trick for <em>clarity</em>: a thin white gap or a heavy black contour around the main figure separates it from the background, much as a stage light separates an actor from the set. Inkers often thickened outer contours and kept inner lines thin for the same reason.</div>
 </section>
 
 <section id="collage">
@@ -270,6 +281,31 @@ section[hidden] { display: none; }
 <h3 id="reading">Reading order and readability</h3>
 <p>Readers follow balloons left to right and top to bottom (right to left in manga). The inspector warns when balloons would be read out of script order, and when lettering is too small to read at print size or on a phone. <strong>Keep readable</strong> nudges too-small lettering back up. <strong>Review script changes</strong> shows balloons whose script line has changed, so you can update the wording without losing placement.</p>
 <div class="tip">Place the first balloon of a panel near its top left, and keep tails short and pointing at mouths. Balloons should never cover a face or the key action.</div>
+</section>
+
+<section id="type">
+<h2><span class="desk">Caption</span>Type frames: text-led pages</h2>
+<p>Not every illustrated book is a comic. The <strong>Type</strong> tool (<kbd>X</kbd>) in the Caption desk sets <em>text</em> on the page, for illustrated novels, picture books, poems, short stories told beside a single image, and title or chapter pages.</p>
+<ol>
+<li>Choose <strong>Type</strong> and drag a frame on the page (or click for a ready-sized one, or right-click → <strong>Type frame here</strong>).</li>
+<li>Write in the <strong>Text</strong> box. Each line break starts a new paragraph; an empty line adds space.</li>
+<li>Pick a <strong>style</strong> to start from: Novel body, Chapter opening, Title, Poem, Pull quote or Picture-book.</li>
+<li>Drag the frame to move it and its corner to resize. A red <strong>+</strong> means more text than fits: enlarge the frame, add a column or reduce the size.</li>
+</ol>
+<table>
+<tr><th>Setting</th><th>What it does</th></tr>
+<tr><td>Typeface</td><td>Book faces (serif, Georgia-style, sans serif, typewriter) or the comic and display fonts.</td></tr>
+<tr><td>Size, leading</td><td>Type size in points, and the space from one line to the next.</td></tr>
+<tr><td>Tracking</td><td>Even letter spacing; open it up for titles in capitals.</td></tr>
+<tr><td>Bold, italic, capitals, small caps</td><td>Emphasis and the classic book-opening look.</td></tr>
+<tr><td>Alignment</td><td>Left, centre, right, or <strong>justified</strong> (straight edges on both sides, like most novels).</td></tr>
+<tr><td>First-line indent, space between</td><td>How paragraphs are marked: novels indent; poems and picture books add space.</td></tr>
+<tr><td>Drop cap</td><td>A large first letter 2–4 lines tall.</td></tr>
+<tr><td>Columns, column gap, inset, rotation, background</td><td>Page design: two-column stories, text on a coloured block, tilted labels.</td></tr>
+</table>
+<div class="history">Text pages have their own long craft. Medieval manuscripts opened chapters with large painted initials, the ancestor of the <strong>drop cap</strong>. Printers settled on <strong>justified</strong> columns and first-line indents for continuous reading, while poems keep their line breaks and space between stanzas. Illustrated books, from Victorian novels with engraved plates to picture books where words and pictures share every spread, mix text and image in ways comics borrowed and changed. Type frames let you design pages in that tradition alongside your comic pages.</div>
+<div class="tip">For a single-image story, place one large drawing or collage and add a Pull quote frame over a quiet area, with a background colour and a little inset. Then a Novel body frame below for the story.</div>
+<p>Type frames print and export with the lettering, including the lettering separation, and they are kept in the .inkflo book with every setting.</p>
 </section>
 
 <section id="print">

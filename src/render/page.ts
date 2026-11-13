@@ -1,4 +1,5 @@
 import { cutoutPath } from '../geom/collage';
+import { drawTypeFrames } from './typeset';
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack, type Panel } from '../geom/carve';
@@ -420,6 +421,8 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
     g.restore();
   }
   for (const grp of over) drawLayers(g, grp, art, opts, W, H, 'all');
+  // set text sits under the lettering, and travels with it in the lettering separation
+  if (opts.balloons !== false) drawTypeFrames(g, page, s);
   if (opts.balloons !== false) drawBalloons(g, page, s, opts.sheet, opts.skipBalloon);
   if (opts.whiteBackground) {
     g.globalCompositeOperation = 'destination-over';

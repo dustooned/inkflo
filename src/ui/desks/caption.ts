@@ -17,6 +17,7 @@ import { openDialogue } from '../dialogue';
 import { closePopover, popover } from '../popover';
 import { openStyleSheet } from '../stylesheet';
 import { balloonSwatch } from '../balloonswatch';
+import { typeTool } from '../typetool';
 
 type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
 
@@ -360,6 +361,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
 
   let lastTap: { at: number; id: string; point: Pt } | null = null;
   let fineTuneOpen = false;
+  const type = typeTool(ctx);
   const mode: DeskMode = {
     id: 'caption',
     actions: [
@@ -370,6 +372,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       { id: 'select', label: 'Select', glyph: '➤', key: 'v', group: 'edit' },
       { id: 'letter', label: 'Letter', glyph: '💬', group: 'make', variants: KINDS.map((k) => ({ id: k.id, label: k.label, glyph: k.glyph, key: k.key })) },
       { id: 'draw-balloon', label: 'Draw balloon', glyph: '◌', key: 'd', group: 'make' },
+      { id: 'type', label: 'Type', glyph: '¶', key: 'x', group: 'make' },
     ],
     tool: 'letter',
     cursor: () => (mode.tool === 'select' ? 'move' : 'cross'),
@@ -411,6 +414,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       );
     },
     inspector(el) {
+      if (mode.tool === 'type') { type.inspector(el); return; }
       const l = sel();
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Caption'), h('div', { class: 'ins-title' }, l ? KIND_LABEL[l.cap.style] ?? 'Balloon' : `${page.balloons.length} balloon${page.balloons.length === 1 ? '' : 's'}`)));
       if (reviewOpen) el.append(revisionPanel());
@@ -457,6 +461,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           'sep');
       }
       items.push(...KINDS.map((k) => ({ label: k.label + ' here', run: () => place(p, k.id) })));
+      items.push({ label: 'Type frame here', run: () => { mode.tool = 'type'; type.down(p); type.up(false); ctx.chrome(); } });
       items.push('sep',
         { label: 'Select', key: 'V', checked: mode.tool === 'select', run: () => { mode.tool = 'select'; ctx.chrome(); } },
         { label: 'Script dialogue…', run: openScript },
@@ -464,6 +469,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       return items;
     },
     down(p, e) {
+      if (mode.tool === 'type') { type.down(p); return; }
       if (mode.tool === 'draw-balloon') {
         loop = [p];
         lastTap = null;
@@ -521,6 +527,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       downAt = p;
     },
     move(p, e) {
+      if (mode.tool === 'type') { type.move(p); return; }
       if (loop) {
         const last = loop[loop.length - 1]!;
         if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() > 2) {
@@ -584,6 +591,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       }
     },
     up(p, e) {
+      if (mode.tool === 'type') { type.up(e.type === 'pointercancel'); return; }
       if (e.type === 'pointercancel') { addAt = null; cancelDrag(); ctx.chrome(); return; }
       if (addAt) {
         const at = addAt;
@@ -620,6 +628,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       ctx.chrome();
     },
     overlay(g, s) {
+      if (mode.tool === 'type') { type.overlay(g, s); return; }
       const k = s / PT;
       const issues = new Set(readingOrderIssues(page, ctx.panels()).map((i) => i.balloon.id));
       g.save();
