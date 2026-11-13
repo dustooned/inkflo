@@ -302,8 +302,15 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     ctx.request();
   }
 
+  /** Layers, docked in the Studio inspector (a panel) as well as in the popover. */
+  let docked: HTMLElement | null = null;
+
   function refreshPicker(focus = false): void {
-    if (!picker) return;
+    if (picker) renderLayers(picker, focus);
+    if (docked?.isConnected) renderLayers(docked, focus && docked.contains(document.activeElement));
+  }
+
+  function renderLayers(picker: HTMLElement, focus: boolean): void {
     const focused = document.activeElement;
     const hadFocus = focused instanceof HTMLElement && picker.contains(focused);
     const token = hadFocus ? focused.dataset.focus ?? focused.getAttribute('aria-label') ?? focused.textContent?.trim() : null;
@@ -1659,12 +1666,15 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         el.append(h('div', { class: 'sec' }, inspectorLayers), images.options());
         return;
       }
+      docked = h('div', { class: 'layer-picker layer-dock' });
       el.append(
-        h('div', { class: 'insp-head' }, h('div', { class: 'ins-title' }, 'Draw')),
-        h('div', { class: 'sec stack' }, inspectorLayers,
+        h('div', { class: 'insp-head' }, h('div', { class: 'ins-title' }, 'Layers')),
+        docked,
+        h('div', { class: 'sec insp-actions' },
           h('button', { class: 'btn', type: 'button', onclick: adjustLayer }, 'Adjustments'),
           h('button', { class: 'btn', type: 'button', onclick: () => images.open() }, 'Place image')),
       );
+      renderLayers(docked, false);
     },
     contextMenu(p) {
       const use = (id: string) => () => { mode.tool = id; ctx.chrome(); ctx.request(); };

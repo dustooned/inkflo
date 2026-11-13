@@ -10,7 +10,7 @@ import { drawBackdrop } from './backdrop';
 import { drawComposition } from './composition';
 import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
-import { glyphEl } from './icons';
+import { glyphEl, icon } from './icons';
 import { h, slider, toast } from './dom';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
@@ -617,7 +617,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         items.push(toolButton(t));
       }
     }
-    const opt = h('button', { class: 'railopt', type: 'button', 'aria-label': 'Customize tools', title: 'Customize tools' }, '⋯');
+    const opt = h('button', { class: 'railopt', type: 'button', 'aria-label': 'Customize tools', title: 'Customize tools' }, icon('customize', 18));
     opt.addEventListener('click', () => customize(opt));
     if (simple) {
       const more = h('button', { class: 'tool', type: 'button', 'aria-label': 'More tools', 'aria-haspopup': 'dialog' }, h('span', {}, '⋯'), h('em', {}, 'More'));

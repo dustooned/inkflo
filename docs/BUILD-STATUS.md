@@ -677,3 +677,24 @@ tool-options row, a popover for choices):
   Escape closes the menu.
 - Checked with synthetic touch and key events in Chromium: hold opens the menu without cutting,
   a moved press and a quick tap do not open it, and the keys move focus as described.
+
+## Draw sidebar, compact chrome and follow-up checks, 2026-11-13
+
+- **Draw sidebar:** the Studio inspector now docks the Layers panel itself instead of a second
+  Layers button, with Adjustments and Place image below it. It shares state with the tool-bar
+  popover; switching to Selected layer in either updates both.
+- **Focus / Simple:**
+  - The size/opacity column no longer scrolls sideways or clips its unit. The unit is in
+    the field's tooltip.
+  - Customize tools has its own icon instead of a second "⋯".
+- **Checks** on the rotated (15°) and scaled (1.25×) panel, using real pointer events:
+  - Polygon and freehand marquees lifted the panel's ink. Polygon closes by clicking the first
+    point, the Close polygon button, or Enter.
+  - Clone stored its path and source in the panel's space: a horizontal drag stays horizontal
+    on the page, and the brush size is divided by 1.25. Undo removes it.
+- **Gutter strip:** measured, and it isn't there. Each fill already reaches one pixel across a
+  shared seam, so borderless neighbours leave no unpainted line. No change.
+- **Rebuild:**
+  - Deterministic: two rebuilds match exactly.
+  - On the starter it draws the same shapes but anti-aliased, where the saved starter bitmaps
+    have hard edges. That accounts for the pixel difference seen earlier; nothing is misplaced.

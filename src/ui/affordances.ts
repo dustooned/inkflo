@@ -10,7 +10,7 @@ import { icon, iconFor } from './icons';
  *   header buttons become icon-only; their name stays as aria-label and in the tooltip.
  */
 
-const CONTROL = 'button, a[href], select, [role="button"], [role="menuitem"], [data-tip]';
+const CONTROL = 'button, a[href], select, input[type="number"][aria-label], [role="button"], [role="menuitem"], [data-tip]';
 /** Header buttons that show only their icon (the tooltip names them). */
 const ICON_ONLY = new Set(['Spread', 'Spread preview', 'Simple / Studio', 'Mark done', 'Done ✓', 'Show inspector', 'Hide inspector', 'Inspector']);
 const DECORATE = '.bar button, .ctx button, .chrome-actions button, .chrome-nav button, .insp button, .pop .item';

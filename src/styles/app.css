@@ -663,3 +663,20 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .bar.more-end { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
 .bar.more-start { mask-image: linear-gradient(to right, transparent, #000 36px); }
 .bar.more-start.more-end { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+
+/* Draw inspector: the layers list docked as a panel, actions below it. */
+.layer-dock { padding: 8px 10px 10px; border-bottom: 1px solid var(--line-2); }
+.insp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.insp-actions .btn { justify-content: center; }
+.layer-picker.layer-dock { width: auto; max-height: none; overflow: visible; padding: 0; scrollbar-gutter: auto; }
+.layer-dock .layer-picker-top { position: static; background: none; }
+.layer-dock .layer-picker-head strong { visibility: hidden; }
+.layer-dock .layer-picker-controls { grid-template-columns: minmax(0, 1fr); }
+.layer-dock .layers { grid-template-columns: minmax(0, 1fr); }
+.layer-dock .layer-group-card { min-width: 0; }
+.layer-dock .llayer .lt, .layer-dock .lgroup .lt { min-width: 30px; }
+/* Focus and Simple: the size/opacity column fits its 44 px fields; the unit is in the tooltip. */
+.screen:is(.focus, .simple) .brush-controls { overflow-x: hidden; }
+.screen:is(.focus, .simple) .brush-value small { display: none; }
+.screen:is(.focus, .simple) .brush-value input { width: 100%; }
+.rail .railopt > .ico { margin: auto; }
