@@ -108,6 +108,20 @@ export function installAffordances(): void {
   document.addEventListener('focusout', hide);
   for (const type of ['pointerdown', 'keydown', 'wheel', 'scroll'] as const) document.addEventListener(type, hide, { capture: true, passive: true });
 
+  // Menus: arrow keys, Home and End move between enabled rows (the canvas menu, Export, flyouts).
+  document.addEventListener('keydown', (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const menu = (e.target as Element).closest?.('[role="menu"]');
+    if (!menu) return;
+    const rows = [...menu.querySelectorAll<HTMLElement>('button:not([disabled]), [role^="menuitem"]:not([disabled])')].filter((r) => r.offsetParent !== null);
+    if (!rows.length) return;
+    const at = rows.indexOf(e.target as HTMLElement);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1
+      : (at + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+    rows[next]!.focus();
+    e.preventDefault();
+  });
+
   // Full one-row bars: a vertical wheel scrolls them sideways; a fade marks the hidden side.
   document.addEventListener('wheel', (e) => {
     const bar = (e.target as Element).closest?.('.bar');

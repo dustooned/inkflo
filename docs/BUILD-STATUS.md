@@ -671,4 +671,9 @@ tool-options row, a popover for choices):
   - Chrome at 662 px: every desk's menu; Add tail then Undo from the menu (tails 1→2→1);
     tooltips on the header and rail; Focus bar icons; Export reachable in the header.
   - `icons.test.ts` checks that every label maps to a drawn icon. 358 tests, typecheck and build.
-- **Not done:** a long-press menu for touch, and arrow-key navigation inside the canvas menu.
+- **Touch:** holding one finger still for 550 ms opens the same canvas menu. Moving more than
+  10 px, lifting early or a second finger cancels it, and the held press never reaches the tool.
+- **Keyboard:** in any menu, Up and Down (wrapping), Home and End move between enabled rows.
+  Escape closes the menu.
+- Checked with synthetic touch and key events in Chromium: hold opens the menu without cutting,
+  a moved press and a quick tap do not open it, and the keys move focus as described.

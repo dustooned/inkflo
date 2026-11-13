@@ -269,10 +269,32 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       // ignore
     }
   };
+  // Touch: hold one finger still to open the canvas menu (the right-click of a tablet).
+  let longPress: { id: number; x: number; y: number; timer: number } | null = null;
+  const cancelLongPress = () => {
+    if (longPress) clearTimeout(longPress.timer);
+    longPress = null;
+  };
+  const startLongPress = (e: PointerEvent) => {
+    cancelLongPress();
+    const id = e.pointerId, x = e.clientX, y = e.clientY;
+    longPress = { id, x, y, timer: window.setTimeout(() => {
+      longPress = null;
+      if (primaryPointer !== id || pinch || finger?.started) return;
+      // the press becomes the menu: drop the gesture so lifting the finger does nothing
+      primaryPointer = null;
+      finger = null;
+      boardTouch = null;
+      try { stageEl.releasePointerCapture(id); } catch { /* already released */ }
+      navigator.vibrate?.(12);
+      openCanvasMenu(ctx.toPage({ clientX: x, clientY: y } as PointerEvent), x, y);
+    }, 550) };
+  };
   stageEl.addEventListener('pointerdown', (e) => {
     if (mode.pane) return;
     stageRect = stageEl.getBoundingClientRect();
     if (primaryPointer !== null) {
+      cancelLongPress();
       if (pinch && e.pointerType === 'touch') {
         if (pinch.third === undefined) { pinch.third = e.pointerId; capture(e.pointerId); }
         e.preventDefault(); return;
@@ -315,6 +337,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       boardTouch = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
     } else if (e.pointerType === 'touch') finger = { first: e, last: e, started: false };
     else mode.down?.(p, e);
+    if (e.pointerType === 'touch') startLongPress(e);
     ctx.request();
   });
   // Right-click (or a two-finger long press reported as contextmenu): practical actions here.
@@ -326,6 +349,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     openCanvasMenu(ctx.toPage(e), e.clientX, e.clientY);
   });
   stageEl.addEventListener('pointermove', (e) => {
+    if (longPress && e.pointerId === longPress.id && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 10) cancelLongPress();
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       const which = e.pointerId === primaryPointer ? 'a' : 'b';
       pinch[which] = { x: e.clientX, y: e.clientY };
@@ -367,6 +391,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ctx.request();
   });
   const end = (e: PointerEvent) => {
+    if (longPress?.id === e.pointerId) cancelLongPress();
     if (pinch && e.pointerId === pinch.third) return;
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       if (!pinch.moved && e.type === 'pointerup' && performance.now() - pinch.at < 300) {
