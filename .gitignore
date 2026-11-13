@@ -7,3 +7,6 @@ dist
 .DS_Store
 Thumbs.db
 coverage/
+
+# local research extracts (copyrighted sources; never commit)
+.rea-work/

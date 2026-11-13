@@ -25,6 +25,9 @@ docs/
   research/procreate-integration-matrix.md  feature → inkflo gap → decision → order of work
   research/dreams-1.0.15-motion.md  what the Dreams package says about timeline and cues
   research/csp-simple-mode.md      the tablet/Simple Mode UI that CSP ships on Windows
+  research/comics-craft-source-map.md  craft books → feature map (panel choices, transitions, composition)
+  research/craft-taxonomy.json     our own enums: transitions, shots, word-image relations, checks
+  research/craft-features.md       22 implementable craft features, effort and anti-features
 ```
 
 The prototypes are **reference implementations**: geometry, interaction and visual language are
