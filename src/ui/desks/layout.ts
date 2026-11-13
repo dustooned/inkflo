@@ -12,6 +12,7 @@ import { openGrid } from '../grid';
 import { openPageTemplates } from '../pagetemplates';
 import { applyPageTemplate } from '../../geom/pagetemplates';
 import { resample, pathLength } from '../../engine/core/quickshape';
+import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../geom/cutshape';
 import { panelPlacement } from '../panelplacement';
 
 type Side = 'n' | 's' | 'e' | 'w';
@@ -61,6 +62,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   let trail: Pt[] | null = null;
   let straight = false;
   let heldStraight = false;
+  /** Auto Shape: the shape a held knife stroke snapped to, and where the pen was then. */
+  let held: { cut: CutShape; grab: Pt } | null = null;
   let holdTimer = 0;
   let autoShape = true;
   let sel: number | null = null;
@@ -136,8 +139,12 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     if (!autoShape || !trail || trail.length < 2 || heldStraight) return;
     holdTimer = window.setTimeout(() => {
       if (!trail || Math.hypot(trail.at(-1)!.x - trail[0]!.x, trail.at(-1)!.y - trail[0]!.y) * ctx.scale() < 22) return;
-      heldStraight = true;
-      trail = [trail[0]!, trail.at(-1)!];
+      // snap to the cleanest shape the stroke looks like: line, arc, zig-zag or a smoothed curve
+      const cut = recognizeCut(trail, ctx.scale());
+      held = { cut, grab: trail.at(-1)! };
+      heldStraight = cut.kind === 'line';
+      trail = cut.pts.map((q) => ({ ...q }));
+      ctx.hint(CUT_SHAPE_LABEL[cut.kind] + ' · keep holding and drag to adjust');
       ctx.request();
     }, 550);
   }
@@ -146,6 +153,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     placement.clear();
     clearTimeout(holdTimer);
     trail = null;
+    held = null;
     drag = null;
     curveDrag = undefined;
     preview = undefined;
@@ -234,7 +242,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         const snap = h('input', { type: 'checkbox', checked: autoShape });
         snap.addEventListener('change', () => (autoShape = snap.checked));
         bar.append(seg<CutMode>([{ id: 'across', label: 'Across page' }, { id: 'panel', label: 'One panel' }], cutMode(), (v) => ctx.setVariant('knife', v), 'Cut mode'),
-          h('label', { class: 'mini', title: 'Hold at the end of the cut, then drag to aim the straight edge' }, snap, 'Auto Shape'));
+          h('label', { class: 'mini', title: 'Hold at the end of a cut: it snaps to a straight line, an arc, a zig-zag or a smooth curve. Keep holding and drag to adjust.' }, snap, 'Auto Shape'));
       }
       bar.append(
         h('button', { class: 'btn document-option', type: 'button', onclick: templates }, 'Page templates'),
@@ -354,6 +362,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         trail = [p];
         straight = e.shiftKey;
         heldStraight = false;
+        held = null;
         sel = panelIndexAt(p);
         return;
       }
@@ -377,6 +386,10 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         const cuts = movePanelCuts(page, new Map(), layoutOf(page), new Map([[original.id, { ...original, handles }]]));
         const next = { ...page, cuts };
         if (sameGutterTopology(page, next)) preview = { page: next, panels: derivePanels(next) };
+        return;
+      }
+      if (trail && held) {
+        trail = adjustCut(held.cut, held.grab, p, ctx.scale()).pts;
         return;
       }
       if (trail) {
@@ -433,8 +446,10 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (trail) {
-        const isStraight = straight || heldStraight || e.shiftKey;
-        const points = isStraight ? [trail[0]!, p] : [...trail, p];
+        const snapped = held;
+        held = null;
+        const isStraight = snapped ? snapped.cut.kind === 'line' : straight || heldStraight || e.shiftKey;
+        const points = snapped ? adjustCut(snapped.cut, snapped.grab, p, ctx.scale()).pts : isStraight ? [trail[0]!, p] : [...trail, p];
         const { plan, gridGutter } = knifePreview(points, isStraight);
         trail = null;
         sel = null; // reading-order indices shift when panels split

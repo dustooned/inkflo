@@ -718,3 +718,17 @@ tool-options row, a popover for choices):
   - Browser, with real pointer events: a mouse line inside the page cut 0 → 6.625″; a touch hold
     of 650 ms then a swipe cut with no menu left open; hold then lift opened the menu without a
     cut; One panel split one panel (6 → 7).
+
+## Knife Auto Shape, 2026-11-13
+
+- Hold at the end of a knife stroke (Auto Shape on) and it snaps to a **straight line**, an
+  **arc**, a **zig-zag** or, failing those, a **smooth curve** with the hand wobble removed
+  (`geom/cutshape.ts`). Keep holding and drag to adjust: the start stays put and the end follows
+  the pen. A hint names the shape.
+- Recognition reuses QuickShape in screen pixels. A cut counts as straight only within 3% of its
+  length (QuickShape's 7% swallowed shallow zig-zags across a page), and a zig-zag needs corners
+  that survive a 1% tolerance, so gentle waves become smooth curves.
+- The page's **Curve** setting still rounds cut corners; set it to 0 for sharp zig-zags.
+- Checks: `cutshape.test.ts` (7 cases). Browser: a wobbly bow became an edge-to-edge arc (0.2°
+  maximum turn between segments, against 3.6° without the hold); a held line aimed lower; a
+  zig-zag across the page snapped to Zig-zag.
