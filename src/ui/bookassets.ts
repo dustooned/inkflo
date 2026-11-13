@@ -1,3 +1,4 @@
+import { loadMarks } from '../render/marks';
 import type { Studio } from '../app/studio';
 import type { Book, BookAsset } from '../doc/model';
 import { parseBookFile } from '../doc/schema';
@@ -66,13 +67,21 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
       }).catch(() => { if (id === revision) img.alt = 'Preview unavailable'; });
       return h('article', { class: 'asset-card' }, img, h('strong', {}, asset.name), h('small', {}, `${asset.width} × ${asset.height}`),
         h('div', { class: 'asset-actions' }, place ? h('button', { class: 'btn', type: 'button', onclick: () => { dialog.close(); place(asset); } }, 'Place') : null,
+          h('button', { class: 'btn', type: 'button', 'aria-pressed': String(book.artistMark === asset.key), title: 'Your signature or symbol, placed with Draw → Artist mark',
+            onclick: () => {
+              const before = book.artistMark;
+              if (before === asset.key) return;
+              studio.run({ label: 'Set Artist mark', do: () => { book.artistMark = asset.key; }, undo: () => { if (before) book.artistMark = before; else delete book.artistMark; } });
+              void loadMarks([asset.key], (k) => studio.store.getAsset(k));
+              render();
+            } }, book.artistMark === asset.key ? 'Artist mark ✓' : 'Use as Artist mark'),
           h('button', { class: 'btn', type: 'button', 'aria-label': `Download ${asset.name}`, onclick: () => void task(async () => {
             const data = await studio.store.getAsset(asset.key);
             if (!data) throw new Error('This asset’s image is missing.');
             download(new Blob([data as BlobPart], { type: 'image/png' }), `${slug(asset.name)}.png`);
             return 'Image downloaded.';
           }) }, 'PNG'),
-          h('button', { class: 'btn', type: 'button', 'aria-label': `Remove ${asset.name}`, onclick: () => { if (!busy) { studio.removeAsset(asset.key); render(); } } }, 'Remove')));
+          h('button', { class: 'btn', type: 'button', 'aria-label': `Remove ${asset.name}`, onclick: () => { if (busy) return; try { studio.removeAsset(asset.key); render(); } catch (error) { status.textContent = error instanceof Error ? error.message : String(error); } } }, 'Remove')));
     }));
     if (!assets.length) grid.append(h('p', { class: 'note' }, 'Add images to reuse on any page in this book.'));
   }

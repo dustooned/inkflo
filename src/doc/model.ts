@@ -373,8 +373,22 @@ export interface Page {
   balloons: Letter[];
   /** Set text (type frames) for text-led pages: novels, picture books, poems. */
   texts?: TextFrame[];
+  /** Placements of the artist mark (a signature or symbol), by asset key. */
+  marks?: PageMark[];
   state: Record<Stage, StageState>;
   updatedAt: number;
+}
+
+/** One placement of an artist mark: its centre and width in inches; the height follows the image. */
+export interface PageMark {
+  id: string;
+  /** The book asset drawn here. */
+  key: string;
+  x: number;
+  y: number;
+  width: number;
+  /** Hidden marks stay editable but are left out of the page and every export. */
+  hidden?: boolean;
 }
 
 /** A frame of set text on the page. Position and size in inches; type sizes in points. */
@@ -455,6 +469,8 @@ export interface Book {
   /** Exact settings of every brush strokes in this book use, by `<brush id>~<hash>` (draw/brushes.ts). */
   brushes?: Record<string, BrushSettings>;
   assets?: BookAsset[];
+  /** The creator's mark (signature, monogram, symbol): a key in `assets`, stored once. */
+  artistMark?: string;
   pages: Page[];
   lastPageId?: string;
   lastStage: Stage;

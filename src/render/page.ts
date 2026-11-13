@@ -1,5 +1,6 @@
 import { cutoutPath } from '../geom/collage';
 import { drawTypeFrames } from './typeset';
+import { drawMarks } from './marks';
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack, type Panel } from '../geom/carve';
@@ -56,6 +57,8 @@ export interface RenderOptions {
    * heaviest work an iPad does while drawing.
    */
   smoothing?: ImageSmoothingQuality;
+  /** Artist marks (default: with the lettering; art-only renders and separations leave them out). */
+  marks?: boolean;
   /** Only these groups' layers (export by panel). */
   onlyGroups?: Set<string>;
   /** The book's lettering style sheet (type sizes). */
@@ -423,6 +426,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   for (const grp of over) drawLayers(g, grp, art, opts, W, H, 'all');
   // set text sits under the lettering, and travels with it in the lettering separation
   if (opts.balloons !== false) drawTypeFrames(g, page, s);
+  if (opts.marks ?? opts.balloons !== false) drawMarks(g, page, s);
   if (opts.balloons !== false) drawBalloons(g, page, s, opts.sheet, opts.skipBalloon);
   if (opts.whiteBackground) {
     g.globalCompositeOperation = 'destination-over';

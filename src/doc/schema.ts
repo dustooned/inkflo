@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage, ScreenTone, TextFrame } from './model';
+import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, ScreenTone, TextFrame } from './model';
 import { TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -320,6 +320,17 @@ function placedImage(v: unknown, path: string): PlacedImage {
   };
 }
 
+function pageMark(v: unknown, path: string): PageMark {
+  const o = obj(v, path);
+  const key = str(o.key, `${path}.key`);
+  if (!/^assets\/[a-z0-9]+-[a-z0-9]+\.png$/.test(key)) fail(`${path}.key`, 'is not a book asset key');
+  return {
+    id: str(o.id, `${path}.id`), key,
+    x: num(o.x, `${path}.x`), y: num(o.y, `${path}.y`), width: pos(o.width, `${path}.width`),
+    ...(o.hidden === true ? { hidden: true } : {}),
+  };
+}
+
 function textFrame(v: unknown, path: string): TextFrame {
   const o = obj(v, path);
   const pick = <T extends string>(x: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(x as T) ? (x as T) : fallback);
@@ -618,6 +629,7 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   if (o.downbeat !== undefined) pg.downbeat = relativePoint(o.downbeat, `${path}.downbeat`);
   if (o.autoLetter === true) pg.autoLetter = true;
   if (o.texts !== undefined) pg.texts = arr(o.texts, `${path}.texts`).map((t, i) => textFrame(t, `${path}.texts[${i}]`));
+  if (o.marks !== undefined) pg.marks = arr(o.marks, `${path}.marks`).map((m, i) => pageMark(m, `${path}.marks[${i}]`));
   const earlier = new Set<string>();
   const grouped = pg.balloons.some((l) => l.continuation);
   for (const [i, l] of pg.balloons.entries()) {
@@ -669,6 +681,7 @@ function book(v: unknown, v1Art?: Obj): Book {
   }
   const lettering = sheet(o.lettering, 'book.lettering');
   if (o.assets !== undefined) b.assets = readBookAssets(o.assets);
+  if (typeof o.artistMark === 'string' && b.assets?.some((a) => a.key === o.artistMark)) b.artistMark = o.artistMark;
   if (o.fixedGrid !== undefined) b.fixedGrid = modularGrid(o.fixedGrid, 'book.fixedGrid');
   if (lettering) b.lettering = lettering;
   if (o.brushes !== undefined) {

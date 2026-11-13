@@ -7,6 +7,7 @@ import { derivePanels, panelAt, panelStack } from '../geom/carve';
 import { groupLabel, panelForGroup, syncGroups } from '../geom/groups';
 import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
+import { drawMarks } from '../render/marks';
 import { clearGutterPaper, drawBalloons, drawGutters, drawPagePaper, paintPlacedFrame, placedPanelPath, renderPage } from '../render/page';
 import { makeCanvas } from './canvasops';
 import type { Progress } from './exports';
@@ -121,8 +122,10 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
       painted(`Panel ${panel.index + 1} paper`, () => paintPlacedFrame(g, page, panel, dpi, 'paper')),
     ];
   });
+  const markLayer: PsdLayer | null = (page.marks ?? []).some((m) => !m.hidden) ? painted('Artist mark', () => drawMarks(g, page, dpi)) : null;
   const children: (PsdLayer | null)[] = [
     letteringLayer,
+    markLayer,
     ...source.groups.filter((grp) => grp.kind === 'over').map((grp) => group(grp)),
     ...placed,
     ...fixed.map((grp) => group(grp, true)),

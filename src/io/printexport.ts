@@ -58,7 +58,7 @@ export async function renderSeparation(page: Page, art: PageArt | null, dpi: num
   const types = { ...ALL_OFF, ...(sep === 'inks' ? { ink: true } : sep === 'colours' ? { colour: true, tone: true } : sep === 'pencils' ? { pencil: true } : {}) };
   renderPage(g, page, art, {
     scale: dpi, types, printOnly: sep !== 'pencils', frame: false, frameInk: sep === 'inks' && borders,
-    knockoutPanels: sep !== 'lettering', whiteBackground: background === 'white', balloons: sep === 'lettering', sheet,
+    knockoutPanels: sep !== 'lettering', whiteBackground: background === 'white', balloons: sep === 'lettering', marks: false, sheet,
   });
   return c;
 }

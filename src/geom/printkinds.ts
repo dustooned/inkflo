@@ -44,6 +44,7 @@ export const PRINT_KINDS: PrintKind[] = [
   { id: 'picture-book', label: 'Picture book (8 × 10 in)', group: 'Albums & magazines', w: 8, h: 10, bleed: 0.125, safe: 0.375, binding: 'hardcover', dpi: 300, note: '' },
   { id: 'picture-square', label: 'Picture book, square (8.5 in)', group: 'Albums & magazines', w: 8.5, h: 8.5, bleed: 0.125, safe: 0.375, binding: 'hardcover', dpi: 300, note: '' },
   { id: 'daily-strip', label: 'Newspaper daily strip', group: 'Strips & web', w: 13, h: 4, bleed: 0, safe: 0.15, binding: 'none', dpi: 300, note: 'A landscape strip of 3–4 panels.' },
+  { id: 'stacked-strip', label: 'Stacked strip (phone and print)', group: 'Strips & web', w: 4, h: 12, bleed: 0, safe: 0.15, binding: 'none', dpi: 300, note: 'Three panels in a column: one tall image for phones, or a narrow print column.' },
   { id: 'sunday', label: 'Sunday page (half tabloid)', group: 'Strips & web', w: 11, h: 8.5, bleed: 0, safe: 0.25, binding: 'none', dpi: 300, note: '' },
   { id: 'webtoon', label: 'Webtoon (vertical scroll)', group: 'Strips & web', w: 8, h: 32, bleed: 0, safe: 0.4, binding: 'web', dpi: 100, note: '800 px wide; sliced into images for upload.' },
   { id: 'carousel-45', label: 'Social carousel (4:5)', group: 'Strips & web', w: 10.8, h: 13.5, bleed: 0, safe: 0.5, binding: 'web', dpi: 100, note: '1080 × 1350 px slides.' },

@@ -891,3 +891,21 @@ an iPad pays for on every frame:
 - Checks: two `carve.test.ts` cases (gutter-following inset; slice keeps both halves moved with a
   gutter between). In Chrome, a vertical slice through a rotated lower panel split it in place,
   left the upper panel alone, and kept both halves rotated.
+
+## Comic strips and Artist marks (in progress), 2026-11-13
+
+- **Library → Comic strip:** 3 panels or 4 panels (13 × 4″ daily strip), or a stacked strip
+  (new `stacked-strip` print kind, 4 × 12″). It opens in Draw with ordinary, editable cuts
+  (`stripCuts`).
+- **Artist mark:** `book.artistMark` names one book asset, stored once. `page.marks` holds
+  placements (asset key, centre, width, hidden). Draw → Artist mark chooses or imports the mark
+  and places it in the bottom-right safe corner; it can move, resize from its corner, snap to
+  corners, hide or delete, all undoable. The inspector shows source px and dpi at the placed
+  width, with a warning below the book's dpi. Assets → **Use as Artist mark**. Marks in use
+  can't be removed from Assets.
+- **Rendering:** marks draw above art and type, below balloons, and follow the lettering switch.
+  Hidden marks are omitted everywhere, and separations leave them out. The PSD gets an "Artist
+  mark" layer. Mark images preload when a book opens.
+- **Not done yet:** explicit-reduction import flow, the single-strip Web image export,
+  browser end-to-end checks of the acceptance list, and schema save/load tests for marks.
+  Typecheck, 385 tests and the build pass; none of this is browser-verified yet.

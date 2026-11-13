@@ -103,6 +103,7 @@ export const ICONS = {
   review: P('M5 4.5h10l4 4V19.5H5z') + P('M8.5 13l2.5 2.5L16 10.5'),
   place: P('M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z') + C(12, 10, 2.3),
   checks: P('M4 7l2 2 3.5-3.5M4 15l2 2 3.5-3.5M12 8h8M12 16h8'),
+  mark: P('M4 17c2-1 3-5 5-5s1 4 3 4 2-6 4-6 2 3 4 3') + P('M4 20h16'),
   typeFrame: R(4, 4, 16, 16, 1) + P('M8 8h8M12 8v9M10 17h4'),
   manual: P('M4 5.5c2.5-1 5.5-1 8 .5 2.5-1.5 5.5-1.5 8-.5V19c-2.5-1-5.5-1-8 .5-2.5-1.5-5.5-1.5-8-.5z') + P('M12 6v13.5'),
 } as const;
@@ -153,7 +154,7 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   'Review script changes': 'review', 'Place from script': 'place', 'Page checks': 'checks',
   // canvas menu
   'Pick colour here': 'eyedropper', 'Reset rotation': 'rotate', 'Show pencil': 'pencil', 'Delete balloon': 'trash',
-  'Add tail': 'speech', 'Joined balloon': 'speech', 'Export…': 'export', Manual: 'manual', 'Open the manual': 'manual', Type: 'typeFrame', 'Type frame here': 'typeFrame',
+  'Add tail': 'speech', 'Joined balloon': 'speech', 'Export…': 'export', Manual: 'manual', 'Open the manual': 'manual', Type: 'typeFrame', 'Type frame here': 'typeFrame', 'Artist mark': 'mark', 'Place Artist mark here': 'mark', 'Place Artist mark': 'mark',
   Copy: 'copy', 'Paste here': 'copy',
 };
 

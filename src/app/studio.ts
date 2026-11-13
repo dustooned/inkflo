@@ -1,3 +1,4 @@
+import { loadMarks, markKeys } from '../render/marks';
 import { scalePanelTransforms } from '../geom/pagetemplates';
 import { newBook, newId, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
 import { assetsOf, parseBookFile, readBookAssets, stringifyBookFile } from '../doc/schema';
@@ -104,6 +105,7 @@ export class Studio {
     if (!head) throw new Error('That book is not in this library.');
     const { book, art } = loadBookFile(parseBookFile(head.json));
     this.attach(book, art);
+    void loadMarks(markKeys(book), (k) => this.store.getAsset(k));
     const meta = (await this.store.getBook(id)) ?? metaFromFile(parseBookFile(head.json));
     meta.opened = Date.now();
     void this.store.putBookMeta(meta);
@@ -437,6 +439,7 @@ export class Studio {
     const book = this.requireBook();
     const before = book.assets;
     if (!before?.some((asset) => asset.key === key)) return;
+    if (book.artistMark === key || book.pages.some((p) => p.marks?.some((m) => m.key === key))) throw new Error('This image is your Artist mark or is placed as one. Choose another mark or remove its placements first.');
     this.assetHistory.add(key);
     const after = before.filter((asset) => asset.key !== key);
     this.run({ label: 'Remove book asset', do: () => { book.assets = after; }, undo: () => { book.assets = before; } });

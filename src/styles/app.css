@@ -773,3 +773,25 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .type-range { display: grid; grid-template-columns: 64px minmax(0, 1fr) 5ch; }
 .type-range input { width: 100%; }
 .type-toggles { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Comic strip: library card and layout choices */
+.strip-mini { display: inline-flex; gap: 3px; width: 64px; height: 22px; }
+.strip-mini i { flex: 1; border: 1.5px solid currentColor; border-radius: 2px; }
+.strip-mini.stacked { flex-direction: column; width: 18px; height: 50px; }
+.card .sheet .strip-mini { color: var(--text-faint); }
+.strip-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.strip-choice { display: grid; justify-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); text-align: center; }
+.strip-choice small { color: var(--text-soft); font-size: 11px; }
+.strip-choice[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.strip-choice .strip-mini { color: var(--text-soft); }
+
+/* Artist mark tool */
+.mark-current { display: flex; gap: 10px; align-items: center; }
+.mark-current small { display: block; color: var(--text-soft); }
+.mark-thumb { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; border: 1px solid var(--line); background: repeating-conic-gradient(#e7e3da 0 25%, #f8f6f1 0 50%) 0 0 / 10px 10px; }
+.mark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin-top: 6px; }
+.mark-option { display: grid; justify-items: center; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 8px; font-size: 10px; min-width: 0; }
+.mark-option small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mark-option[aria-pressed="true"] { border-color: var(--accent); }
+.mark-pick summary { cursor: pointer; font-size: 12px; color: var(--text-soft); }
+.mark-corners { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

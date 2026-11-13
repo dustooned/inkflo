@@ -602,6 +602,17 @@ export function evenOut(page: Page): Cut[] {
 
 export type Preset = 'rows2' | 'grid4' | 'grid6' | 'grid9' | 'splash' | 'tier3';
 
+/** A comic strip's panels: `n` side by side, or stacked in a column. Ordinary cuts, editable later. */
+export function stripCuts(page: Page, n: number, stacked = false): Cut[] {
+  const W = page.widthIn, H = page.heightIn;
+  return Array.from({ length: Math.max(0, n - 1) }, (_, i): Cut => {
+    const t = (i + 1) / n;
+    return stacked
+      ? { id: newCutId(), mode: 'across', pts: [{ x: 0, y: H * t }, { x: W, y: H * t }] }
+      : { id: newCutId(), mode: 'across', pts: [{ x: W * t, y: 0 }, { x: W * t, y: H }] };
+  });
+}
+
 /** Cuts that seed a classic grid. After that the page is free. */
 export function presetCuts(page: Page, preset: Preset): Cut[] {
   const W = page.widthIn;

@@ -4,7 +4,7 @@ import { STAGES } from '../doc/model';
 import { askText, h, pickFile, toast } from './dom';
 import { displayButton } from './popover';
 import { kindById, specFor } from '../geom/printkinds';
-import { DEFAULT_LAYOUT } from '../geom/carve';
+import { DEFAULT_LAYOUT, stripCuts } from '../geom/carve';
 
 /** Home: the library of books on this device. */
 export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: string) => void): Promise<void> {
@@ -47,6 +47,46 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     });
     go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
   };
+  /** Comic strip: three or four panels side by side, or three stacked; opens in Draw, ready to ink. */
+  const newStrip = () => {
+    type StripLayout = '3' | '4' | 'stacked';
+    let layout: StripLayout = '3';
+    const title = h('input', { value: 'Untitled strip', 'aria-label': 'Title', maxlength: 120 });
+    const choice = (id: StripLayout, label: string, note: string, cells: number, stacked: boolean) =>
+      h('button', { type: 'button', class: 'strip-choice', role: 'radio', 'aria-checked': String(id === layout), onclick: () => { layout = id; pick.querySelectorAll('[role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b === pick.querySelector(`[data-id="${id}"]`)))); }, 'data-id': id },
+        h('span', { class: 'strip-mini' + (stacked ? ' stacked' : ''), 'aria-hidden': 'true' }, Array.from({ length: cells }, () => h('i'))),
+        h('b', {}, label), h('small', {}, note));
+    const pick = h('div', { class: 'strip-choices', role: 'radiogroup', 'aria-label': 'Strip layout' },
+      choice('3', '3 panels', '13 × 4 in daily strip', 3, false),
+      choice('4', '4 panels', '13 × 4 in daily strip', 4, false),
+      choice('stacked', 'Stacked strip', '4 × 12 in, phone-friendly', 3, true));
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New comic strip')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), pick,
+        h('p', { class: 'note' }, 'Opens in Draw with the panels cut. Change the cuts in Layout and the size in Print any time.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), h('button', { class: 'btn primary', type: 'submit' }, 'Create strip')));
+    const d = h('dialog', { 'aria-label': 'New comic strip' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const stacked = layout === 'stacked';
+      const kind = kindById(stacked ? 'stacked-strip' : 'daily-strip')!;
+      d.close();
+      const book = await studio.createBook(title.value.trim() || 'Untitled strip', '', (b) => {
+        b.print = specFor(kind);
+        b.dpi = kind.dpi;
+        const pg = b.pages[0]!;
+        pg.widthIn = kind.w;
+        pg.heightIn = kind.h;
+        pg.layout = { ...DEFAULT_LAYOUT, gutter: 0.18 };
+        pg.cuts = stripCuts(pg, layout === '4' ? 4 : 3, stacked);
+      });
+      go(`#desk/${book.id}/${book.pages[0]!.id}/draw`);
+    });
+    document.body.append(d);
+    d.showModal();
+    title.select();
+  };
   const starter = h('button', { class: 'card new', type: 'button', onclick: async () => {
     starter.disabled = true;
     try {
@@ -64,6 +104,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
   const grid = h('div', { class: 'books' },
     h('button', { class: 'card new', type: 'button', onclick: newBook }, h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New book'), h('small', {}, 'One page, ready to script')),
     h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
+    h('button', { class: 'card new', type: 'button', onclick: newStrip }, h('div', { class: 'sheet' }, h('span', { class: 'strip-mini', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))), h('h3', {}, 'Comic strip'), h('small', {}, '3 or 4 panels, or stacked')),
     starter,
     books.map((b) =>
       h('button', { class: 'card', type: 'button', onclick: () => go(`#book/${b.id}`) },

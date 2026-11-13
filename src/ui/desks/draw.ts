@@ -13,6 +13,7 @@ import { rasterSelection } from '../rasterselection';
 import { quickShapeEditor } from '../quickshapeedit';
 import { smudgeTool } from '../smudgetool';
 import { placementOf, toSource, type Placement } from '../placement';
+import { markTool } from '../marktool';
 import { moveStrokes, type ClipPayload } from '../../app/clipboard';
 import { screentoneTool } from '../screentone';
 import { openAdjustments } from '../adjustments';
@@ -285,6 +286,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     setTarget('auto');
   };
   const images = imagePlacement(ctx, () => active()?.layer.id ?? null, selectImage);
+  const marks = markTool(ctx);
 
   function contextGroup(): LayerGroup | undefined {
     ctx.panels();
@@ -1505,6 +1507,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       { id: 'selection', label: 'Select lines', glyph: '⬚', key: 'm', group: 'edit', variants: [...MARQUEE_SHAPES] },
       { id: 'pixels', label: 'Transform', glyph: '↗', key: 'r', group: 'edit', variants: [...MARQUEE_SHAPES] },
       { id: 'image', label: 'Position image', glyph: '▧', group: 'image' },
+      { id: 'mark', label: 'Artist mark', glyph: '✍', group: 'image' },
     ],
     tool: 'ink',
     cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' || shapeEditor.active() ? 'move' : ['fill', 'tone', 'lines', 'vedit', 'selection', 'pixels'].includes(mode.tool) ? 'cross' : 'brush'),
@@ -1662,6 +1665,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       bar.append(h('label', { class: 'mini' }, show, 'Show pencil'));
     },
     inspector(el) {
+      if (mode.tool === 'mark') { marks.inspector(el); return; }
       updateLayerButton(inspectorLayers);
       if (mode.tool === 'image') {
         el.append(h('div', { class: 'sec' }, inspectorLayers), images.options());
@@ -1738,6 +1742,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         'sep',
         { label: 'Show pencil', checked: state.showPencil, run: () => { state.showPencil = !state.showPencil; pixels.clear(); ctx.chrome(); } },
         { label: 'Layers…', run: () => contextLayers.click() },
+        ...(marks.hasMark() ? [{ label: 'Place Artist mark here', run: () => { mode.tool = 'mark'; void marks.place(p); } }] : []),
       ];
     },
     down(p, e) {
@@ -1753,6 +1758,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (mode.tool === 'image') { images.start(p); return; }
+      if (mode.tool === 'mark') { marks.down(p); return; }
       if (mode.tool === 'selection') { selection.down(p, e, marqueeShape(variantOf(mode, 'selection'))); return; }
       if (target === 'auto') {
         lastCanvasGroupId = groupAt(page, ctx.panels(), p).id;
@@ -1795,6 +1801,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       hover = p;
       if (shapeEditor.active()) { shapeEditor.move(p, e); return; }
       if (mode.tool === 'image') { images.move(p); return; }
+      if (mode.tool === 'mark') { marks.move(p); return; }
       if (mode.tool === 'selection') { selection.move(p, e); return; }
       if (mode.tool === 'pixels') { pixels.move(p, e); return; }
       if (mode.tool === 'tone') { tone.move(p); return; }
@@ -1825,6 +1832,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     up(p, e) {
       if (shapeEditor.active()) { shapeEditor.up(p, e); return; }
       if (mode.tool === 'image') { if (e.type !== 'pointercancel') images.move(p); images.end(e.type === 'pointercancel'); return; }
+      if (mode.tool === 'mark') { if (e.type !== 'pointercancel') marks.move(p); marks.up(e.type === 'pointercancel'); return; }
       if (mode.tool === 'selection') { selection.up(p, e); return; }
       if (mode.tool === 'pixels') { pixels.up(p, e); return; }
       if (mode.tool === 'tone') { tone.up(p, e.type === 'pointercancel'); return; }
@@ -1876,6 +1884,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     overlay(g, s) {
       if (shapeEditor.active()) { shapeEditor.overlay(g, s); return; }
       if (mode.tool === 'image') { images.overlay(g, s); return; }
+      if (mode.tool === 'mark') { marks.overlay(g, s); return; }
       if (mode.tool === 'selection') { selection.overlay(g, s); return; }
       if (mode.tool === 'pixels') { pixels.overlay(g, s); return; }
       if (mode.tool === 'tone') { tone.overlay(g, s); return; }

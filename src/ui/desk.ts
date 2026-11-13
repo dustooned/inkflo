@@ -12,6 +12,7 @@ import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
 import { glyphEl, icon } from './icons';
 import { openManual } from './manual';
+import { MARK_EVENT } from '../render/marks';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
 import { h, slider, toast } from './dom';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
@@ -581,6 +582,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     void readClipboard(text, files).then((clip) => pasteNow(clip, at));
   };
   window.addEventListener('copy', onCopy);
+  const onMarks = () => ctx.request();
+  window.addEventListener(MARK_EVENT, onMarks);
   window.addEventListener('paste', onPaste);
 
   function openCanvasMenu(p: Pt, x: number, y: number): void {
@@ -1045,6 +1048,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     closePopover();
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('copy', onCopy);
+    window.removeEventListener(MARK_EVENT, onMarks);
     window.removeEventListener('paste', onPaste);
     window.removeEventListener('keyup', onKeyUp);
     mode.dispose?.();
