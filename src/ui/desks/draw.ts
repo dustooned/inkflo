@@ -1,5 +1,5 @@
 import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
-import { DEFAULT_BRUSH, entry, PASS_STYLE, type BrushEntry } from '../../draw/brushes';
+import { DEFAULT_BRUSH, entry, PASS_STYLE, withGPenPressure, type BrushEntry, type GPenPressure } from '../../draw/brushes';
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
 import { smoothStroke } from '../../engine/brush/smoothing';
@@ -49,6 +49,7 @@ interface InkPrefs {
   brush: Record<LinePass, string>;
   vectorBrush?: string;
   vectorStabilize?: number;
+  gPenPressure?: GPenPressure;
   symmetry?: SymmetryMode;
   sizes: Record<string, number>;
   opacity: Record<string, number>;
@@ -82,6 +83,7 @@ function readInk(): InkPrefs {
       ...structuredClone(INK_DEFAULTS),
       ...v,
       brush: { ...INK_DEFAULTS.brush, ...v.brush },
+      gPenPressure: v.gPenPressure === 'light' || v.gPenPressure === 'firm' ? v.gPenPressure : 'balanced',
       sizes: v.sizes && typeof v.sizes === 'object' ? v.sizes : {},
       symmetry: ['vertical', 'horizontal', 'quadrant', 'radial'].some((mode) => mode === v.symmetry) ? v.symmetry : 'off',
       opacity: v.opacity && typeof v.opacity === 'object' ? v.opacity : {},
@@ -232,7 +234,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const vectorErase = () => mode.tool === 'eraser' && variantOf(mode, 'eraser') === 'vector';
   const currentBrush = (t: LinePass): BrushEntry => {
     const e = entry(mode.tool === 'vpen' ? ink.vectorBrush ?? '2dope-vector-ink' : ink.brush[t]);
-    return e ?? entry(DEFAULT_BRUSH[t])!;
+    return withGPenPressure(e ?? entry(DEFAULT_BRUSH[t])!, ink.gPenPressure ?? 'balanced');
   };
   const brushKey = (t: SizedTool) => t === 'eraser' ? 'eraser' : (mode.tool === 'vpen' ? 'vector' : t) + ':' + currentBrush(t).id;
   const sizeIn = (t: SizedTool) => {
@@ -312,6 +314,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       active: active()?.layer.id ?? null,
       target,
       scope: layerScope,
+      art,
       contextGroup: contextGroup()?.id ?? null,
       view: layerView,
       onTarget: setTarget,
@@ -368,7 +371,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const hint = target === 'auto' ? 'Panel under pen' : pinned ?? 'Choose a layer';
     button.title = 'Layers · ' + hint;
     button.replaceChildren(h('span', {}, 'Layers'),
-      h('small', {}, target === 'auto' ? 'Auto' : pinned ?? 'Choose layer'),
+      h('small', {}, target === 'auto' ? 'Panel under pen' : pinned ?? 'Choose layer'),
       h('span', { class: 'layer-chevron', 'aria-hidden': 'true' }, '⌄'));
   }
 
@@ -1528,6 +1531,19 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         const ruler = RULERS.find((x) => x.id === ink.ruler.kind)!;
         const rb = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', title: 'Rulers: straight, parallel, radial, perspective' }, ruler.id === 'off' ? 'Rulers ▾' : `Ruler · ${ruler.label} ▾`);
         rb.addEventListener('click', () => rulerMenu(rb));
+        if (currentBrush(bt).id === 'g-pen') {
+          const pressure = h('button', { class: 'btn', type: 'button', 'aria-label': 'G-pen pressure', 'aria-haspopup': 'dialog' }, 'Pressure ▾');
+          pressure.onclick = () => popover(pressure, h('div', {},
+            h('h4', {}, 'G-pen pressure'),
+            seg<GPenPressure>([{ id: 'light', label: 'Light touch' }, { id: 'balanced', label: 'Balanced' }, { id: 'firm', label: 'Firm' }], ink.gPenPressure ?? 'balanced', (response) => {
+              ink.gPenPressure = response;
+              saveInk();
+              closePopover();
+              pressure.focus();
+            }, 'Pressure response'),
+          ), 'below', 'G-pen pressure');
+          bar.append(pressure);
+        }
         bar.append(stroke, rb);
       }
       if (mode.tool === 'lines') {

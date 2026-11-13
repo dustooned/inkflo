@@ -447,6 +447,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       }
     },
     layoutPreview: () => placement.preview() ?? preview,
+    viewBleed: () => mode.tool === 'place' && placement.showBleed(),
     overlay(g, s) {
       const ps = displayPanels();
       const grid = page.grid ?? book.fixedGrid;

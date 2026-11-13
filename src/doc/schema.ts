@@ -483,6 +483,7 @@ function letterOf(v: unknown, path: string): Letter {
   if (o.speaker !== undefined) l.speaker = str(o.speaker, `${path}.speaker`);
   if (o.smallOk === true) l.smallOk = true;
   if (o.generated === true) l.generated = true;
+  if (o.keptScriptLine !== undefined) l.keptScriptLine = str(o.keptScriptLine, path + '.keptScriptLine');
   return l;
 }
 

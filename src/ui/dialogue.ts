@@ -1,5 +1,5 @@
 import { newId, sheetOf, type Beat } from '../doc/model';
-import { assignDialoguePanel, assignDialoguePreset, bindDialogue, dialoguePanel, letterForLine, parseLine, reconcileDialogue, speakerKey, speakers } from '../geom/lettering';
+import { assignDialoguePanel, assignDialoguePreset, bindDialogue, dialoguePanel, letterForLine, parseLine, reconcileDialogue, scriptRevision, speakerKey, speakers } from '../geom/lettering';
 import type { DeskCtx } from './desk';
 import { h } from './dom';
 
@@ -48,7 +48,7 @@ export function openDialogue(ctx: DeskCtx, onLocate?: (id: string) => void): voi
       });
       const updateRow = () => {
         const l = letterForLine(page, beat, i);
-        status.textContent = line?.omit ? 'Skipped' : l ? 'Lettered' : panel ? 'Panel ' + (panel.index + 1) : 'Needs a panel';
+        status.textContent = line?.omit ? 'Skipped' : l ? scriptRevision(page, l) ? 'Wording to review' : 'Lettered' : panel ? 'Panel ' + (panel.index + 1) : 'Needs a panel';
         locate.hidden = !l || !onLocate;
       };
       updateRow();

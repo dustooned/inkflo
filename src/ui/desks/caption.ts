@@ -6,13 +6,14 @@ import { applyStyle, captureStyle } from '../../engine/lettering/styles';
 import { LETTER_SIZES, TAIL_JOINS, type BalloonStyle, type CaptionSpec, type LetterSize, type TailJoin } from '../../engine/lettering/spec';
 import { panelAt } from '../../geom/carve';
 import { balloonGroup, balloonPaintOrder, captionGroups, firstBalloon } from '../../geom/captiongroup';
-import { assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
+import { applyScriptWording, assignDialoguePanel, assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, scriptRevision, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
 import { applyFix, letterPt, readabilityAll, safeFixes, snapScale, targetsFor, type FixId, type Level } from '../../geom/readability';
 import { hitLetter, letterBodyBox, letterBodyOutline } from '../../render/caption';
 import { boxHandles, resizeBox, rotateAround, type Bounds, type ResizeSide } from '../../geom/resizebox';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { askText, h, seg, toast } from '../dom';
 import { openDialogue } from '../dialogue';
+import { closePopover, popover } from '../popover';
 import { openStyleSheet } from '../stylesheet';
 
 type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
@@ -46,6 +47,9 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   reconcileDialogue(book, page, ctx.panels());
   if (JSON.stringify([page.beats, page.balloons]) !== prior) studio.saver.markDirty();
   let selId: string | null = null;
+  let moveGroup = false;
+  let reviewOpen = false;
+  let addAt: Pt | null = null;
   let drag: { id: string; grab: Grab; start: Pt; orig: CaptionSpec; before: Letter[]; beforeBeats: string; moved: boolean } | null = null;
   let loop: Pt[] | null = null;
   let downAt: Pt | null = null;
@@ -73,10 +77,16 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   /** One undo step over lettering and (linked) script lines. */
   const commit = (label: string, beforeLetters: Letter[], beforeBeats: string) => {
     const previous = new Map(beforeLetters.map((l) => [l.id, l]));
+    const before = { ...page, balloons: beforeLetters };
     for (const l of page.balloons) {
       const original = previous.get(l.id);
       if (l.generated && original && (l.rotation !== original.rotation || JSON.stringify(l.cap) !== JSON.stringify(original.cap))) delete l.generated;
-      syncScriptFromLetter(page, l);
+      if (!l.src || l.keptScriptLine !== undefined) continue;
+      if (original && original.src?.beat === l.src.beat && (original.src.lineId ?? original.src.line) === (l.src.lineId ?? l.src.line) && scriptRevision(before, original)) continue;
+      const oldGroup = original ? balloonGroup(beforeLetters, original) : [];
+      const group = groupOf(l);
+      if (!original || original.speaker !== l.speaker || JSON.stringify(original.src) !== JSON.stringify(l.src)
+        || group.length !== oldGroup.length || group.some((part, i) => part.cap.text !== oldGroup[i]?.cap.text)) syncScriptFromLetter(page, l);
     }
     const was = { balloons: structuredClone(beforeLetters), beats: JSON.parse(beforeBeats) as typeof page.beats };
     const now = { balloons: structuredClone(page.balloons), beats: structuredClone(page.beats) };
@@ -172,6 +182,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const t = page.balloons.find((x) => x.id === l.id)!;
       t.cap = { ...t.cap, text: fresh.cap.text };
       t.src = fresh.src;
+      delete t.keptScriptLine;
       if (fresh.speaker) t.speaker = fresh.speaker;
       else delete t.speaker;
     });
@@ -185,7 +196,71 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   };
   const openScript = () => openDialogue(ctx, selectLetter);
 
-  function addContinuation(l: Letter, splitAt?: number): void {
+  function showRevisions(trigger: HTMLElement): void {
+    reviewOpen = true;
+    const next = page.balloons.find((l) => scriptRevision(page, l));
+    ctx.openInspector(trigger);
+    if (next) selectLetter(next.id);
+    else ctx.chrome();
+    ctx.stage.closest('.screen')?.querySelector<HTMLElement>('.script-revisions')?.focus({ preventScroll: true });
+  }
+
+  function revisionPanel(): HTMLElement {
+    const items = page.balloons.flatMap((l) => {
+      const revision = scriptRevision(page, l);
+      return revision ? [{ l, revision }] : [];
+    });
+    const panels = ctx.panels();
+    const list = h('div', { class: 'sec script-revisions', tabindex: '-1', 'aria-label': 'Script revisions', role: 'region' },
+      h('h4', {}, 'Script revisions'),
+      h('button', { class: 'btn', type: 'button', onclick: () => {
+        reviewOpen = false;
+        ctx.chrome();
+        ctx.stage.closest('.screen')?.querySelector<HTMLElement>('[data-review-script]')?.focus();
+      } }, 'Done'),
+    );
+    for (const { l, revision } of items) {
+      const beat = page.beats.find((b) => b.id === l.src!.beat)!;
+      const index = sourceIndex(beat, l.src!);
+      const intended = dialoguePanel(page, panels, beat, index);
+      const current = panelAt(panels, centreIn(l));
+      const panel = h('select', { 'aria-label': 'Move revised dialogue to panel' },
+        h('option', { value: '' }, 'Choose panel'),
+        panels.map((item) => h('option', { value: item.index }, 'Panel ' + (item.index + 1))),
+      );
+      panel.addEventListener('change', () => {
+        const destination = panel.value === '' ? undefined : panels[Number(panel.value)];
+        if (!destination) return;
+        selId = l.id;
+        edit('Move revised dialogue', () => assignDialoguePanel(page, panels, beat, index, destination));
+      });
+      const decide = (label: string, fn: () => void) => h('button', { class: 'btn', type: 'button', onclick: () => {
+        selId = l.id;
+        edit(label, fn);
+        ctx.stage.closest('.screen')?.querySelector<HTMLElement>('.script-revisions')?.focus({ preventScroll: true });
+      } }, label);
+      list.append(h('article', { class: 'script-revision' },
+        h('button', { class: 'btn', type: 'button', 'aria-pressed': String(selId === l.id), onclick: () => {
+          selectLetter(l.id);
+          ctx.stage.closest('.screen')?.querySelector<HTMLElement>('.script-revisions')?.focus({ preventScroll: true });
+        } }, 'Select balloon · ' + (current ? 'Panel ' + (current.index + 1) : 'Page')),
+        h('dl', {},
+          h('dt', {}, 'Current lettering'), h('dd', {}, (l.speaker ? l.speaker + ': ' : '') + revision.current),
+          h('dt', {}, 'Revised script'), h('dd', {}, (revision.next.speaker ? revision.next.speaker + ': ' : '') + revision.next.text),
+        ),
+        h('div', { class: 'script-revision-actions' },
+          decide('Apply wording', () => { applyScriptWording(page, l); }),
+          decide('Keep current lettering', () => { l.keptScriptLine = revision.raw; }),
+        ),
+        panels.length ? h('label', { class: 'field' }, intended ? 'Script panel ' + (intended.index + 1) : 'Script panel', panel) : null,
+      ));
+    }
+    if (!items.length) list.append(h('p', { class: 'note', role: 'status' }, 'All script revisions reviewed.'));
+    return list;
+  }
+
+
+  function addContinuation(l: Letter, splitAt?: number, join: NonNullable<Letter['continuation']>['join'] = 'merge'): void {
     if (l.cap.style === 'sfx') return;
     const b = box(l);
     const root = rootOf(l);
@@ -196,7 +271,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     const top = (panel?.bbox.y0 ?? 0) * PT;
     const y = b.y1 + 9 < bottom - 8 ? b.y1 + 9 : Math.max(top + 8, b.y0 - 9);
     const text = splitAt === undefined ? '' : l.cap.text.slice(splitAt).trimStart();
-    const part: Letter = { id: newId('letter'), continuation: { after: l.id, join: 'merge' },
+    const part: Letter = { id: newId('letter'), continuation: { after: l.id, join },
       cap: { ...cap, x: l.cap.x, y, text, minSize: [width / 2, 11], tails: [] } };
     edit('Add continuation balloon', () => {
       delete root.generated;
@@ -209,6 +284,27 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     ctx.stage.closest('.screen')?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Words"]')?.focus();
   }
 
+  function addTail(l: Letter): void {
+    if (l.cap.tails.length >= 4) return;
+    edit('Add tail', () => {
+      const { cap } = l;
+      l.cap = { ...cap, tails: [...cap.tails, { x: cap.x + 30 * (cap.tails.length % 2 ? -1 : 1), y: cap.y + 60, join: cap.style === 'thought' ? 'bubbles' : 'merged', width: 1.2 }] };
+    });
+  }
+
+  function openAddMenu(l: Letter, anchor: HTMLElement, onClose?: () => void): void {
+    const item = (label: string, run: () => void, disabled = false) => h('button', { class: 'item', type: 'button', disabled, onclick: () => {
+      closePopover();
+      run();
+    } }, label);
+    popover(anchor, h('div', {},
+      item('Joined balloon', () => addContinuation(l)),
+      item('Balloon underneath', () => addContinuation(l, undefined, 'stack')),
+      item('Separate balloon in group', () => addContinuation(l, undefined, 'separate')),
+      item('Add tail', () => addTail(l), l.cap.tails.length >= 4),
+    ), 'below', 'Add to caption', onClose);
+  }
+
   function removeLetter(l: Letter): void {
     const group = groupOf(l);
     const replacement = l.continuation?.after ?? group[1]?.id;
@@ -217,6 +313,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       delete first.continuation;
       first.src = l.src;
       first.speaker = l.speaker;
+      first.keptScriptLine = l.keptScriptLine;
     } else if (!l.continuation) omitDialogue(page, l);
     for (const part of group) {
       if (part.continuation?.after === l.id && replacement) part.continuation.after = replacement;
@@ -294,7 +391,10 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           return h('option', { value: l.id, selected: l.id === selId }, (panel ? 'Panel ' + (panel.index + 1) : 'Page') + ' · ' + (words || 'Balloon ' + (index + 1)));
         }));
       find.addEventListener('change', () => selectLetter(find.value || null));
+      const revisions = page.balloons.filter((l) => scriptRevision(page, l)).length;
       bar.append(
+        h('button', { class: 'btn', type: 'button', 'data-review-script': '', 'aria-expanded': String(reviewOpen),
+          onclick: (e) => showRevisions(e.currentTarget as HTMLElement) }, 'Review script changes' + (revisions ? ' · ' + revisions : '')),
         h('button', { class: 'btn document-option', type: 'button', onclick: openScript }, 'Script dialogue'),
         h('button', { class: 'btn primary', type: 'button', disabled: !left, onclick: () => edit('Place script lettering', () => reconcileDialogue(book, page, panels, true)) }, 'Place from script' + (left ? ' · ' + left : '')),
         ...(page.balloons.length ? [find] : []),
@@ -310,6 +410,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     inspector(el) {
       const l = sel();
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Caption'), h('div', { class: 'ins-title' }, l ? KIND_LABEL[l.cap.style] ?? 'Balloon' : `${page.balloons.length} balloon${page.balloons.length === 1 ? '' : 's'}`)));
+      if (reviewOpen) el.append(revisionPanel());
       if (l) inspectLetter(el, l);
       else inspectPage(el);
       if (l) el.append(presetControls(l));
@@ -327,7 +428,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         const k = ctx.scale() / PT;
         const r = (e.pointerType === 'touch' ? 14 : 9) / k;
         const distance = (a: Pt) => Math.hypot(a.x - q.x, a.y - q.y);
-        if (s.cap.style !== 'sfx' && distance(plusAt(s, k)) <= 12 / k) { addContinuation(s); return; }
+        if (s.cap.style !== 'sfx' && distance(plusAt(s, k)) <= (e.pointerType === 'touch' ? 19 : 12) / k) { addAt = p; return; }
         const start = () => {
           studio.drawing = true;
           return { start: q, orig: structuredClone(s.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
@@ -361,7 +462,6 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         }
         drag = { id: hit.id, grab: { kind: 'body' }, start: q, orig: structuredClone(hit.cap), before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats), moved: false };
         studio.drawing = true;
-        ctx.chrome();
         return;
       }
       if (mode.tool === 'select') {
@@ -400,7 +500,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           if (part.id === l.id) continue;
           const previous = drag.before.find((b) => b.id === part.id);
           if (!previous) continue;
-          part.cap = e.shiftKey ? { ...previous.cap, x: previous.cap.x + dxGroup, y: previous.cap.y + dyGroup,
+          part.cap = moveGroup || e.shiftKey ? { ...previous.cap, x: previous.cap.x + dxGroup, y: previous.cap.y + dyGroup,
             links: previous.cap.links?.map((k) => ({ ...k, x: k.x + dxGroup, y: k.y + dyGroup })) } : previous.cap;
         }
       } else if (drag.grab.kind === 'tail') {
@@ -436,7 +536,21 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       }
     },
     up(p, e) {
-      if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
+      if (e.type === 'pointercancel') { addAt = null; cancelDrag(); ctx.chrome(); return; }
+      if (addAt) {
+        const at = addAt;
+        addAt = null;
+        const l = sel();
+        if (l && Math.hypot(p.x - at.x, p.y - at.y) * ctx.scale() <= 18) {
+          const anchor = h('span', { class: 'caption-menu-anchor', style: 'left:' + e.clientX + 'px;top:' + e.clientY + 'px' });
+          ctx.stage.append(anchor);
+          openAddMenu(l, anchor, () => {
+            anchor.remove();
+            ctx.stage.closest('.screen')?.querySelector<HTMLElement>('[data-add-caption]')?.focus({ preventScroll: true });
+          });
+        }
+        return;
+      }
       if (loop) {
         const pts = [...loop, p];
         loop = null;
@@ -480,6 +594,16 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       }
       const l = sel();
       if (l && mode.tool !== 'draw-balloon') {
+        if (moveGroup) {
+          g.strokeStyle = '#2F6F7E';
+          g.setLineDash([5, 3]);
+          for (const part of groupOf(l)) {
+            if (part === l) continue;
+            const b = box(part);
+            g.strokeRect(b.x0 * k, b.y0 * k, (b.x1 - b.x0) * k, (b.y1 - b.y0) * k);
+          }
+          g.setLineDash([]);
+        }
         g.strokeStyle = '#B8432F';
         g.lineWidth = 1.5;
         g.beginPath();
@@ -615,16 +739,26 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         group.length > 1 ? seg(group.map((part, i) => ({ id: part.id, label: String(i + 1) })), l.id, selectLetter, 'Select balloon in group') : null,
         join ? seg([{ id: 'merge', label: 'Merge' }, { id: 'stack', label: 'Underneath' }, { id: 'separate', label: 'Separate' }], join.join,
           (v) => edit('Set balloon connection', () => { join.join = v; }), 'Balloon connection') : null,
-        c.style !== 'sfx' ? h('button', { class: 'btn', type: 'button', onclick: () => addContinuation(l) }, '+ Add balloon') : null,
-        group.length > 1 ? h('p', { class: 'note' }, 'Shift-drag a balloon to move the whole group.') : null,
+        c.style !== 'sfx' ? h('button', { class: 'btn', type: 'button', 'data-add-caption': '', 'aria-haspopup': 'dialog', onclick: (e) => openAddMenu(l, e.currentTarget as HTMLElement) }, '+ Add to caption') : null,
+        group.length > 1 ? h('button', { class: 'btn', type: 'button', 'aria-pressed': String(moveGroup), onclick: (e) => { moveGroup = !moveGroup; (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(moveGroup)); ctx.request(); } }, 'Move whole group') : null,
       ));
     }
-    el.append(sec('Words', text,
+    const beat = page.beats[beatIdx];
+    const lineIndex = beat && root.src ? sourceIndex(beat, root.src) : -1;
+    const panels = ctx.panels();
+    const destination = beat && lineIndex >= 0 ? h('select', { 'aria-label': 'Assign dialogue to panel' },
+      h('option', { value: '' }, 'Follow script order'),
+      panels.map((item) => h('option', { value: item.index, selected: !!beat.dialogue?.[lineIndex]?.panel && panel === item }, 'Panel ' + (item.index + 1))),
+    ) : null;
+    destination?.addEventListener('change', () => edit('Assign dialogue to panel', () => {
+      assignDialoguePanel(page, panels, beat!, lineIndex, destination.value === '' ? null : panels[Number(destination.value)] ?? null);
+    }));
+    el.append(sec('Words', text, destination ? h('label', { class: 'field' }, 'Script panel', destination) : null,
       c.style !== 'sfx' ? splitButton : null,
       h('p', { class: 'note' }, beatIdx >= 0 ? `Beat ${beatIdx + 1}, line ${root.src!.line + 1}${panel ? ' · Panel ' + (panel.index + 1) : ''}. Text edits update the script.` : 'Free text.'),
       h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
         l.src && group.length === 1 ? h('button', { class: 'btn', type: 'button', onclick: () => cycleLine(l) }, 'Next line') : null,
-        l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => { omitDialogue(page, l); delete l.src; delete l.generated; }) }, 'Unlink') : null,
+        l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => { omitDialogue(page, l); delete l.src; delete l.generated; delete l.keptScriptLine; }) }, 'Unlink') : null,
         h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete balloon', () => removeLetter(l)); selId = null; ctx.chrome(); } }, 'Delete'))));
 
     // Speaker and character style
@@ -720,7 +854,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           return h('div', { style: 'display:flex;gap:6px;align-items:center' }, h('span', { class: 'hint' }, `Tail ${i + 1}`), join,
             h('button', { class: 'btn', type: 'button', 'aria-label': `Remove tail ${i + 1}`, onclick: () => editCap('Remove tail', (x) => ({ ...x, tails: x.tails.filter((_, k) => k !== i) })) }, '✕'));
         }),
-        c.tails.length < 4 ? h('button', { class: 'btn', type: 'button', onclick: () => editCap('Add tail', (x) => ({ ...x, tails: [...x.tails, { x: x.x + 30 * (x.tails.length % 2 ? -1 : 1), y: x.y + 60, join: x.style === 'thought' ? 'bubbles' : 'merged', width: 1.2 }] })) }, '+ Add tail') : null,
+        c.tails.length < 4 ? h('button', { class: 'btn', type: 'button', onclick: () => addTail(l) }, '+ Add tail') : null,
         h('p', { class: 'note' }, 'Drag a yellow dot on the page to aim its tail at the speaker.')));
     }
 

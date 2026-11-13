@@ -79,6 +79,8 @@ export interface Letter {
   src?: { beat: string; line: number; lineId?: string };
   /** Starter lettering may be repositioned or removed automatically until refined. */
   generated?: boolean;
+  /** Script text last reviewed and deliberately kept separate from this balloon's wording. */
+  keptScriptLine?: string;
   /** Who speaks (from "MAYA: …"), for character styles and renames. */
   speaker?: string;
   /** Small on purpose (whispers, background chatter): the readability guard leaves it alone. */

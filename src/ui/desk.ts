@@ -2,6 +2,7 @@ import type { Studio } from '../app/studio';
 import { sheetOf, STAGES, type Book, type LayerType, type Page, type Pass, type PlacedImage, type Pt, type Stage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { derivePanels, type Panel } from '../geom/carve';
+import { printOf } from '../geom/printkinds';
 import { syncGroups } from '../geom/groups';
 import { renderPage } from '../render/page';
 import { anchorCanvasView, bearing, canvasGeometry, clampZoom, HOME_VIEW, MAX_ZOOM, midpoint, MIN_ZOOM, normalizeAngle } from './canvasview';
@@ -52,6 +53,7 @@ export interface DeskCtx {
   request(): void;
   /** Rebuild the rail, context bar and inspector. */
   chrome(): void;
+  openInspector(trigger?: HTMLElement): void;
   /** Page inches → CSS px on the stage, and back. */
   scale(): number;
   toPage(e: { clientX: number; clientY: number }): Pt;
@@ -83,6 +85,7 @@ export interface DeskMode {
   overlay?(g: CanvasRenderingContext2D, s: number): void;
   live?(): Partial<Record<Pass, HTMLCanvasElement>>;
   placement?(): { id: string; image: PlacedImage } | undefined;
+  viewBleed?(): boolean;
   layoutPreview?(): { page: Page; panels: Panel[] } | undefined;
   types?(): Partial<Record<LayerType, boolean>>;
   skipBalloon?(): string | undefined;
@@ -171,6 +174,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       if (!raf) raf = requestAnimationFrame(draw);
     },
     chrome: () => chrome(),
+    openInspector: (trigger) => { if (!screen.classList.contains('insp-open')) toggleInspector(trigger); },
     scale: () => geom().s,
     toPage: (e) => geom().toPage(local({ x: e.clientX, y: e.clientY })),
     toPageDirection: (vector) => {
@@ -231,7 +235,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       pageG.resetTransform(); pageG.clearRect(0, 0, w, hgt);
     }
     pageTransform(pageG);
-    renderPage(pageG, shownPage, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    renderPage(pageG, shownPage, art, { scale: s, bleed: mode.viewBleed?.() ? printOf(book).bleed : 0, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
     if (transparent) {
       g.resetTransform(); g.drawImage(paper, 0, 0);
       pageTransform(g);

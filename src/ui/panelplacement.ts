@@ -1,18 +1,19 @@
 import type { PanelTransform, Pt } from '../doc/model';
 import { composeMatrix, IDENTITY_MATRIX, isUnmoved } from '../draw/pixeltransform';
 import { IDENTITY, invert, matrixFor } from '../engine/core/selxform';
-import { derivePanels, layoutOf, panelAt, panelStack, type Panel } from '../geom/carve';
+import { derivePanels, layoutOf, pointInPoly, panelStack, type Panel } from '../geom/carve';
 import { anchorFor } from '../geom/groups';
 import { printOf } from '../geom/printkinds';
 import type { Bounds } from '../geom/resizebox';
 import { panelPath } from '../render/page';
 import type { DeskCtx } from './desk';
-import { h } from './dom';
+import { h, seg } from './dom';
 import { drawSelectionFrame, grabSelection, selectionCenter, selectionTransform, type SelectionGrab } from './selectiongesture';
 
 export function panelPlacement(ctx: DeskCtx, selected: () => number | null, select: (index: number | null) => void) {
   const { page, studio } = ctx;
   let resizeAll = false;
+  let guides = true;
   let drag: { panels: Panel[]; bounds: Bounds; from: Pt; grab: SelectionGrab; all: boolean } | null = null;
   let draft: { page: typeof page; panels: Panel[] } | undefined;
   const transforms = () => layoutOf(page).panelTransforms ?? [];
@@ -62,14 +63,16 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
       if (resizeAll) {
         const panels = panelStack(ctx.panels());
         const bounds = panelBounds(panels);
-        const grab = bounds && grabSelection(bounds, p, ctx.scale(), touch, false);
+        const grab = bounds && grabSelection(bounds, p, ctx.scale(), touch, false, touch ? 19 : 10);
         if (bounds && grab?.kind === 'resize') drag = { panels, bounds, from: p, grab, all: true };
         return;
       }
       const panel = current();
-      const grab = panel && grabSelection(panel.bbox, p, ctx.scale(), touch);
+      const grab = panel && grabSelection(panel.bbox, p, ctx.scale(), touch, true, touch ? 19 : 10);
       if (panel && grab && grab.kind !== 'move') { drag = { panels: [panel], bounds: panel.bbox, from: p, grab, all: false }; return; }
-      const hit = panelAt(ctx.panels(), p);
+      const hits = panelStack(ctx.panels()).reverse().filter((item) => pointInPoly(p, item.pts));
+      const index = e.altKey ? hits.findIndex((item) => item === panel) + 1 : 0;
+      const hit = hits.length ? hits[index % hits.length] : undefined;
       select(hit?.index ?? null);
       if (hit) drag = { panels: [hit], bounds: hit.bbox, from: p, grab: { kind: 'move' }, all: false };
     },
@@ -82,39 +85,45 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
       if (layout && e.type !== 'pointercancel') commit(layout, all ? 'Resize all panels' : 'Transform panel');
       else ctx.chrome();
     },
+    showBleed: () => guides && !!draft,
     overlay(g: CanvasRenderingContext2D, s: number, panel: Panel | null) {
       const bleed = printOf(studio.book!).bleed * s;
       g.save();
       g.strokeStyle = '#2f7fd8'; g.lineWidth = 1.5; g.setLineDash([5, 4]);
-      if (bleed > 0) {
+      if (guides) {
+        g.strokeStyle = '#bb5a3d';
+        g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
+      }
+      g.strokeStyle = '#2f7fd8';
+      if (guides && bleed > 0) {
         g.globalAlpha = 0.65;
         g.strokeRect(-bleed, -bleed, page.widthIn * s + 2 * bleed, page.heightIn * s + 2 * bleed);
         g.globalAlpha = 1;
       }
       if (resizeAll) {
         const bounds = panelBounds(draft?.panels ?? ctx.panels());
-        if (bounds) drawSelectionFrame(g, bounds, s, undefined, false);
+        if (bounds) drawSelectionFrame(g, bounds, s, undefined, false, 6);
       } else if (panel) {
         g.stroke(panelPath(panel.pts, s));
-        drawSelectionFrame(g, panel.bbox, s);
+        drawSelectionFrame(g, panel.bbox, s, undefined, true, 6);
       }
       g.restore();
     },
     controls() {
-      const toggle = h('button', {
-        class: 'btn', type: 'button', 'aria-pressed': String(resizeAll),
-        title: resizeAll ? 'Drag an outer edge or corner. Shift keeps proportions.' : 'Resize every panel on this page together',
-        onclick: () => {
-          clear();
-          resizeAll = !resizeAll;
-          const row = toggle.parentElement;
-          ctx.chrome();
-          row?.querySelector<HTMLElement>('[data-resize-all]')?.focus();
-          ctx.request();
-        },
-        'data-resize-all': '',
-      }, 'Resize all panels');
-      if (resizeAll) return [toggle, h('span', { class: 'hint' }, 'Drag an outer edge or corner. Shift keeps proportions.')];
+      const scope = seg([{ id: 'one', label: 'One panel' }, { id: 'all', label: 'All panels' }], resizeAll ? 'all' : 'one', (value) => {
+        clear();
+        resizeAll = value === 'all';
+        const row = scope.parentElement;
+        ctx.chrome();
+        row?.querySelector<HTMLElement>('[aria-label="Transform scope"] [aria-pressed="true"]')?.focus();
+        ctx.request();
+      }, 'Transform scope');
+      const preview = h('button', { class: 'btn', type: 'button', 'aria-pressed': String(guides), onclick: () => {
+        guides = !guides;
+        preview.setAttribute('aria-pressed', String(guides));
+        ctx.request();
+      } }, 'Trim & bleed');
+      if (resizeAll) return [scope, preview, h('span', { class: 'hint' }, 'Drag an outer edge or corner. Shift keeps proportions.')];
       const panel = current();
       const order = (front: boolean) => {
         if (!panel) return;
@@ -128,7 +137,7 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
       picker.value = panel ? String(panel.index) : '';
       picker.onchange = () => { select(picker.value === '' ? null : Number(picker.value)); ctx.chrome(); ctx.request(); };
       return [
-        toggle, picker,
+        scope, preview, picker,
         h('button', { class: 'btn', type: 'button', disabled: !panel, onclick: () => order(true) }, 'Bring to front'),
         h('button', { class: 'btn', type: 'button', disabled: !panel?.transform, title: 'Behind the other transformed panels', onclick: () => order(false) }, 'Send to back'),
         h('button', { class: 'btn', type: 'button', disabled: !panel, onclick: () => {
@@ -138,7 +147,7 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
           commitPanel(panel, placement(panel, m), 'Rotate panel');
         } }, 'Rotate 90°'),
         h('button', { class: 'btn', type: 'button', disabled: !panel?.transform, onclick: () => { if (panel) commitPanel(panel, null, 'Reset panel placement'); } }, 'Reset placement'),
-        h('span', { class: 'hint' }, 'Drag a panel, a side, or a corner. Use the round handle to rotate.'),
+        h('span', { class: 'hint' }, 'Drag to move or resize. Alt-click cycles overlapping panels.'),
       ];
     },
   };

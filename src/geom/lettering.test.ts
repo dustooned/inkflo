@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SHEET, newBook, newPage, PT, type Book, type Letter, type Page } from '../doc/model';
 import { derivePanels, panelAt, presetCuts } from './carve';
-import { assignDialoguePanel, bindDialogue, centreIn, dialogueText, letterForLine, lineFor, linesFromDialogueText, newLetter, nextFreeLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, renameSpeaker, replaceDialogue, speakers, syncLettersFromScript, syncScriptFromLetter, withCharacterStyle } from './lettering';
+import { applyScriptWording, assignDialoguePanel, bindDialogue, centreIn, dialogueText, letterForLine, lineFor, linesFromDialogueText, newLetter, nextFreeLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, scriptRevision, renameSpeaker, replaceDialogue, speakers, syncLettersFromScript, syncScriptFromLetter, withCharacterStyle } from './lettering';
 import { preflightPage } from './preflight';
 import { applyFix, contrast, readability, readabilityAll, safeFixes, snapScale, TARGETS } from './readability';
 import { comicInfo } from '../io/exports';
@@ -88,7 +88,27 @@ describe('script ↔ lettering sync', () => {
     expect(p.balloons).toHaveLength(9);
     a.lines[1] = 'JO: Revised.';
     reconcileDialogue(book, p, derivePanels(p));
-    expect(manual.cap.text).toBe('Revised.');
+    expect(manual.cap.text).toBe('Two.');
+    expect(scriptRevision(p, manual)?.next.text).toBe('Revised.');
+    const old = structuredClone(manual.cap);
+    expect(applyScriptWording(p, manual)).toBe(true);
+    expect(manual.cap).toEqual({ ...old, text: 'Revised.' });
+  });
+
+  it('keeps a reviewed script revision until the line changes again', () => {
+    const p = page();
+    const book = bookWith(p);
+    const a = p.beats[0]!;
+    const l = at(book, p, 1, 1, 'a', 0);
+    p.balloons.push(l);
+    a.lines[0] = 'MAYA: Revised.';
+    l.keptScriptLine = scriptRevision(p, l)!.raw;
+    reconcileDialogue(book, p, derivePanels(p));
+    expect(scriptRevision(p, l)).toBeUndefined();
+    expect(l.cap.text).toBe('One.');
+    a.lines[0] = 'MAYA: Revised again.';
+    reconcileDialogue(book, p, derivePanels(p));
+    expect(scriptRevision(p, l)?.next.text).toBe('Revised again.');
   });
 
   it('moves a balloon when reassigned, and keeps a skipped line from coming back', () => {

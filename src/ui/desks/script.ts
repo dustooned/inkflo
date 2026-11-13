@@ -18,8 +18,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
   }
 
   /**
-   * Edit beats live while typing; one undo step per finished edit. Balloons linked to a line take
-   * its new words in the same step (script ↔ lettering stay in sync).
+   * Edit beats live while typing, with one undo step per finished edit. Caption reviews changes to linked wording.
    */
   let before: { beats: Beat[]; balloons: Letter[] } | null = null;
   const begin = () => {

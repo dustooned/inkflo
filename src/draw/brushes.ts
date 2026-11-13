@@ -62,6 +62,16 @@ const G_PEN: BrushEntry = {
     id: 'g-pen', name: 'G-pen', group: 'ink', pass: 'ink', w: 0.022, note: 'Opaque ink with a responsive light touch and short pointed ends',
     settings: { ...inkBase('G-pen'), sizeDyn: dyn('pressure', 0.04, 1.08), taperStart: 6, taperEnd: 12, taperShape: 0.08, smoothing: 0.18 },
 };
+export type GPenPressure = 'light' | 'balanced' | 'firm';
+
+export function withGPenPressure(brush: BrushEntry, response: GPenPressure): BrushEntry {
+  if (brush.id !== 'g-pen' || response === 'balanced') return brush;
+  return {
+    ...brush,
+    settings: { ...brush.settings, sizeDyn: { ...brush.settings.sizeDyn, curve: response === 'light' ? 0.75 : 1.5 } },
+  };
+}
+
 const ORIGINAL_G_PEN: BrushEntry = { ...G_PEN, settings: { ...inkBase('G-pen'), sizeDyn: dyn('pressure', 0.06, 0.55), taperStart: 30, taperEnd: 40, taperShape: 0.3 } };
 const ORIGINAL_G_PEN_SNAPSHOT = snapshotId(ORIGINAL_G_PEN);
 

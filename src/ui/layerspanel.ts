@@ -1,7 +1,10 @@
 import type { Studio } from '../app/studio';
 import { LAYER_TYPES, newLayer, TYPE_DEFAULTS, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
+import type { PageArt } from '../draw/residency';
+import { drawLayerBitmap } from '../render/page';
+import { drawScreenTone } from '../render/tone';
 import type { Panel } from '../geom/carve';
-import { groupLabel, insertIndex } from '../geom/groups';
+import { groupLabel, insertIndex, panelForGroup } from '../geom/groups';
 import { askText, confirmDialog, h, seg } from './dom';
 
 /**
@@ -21,6 +24,7 @@ export interface LayersPanelOptions {
   studio: Studio;
   page: Page;
   panels: Panel[];
+  art: PageArt;
   active: string | null;
   target: LayerTarget;
   scope: LayerScope;
@@ -165,6 +169,25 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
     }
   }
 
+  function thumbnail(l: Layer, group: LayerGroup): HTMLElement {
+    const plane = o.art.planes[l.id];
+    if (!plane?.width && !l.screenTone) return h('span', { class: 'ltype', 'data-type': l.type, 'aria-hidden': 'true' }, TYPE_GLYPH[l.type]);
+    const canvas = h('canvas', { class: 'ltype layer-thumb', width: 72, height: 72, 'aria-hidden': 'true' });
+    const g = canvas.getContext('2d')!;
+    g.imageSmoothingQuality = 'high';
+    const panel = panelForGroup(panels, group);
+    const bounds = l.overFrame || !group.mask ? undefined : (panel?.source ?? panel)?.bbox;
+    const { x0, x1, y0, y1 } = bounds ?? { x0: 0, y0: 0, x1: page.widthIn, y1: page.heightIn };
+    const scale = 66 / Math.max(x1 - x0, y1 - y0);
+    g.translate((72 - (x1 + x0) * scale) / 2, (72 - (y1 + y0) * scale) / 2);
+    g.beginPath();
+    g.rect(x0 * scale, y0 * scale, (x1 - x0) * scale, (y1 - y0) * scale);
+    g.clip();
+    if (l.screenTone) drawScreenTone(g, l.screenTone, page.widthIn * scale, page.heightIn * scale, scale);
+    if (plane?.width) drawLayerBitmap(g, plane, page.widthIn * scale, page.heightIn * scale, scale, l.image);
+    return canvas;
+  }
+
   const groups = o.scope === 'all' ? page.groups : contextGroup ? [contextGroup] : [];
   const list = h('div', { class: 'layers', 'aria-label': 'Layer stack' });
   for (const g of groups) {
@@ -203,7 +226,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
           h('button', { class: 'lname layer-select', type: 'button', 'data-focus': 'layer-' + l.id, 'aria-pressed': String(on),
             title: l.image ? 'Position ' + l.name : on ? 'Use the panel under the pen' : 'Draw on ' + l.name,
             onclick: () => { if (on) o.onTarget('auto'); else o.onSelect(l.id); } },
-            h('span', { class: 'ltype', 'data-type': l.type, 'aria-hidden': 'true' }, TYPE_GLYPH[l.type]),
+            thumbnail(l, g),
             h('span', { class: 'layer-text' }, h('span', { class: 'layer-name' }, l.name), status ? h('small', {}, status) : null)),
           g.kind === 'panel' ? iconToggle(l.overFrame, '⤒', '⤓', l.overFrame ? `Put ${l.name} back inside the frame` : `Draw ${l.name} over the frame`, () => edit(l.overFrame ? 'Inside frame' : 'Over frame', withLayer(l.id, (x) => (x.overFrame = !x.overFrame)))) : null,
           iconToggle(l.locked, '🔒', '🔓', l.locked ? `Unlock ${l.name}` : `Lock ${l.name}`, () => edit(l.locked ? 'Unlock layer' : 'Lock layer', withLayer(l.id, (x) => (x.locked = !x.locked)))),
@@ -228,7 +251,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
         seg<LayerTarget>([{ id: 'auto', label: 'Panel under pen' }, { id: 'layer', label: 'Selected layer' }], o.target, o.onTarget, 'Layer targeting')),
       o.target === 'layer'
         ? h('p', { class: 'layer-target-detail', role: 'status' }, activeLayer && activeGroup ? groupName(activeGroup) + ' / ' + activeLayer.name : 'Choose a layer below.')
-        : null,
+        : h('p', { class: 'layer-target-detail', role: 'status' }, 'Each stroke follows the panel where you begin.'),
       h('div', { class: 'layer-control' }, h('span', {}, 'Show'),
         seg<LayerScope>([{ id: 'context', label: 'Context' }, { id: 'all', label: 'All layers' }], o.scope, o.onScope, 'Layer view')),
       o.scope === 'context' ? browse : null)),

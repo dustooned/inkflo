@@ -548,3 +548,15 @@ body:has(.screen:is(.focus, .simple)) .settings-card :is(button, select, input[t
 .canvas-view-options input[type="range"] { width: 100%; min-height: var(--tap); margin: 0; }
 .canvas-view-actions { display: flex; flex-wrap: wrap; gap: var(--gap); }
 .canvas-view-actions .btn { min-height: var(--tap); }
+
+.layers .layer-thumb { width: 36px; height: 36px; }
+.layer-picker .llayer, .layer-picker .lgroup { min-height: var(--tap); }
+.layer-picker .llayer .lt, .layer-picker .lgroup .lt { min-width: 36px; min-height: var(--tap); }
+
+.caption-menu-anchor { position: fixed; width: 1px; height: 1px; pointer-events: none; }
+
+.script-revision { margin-block: 8px; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.script-revision dl { margin: 8px 0; }
+.script-revision dt { font-weight: 650; }
+.script-revision dd { margin: 0 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.script-revision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }

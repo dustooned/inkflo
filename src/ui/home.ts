@@ -46,9 +46,24 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     });
     go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
   };
+  const starter = h('button', { class: 'card new', type: 'button', onclick: async () => {
+    starter.disabled = true;
+    try {
+      const response = await fetch(import.meta.env.BASE_URL + 'examples/the-last-train.inkflo');
+      if (!response.ok) throw new Error('The starter could not be loaded. Try again in a moment.');
+      const meta = await studio.importInkflo(new Uint8Array(await response.arrayBuffer()), true);
+      const book = await studio.openBook(meta.id);
+      if (starter.isConnected) go('#desk/' + book.id + '/' + book.pages[0]!.id + '/script');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 5000);
+    } finally {
+      starter.disabled = false;
+    }
+  } }, h('div', { class: 'sheet', 'aria-hidden': 'true' }, '▤'), h('h3', {}, 'Open starter comic'), h('small', {}, 'The Last Train · Two panels'));
   const grid = h('div', { class: 'books' },
     h('button', { class: 'card new', type: 'button', onclick: newBook }, h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New book'), h('small', {}, 'One page, ready to script')),
     h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
+    starter,
     books.map((b) =>
       h('button', { class: 'card', type: 'button', onclick: () => go(`#book/${b.id}`) },
         h('div', { class: 'sheet' }, cover(b.cover)),

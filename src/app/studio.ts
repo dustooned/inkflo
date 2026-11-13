@@ -1,5 +1,5 @@
 import { scalePanelTransforms } from '../geom/pagetemplates';
-import { newBook, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
+import { newBook, newId, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
 import { assetsOf, parseBookFile, readBookAssets, stringifyBookFile } from '../doc/schema';
 import { newPageArt, referencedKeys, Residency, type PageArt } from '../draw/residency';
 import { History, type Command } from '../engine/core/history';
@@ -459,12 +459,18 @@ export class Studio {
   }
 
   /** Import an `.inkflo` into the library. A book whose id is taken becomes a copy. */
-  async importInkflo(bytes: Uint8Array): Promise<BookMeta> {
+  async importInkflo(bytes: Uint8Array, asStarter = false): Promise<BookMeta> {
     const entries = await readZip(bytes);
     const json = entries.get('book.json');
     if (!json) throw new Error('This file has no book.json; it is not an inkflo book.');
     const file = parseBookFile(new TextDecoder().decode(json));
-    if (await this.store.getBook(file.book.id)) {
+    if (asStarter) {
+      const now = Date.now();
+      file.book.id = newId('bk');
+      file.book.createdAt = file.book.updatedAt = now;
+      file.book.lastPageId = file.book.pages[0]!.id;
+      file.book.lastStage = 'script';
+    } else if (await this.store.getBook(file.book.id)) {
       file.book.id = `bk${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       file.book.title = `${file.book.title} (copy)`;
     }

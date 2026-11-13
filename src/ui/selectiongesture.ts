@@ -8,8 +8,8 @@ export const selectionCorners = (a: Pt, b: Pt): Pt[] => [a, { x: b.x, y: a.y }, 
 const rotationAt = (b: Bounds, scale: number) => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / scale });
 const handles = (b: Bounds, scale: number) => boxHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
 
-export function grabSelection(b: Bounds, p: Pt, scale: number, touch: boolean, rotation = true): SelectionGrab | null {
-  const reach = (touch ? 13 : 8) / scale;
+export function grabSelection(b: Bounds, p: Pt, scale: number, touch: boolean, rotation = true, reachPx = touch ? 13 : 8): SelectionGrab | null {
+  const reach = reachPx / scale;
   const distance = (q: Pt) => Math.hypot(p.x - q.x, p.y - q.y);
   if (rotation && distance(rotationAt(b, scale)) <= reach) return { kind: 'rotate' };
   const handle = handles(b, scale).sort((a, b) => distance(a.at) - distance(b.at))[0]!;
@@ -45,7 +45,7 @@ export function drawSelectionPath(g: CanvasRenderingContext2D, path: Pt[], scale
 }
 
 /** The shared on-canvas controls for paint and line selection. */
-export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number, rotation = true): void {
+export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number, rotation = true, radius = 4): void {
   g.strokeRect(b.x0 * scale, b.y0 * scale, (b.x1 - b.x0) * scale, (b.y1 - b.y0) * scale);
   g.setLineDash([]);
   g.fillStyle = '#FFFDF7';
@@ -56,7 +56,7 @@ export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale
   const points = handles(b, scale).map((h) => h.at);
   if (rotation) points.push(rotate);
   for (const q of points) {
-    g.beginPath(); g.arc(q.x * scale, q.y * scale, 4, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.beginPath(); g.arc(q.x * scale, q.y * scale, radius, 0, Math.PI * 2); g.fill(); g.stroke();
   }
   if (angle !== undefined) g.fillText(`${Math.round(angle)}°`, rotate.x * scale + 10, rotate.y * scale);
 }

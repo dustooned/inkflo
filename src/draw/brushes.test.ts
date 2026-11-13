@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { brushFor, entry, knownBrush, LIBRARY, readUserBrushes, setBookBrushes, setUserBrushes, snapshotId } from './brushes';
+import { brushFor, entry, knownBrush, LIBRARY, readUserBrushes, setBookBrushes, setUserBrushes, snapshotId, withGPenPressure } from './brushes';
 import { cloneBrush, evalDynamic } from '../engine/core/brush';
 
 afterEach(() => {
@@ -40,6 +40,18 @@ describe('brush library', () => {
     setUserBrushes(list);
     expect(entry('my-1')?.name).toBe('Mine');
     expect(readUserBrushes('nope')).toEqual([]);
+  });
+
+  it('varies light-pressure width while keeping full pressure and the balanced preset stable', () => {
+    const base = entry('g-pen')!;
+    const light = withGPenPressure(base, 'light');
+    const firm = withGPenPressure(base, 'firm');
+    const width = (b: typeof base, pressure: number) => evalDynamic(b.settings.sizeDyn, { pressure, speed: 0, tilt: 0 }, 0.5);
+    expect(withGPenPressure(base, 'balanced')).toBe(base);
+    expect(width(light, 0.2)).toBeGreaterThan(width(base, 0.2));
+    expect(width(firm, 0.2)).toBeLessThan(width(base, 0.2));
+    expect([light, base, firm].map((b) => width(b, 1))).toEqual([1, 1, 1]);
+    expect(new Set([light, base, firm].map(snapshotId)).size).toBe(3);
   });
 
   it('gives new G-pen strokes lighter pressure response and shorter tips without changing legacy ink', () => {

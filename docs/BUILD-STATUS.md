@@ -522,3 +522,21 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   to zoom, and use Alt with the wheel to rotate around the pointer.
 - The Canvas view control shows zoom and angle and opens sliders, quarter turns, and Fit page.
   Press 0 to restore the upright fit. View changes are local to the open desk.
+
+## Panel, layer and lettering polish
+
+- **Transform panel** offers One panel and All panels scopes, larger handles and a trim/bleed
+  preview while dragging. Alt-click cycles overlapping panels. The panel picker works with touch.
+- The Draw Layers tray shows thumbnails for painted layers, placed images and screentones.
+  Its targeting control shows whether strokes follow the panel under the pen or a selected layer.
+- Caption's **Add to caption** menu offers three balloon connections and an extra tail.
+  **Move whole group** works without a keyboard, and **Script panel** can reassign linked dialogue.
+- G-pen pressure offers Light touch, Balanced and Firm in the Draw toolbar. Balanced uses the
+  existing preset, and each stroke carries the settings used when it was drawn.
+
+## Starter comic and script revisions
+
+- **Open starter comic** makes an independent copy of *The Last Train* and opens Script.
+- **Caption → Review script changes** shows linked lettering beside the revised script. Apply
+  wording preserves placement and tail geometry. Keeping the current lettering dismisses that
+  revision until the line changes again. Reassigning the line moves its balloon group.

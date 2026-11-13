@@ -188,28 +188,42 @@ export function newLetter(book: Pick<Book, 'lettering'>, at: Pt, style: BalloonS
   return l;
 }
 
-/** After script edits: linked letters take their line's words and speaker. Returns true when anything changed. */
+export function linkedScriptLine(page: Page, l: Letter): string | undefined {
+  if (!l.src) return;
+  const beat = page.beats.find((b) => b.id === l.src!.beat);
+  return beat?.lines[sourceIndex(beat, l.src)];
+}
+
+/** Whether a script revision would change the wording or speaker of a linked group. */
+export function scriptRevision(page: Page, l: Letter) {
+  const raw = linkedScriptLine(page, l);
+  if (raw === undefined || raw === l.keptScriptLine) return;
+  const group = balloonGroup(page.balloons, l);
+  const current = group.length === 1 ? l.cap.text : groupWords(group);
+  const next = parseLine(raw);
+  if (next.text && (next.text !== current || (next.speaker ?? '') !== (l.speaker ?? ''))) return { raw, current, next };
+}
+
+export function applyScriptWording(page: Page, l: Letter): boolean {
+  const raw = linkedScriptLine(page, l);
+  if (raw === undefined) return false;
+  const next = parseLine(raw);
+  const changed = setGroupWords(balloonGroup(page.balloons, l), next.text) || (l.speaker ?? null) !== next.speaker || l.keptScriptLine !== undefined;
+  if (next.speaker) l.speaker = next.speaker;
+  else delete l.speaker;
+  delete l.keptScriptLine;
+  return changed;
+}
+
+/** Explicitly apply the linked script wording across a page. */
 export function syncLettersFromScript(page: Page): boolean {
   let changed = false;
-  const beats = new Map(page.beats.map((b) => [b.id, b]));
-  for (const l of page.balloons) {
-    if (!l.src) continue;
-    const beat = beats.get(l.src.beat);
+  for (const l of page.balloons) if (l.src) {
+    const beat = page.beats.find((b) => b.id === l.src!.beat);
     const i = beat ? sourceIndex(beat, l.src) : -1;
-    const raw = beat?.lines[i];
-    if (raw === undefined) continue;
-    if (l.src.line !== i) {
-      l.src.line = i;
-      changed = true;
-    }
-    const p = parseLine(raw);
-    if (setGroupWords(balloonGroup(page.balloons, l), p.text)) changed = true;
-    const speaker = p.speaker ?? undefined;
-    if (l.speaker !== speaker) {
-      if (speaker) l.speaker = speaker;
-      else delete l.speaker;
-      changed = true;
-    }
+    if (i < 0 || beat?.lines[i] === undefined) continue;
+    if (l.src.line !== i) { l.src.line = i; changed = true; }
+    if (applyScriptWording(page, l)) changed = true;
   }
   return changed;
 }
@@ -299,7 +313,7 @@ function availablePosition(page: Page, panels: Panel[], panel: Panel, index: num
     .reduce((best, p) => clearance(p) > clearance(best) ? p : best, preferred);
 }
 
-/** Apply text updates, clean up removed lines, and optionally place unlettered dialogue. */
+/** Maintain source links and optionally place missing dialogue. Existing wording is reviewed in Caption. */
 export function reconcileDialogue(book: Book, page: Page, panels: Panel[], create = !!page.autoLetter): void {
   const beats = new Map(page.beats.map((b) => [b.id, b]));
   const ids = new Map<string, Map<number, Letter>>();
@@ -310,14 +324,16 @@ export function reconcileDialogue(book: Book, page: Page, panels: Panel[], creat
     if (!beat || beat.lines[i] === undefined || !parseLine(beat.lines[i]!).text) {
       if (l.generated) return false;
       delete l.src;
+      delete l.keptScriptLine;
       return true;
     }
+    l.src.line = i;
+    if (l.keptScriptLine !== beat.lines[i]) delete l.keptScriptLine;
     const indexed = ids.get(beat.id) ?? new Map();
     if (!indexed.has(i)) indexed.set(i, l);
     ids.set(beat.id, indexed);
     return true;
   });
-  syncLettersFromScript(page);
   const targets = new Map<Panel, { beat: Beat; index: number }[]>();
   for (const beat of page.beats) {
     beat.lines.forEach((line, index) => {
