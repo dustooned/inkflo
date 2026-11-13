@@ -4,8 +4,8 @@ import { derivePanels } from '../geom/carve';
 import { preflightPage } from '../geom/preflight';
 import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
-import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, pagesIn, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
-import { exportPsd, type PsdMode } from '../io/psd';
+import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
 import { DEFAULT_SCROLL_GAP, exportScroll, type ScrollOptions } from '../io/scroll';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
@@ -21,8 +21,13 @@ const PRINT_MODES: { id: PrintMode; title: string; body: string }[] = [
   { id: 'minizine', title: 'Mini-zine (one sheet)', body: 'All 8 pages on one sheet with fold and cut lines, and how to fold it.' },
 ];
 
+export interface ExportOpen {
+  /** 1-based page the desk has open; the PSD range starts there. */
+  page?: number;
+}
+
 /** The Export center: Print it (guided) and Export files (everything, by hand). */
-export function openExport(studio: Studio, start: Tab = 'files'): void {
+export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpen = {}): void {
   const book = studio.book;
   if (!book) return;
   const name = slug(book.title);
@@ -113,7 +118,9 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   const fo: FilesOptions = { format: 'png', seps: ['all'], background: 'white', colour: 'colour', borders: true, range: { from: 1, to: book.pages.length } };
   let dpi = book.dpi;
   const motion: MotionOptions = { ...DEFAULT_MOTION };
-  const currentPage = Math.max(1, book.pages.findIndex((p) => p.id === book.lastPageId) + 1);
+  const currentPage = open.page && open.page >= 1 && open.page <= book.pages.length
+    ? Math.round(open.page)
+    : Math.max(1, book.pages.findIndex((p) => p.id === book.lastPageId) + 1);
   const scroll: ScrollOptions = { range: { from: 1, to: book.pages.length }, gap: DEFAULT_SCROLL_GAP, background: '#ffffff' };
   function scrollTab(): HTMLElement {
     const field = (label: string, value: number, min: number, max: number, apply: (v: number) => void) => {
@@ -141,30 +148,45 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   }
   const psd = { mode: 'art' as PsdMode, dpi: book.dpi, from: currentPage, to: currentPage };
   function appsTab(): HTMLElement {
+    const summary = h('section', { class: 'psd-summary', 'aria-label': 'What will be exported', 'aria-live': 'polite' });
+    const plan = () => psdPlan(book!, { from: psd.from, to: psd.to }, psd.mode, psd.dpi, name);
+    const refresh = () => {
+      const p = plan();
+      downloadBtn.disabled = exporting || p.tooLarge || !p.pages.length;
+      downloadBtn.textContent = p.pages.length > 1 ? 'Download ZIP of PSDs' : 'Download layered PSD';
+      summary.replaceChildren(
+        h('dl', {},
+          h('dt', {}, 'Pages'), h('dd', {}, p.pagesLabel),
+          h('dt', {}, 'Size'), h('dd', {}, p.trimLabel),
+          h('dt', {}, 'Pixels'), h('dd', {}, p.pixelsLabel),
+          h('dt', {}, 'File'), h('dd', {}, h('code', {}, p.file))),
+        h('h4', { class: 'label' }, psd.mode === 'template' ? 'Drawing template contains' : 'Keep artwork contains'),
+        h('ul', {}, p.contents.map((c) => h('li', {}, c))));
+      if (p.tooLarge) summary.append(h('p', { class: 'warnline' }, 'Too large for browser export at ' + psd.dpi + ' dpi. Choose a lower resolution.'));
+    };
     const pageInput = (label: string, key: 'from' | 'to') => {
       const input = h('input', { type: 'number', 'aria-label': label, min: 1, max: book!.pages.length, step: 1, value: psd[key] });
       input.addEventListener('change', () => {
         psd[key] = Math.max(1, Math.min(book!.pages.length, Math.round(input.valueAsNumber || currentPage)));
         input.value = String(psd[key]);
+        refresh();
       });
       return h('label', { class: 'field' }, label, input);
     };
+    const downloadBtn = btn('Download layered PSD', () => {
+      const { from, to, mode, dpi: resolution } = psd;
+      const p = plan();
+      void run('Layered PSD', () => exportPsd(studio, { from, to }, mode, resolution, (m) => (progress.textContent = m)), p.file).then(refresh);
+    }, true);
+    refresh();
     return h('div', { class: 'stack' },
-      h('div', {}, h('h3', {}, 'Layered Photoshop document'), h('p', { class: 'note' }, 'For Procreate, Photoshop, Affinity and Clip Studio Paint. Export the current page or a ZIP of layered PSDs.')),
+      h('div', {}, h('h3', {}, 'Export for drawing'), h('p', { class: 'note' }, 'Plan and letter here, then keep drawing in Procreate, Photoshop, Affinity or Clip Studio Paint. One page downloads a layered PSD; a range downloads a ZIP of PSDs.')),
       seg<PsdMode>([{ id: 'art', label: 'Keep artwork' }, { id: 'template', label: 'Drawing template' }], psd.mode, (v) => { psd.mode = v; render(); }, 'PSD contents'),
-      h('p', { class: 'note' }, psd.mode === 'template'
-        ? 'Keep the layout and lettering. Each panel gets blank Pencil, Ink and Colour layers.'
-        : 'Keep the panel groups, artwork, borders and lettering in place. Lettering and vector ink are rendered as pixels.'),
       h('div', { class: 'export-app-fields' }, pageInput('First page', 'from'), pageInput('Last page', 'to'),
-        select('Resolution', [[book!.dpi, book!.dpi + ' dpi (book)'], ...[150, 300, 600].filter((n) => n !== book!.dpi).map((n): [number, string] => [n, n + ' dpi'])], psd.dpi, (v) => (psd.dpi = v))),
-      h('p', { class: 'note' }, 'In Procreate, use Gallery → Import. In Photoshop, Affinity or Clip Studio Paint, open the PSD as a document. Keep your .inkflo book for editable cuts, lettering and script.'),
-      btn('Download layered PSD', () => {
-        const { from, to, mode, dpi: resolution } = psd;
-        const pages = pagesIn(book!, { from, to });
-        const stem = name + (mode === 'template' ? '-template' : '');
-        const file = pages.length === 1 ? stem + '-page-' + (book!.pages.indexOf(pages[0]!) + 1) + '.psd' : stem + '-psds.zip';
-        void run('Layered PSD', () => exportPsd(studio, { from, to }, mode, resolution, (m) => (progress.textContent = m)), file);
-      }, true));
+        select('Resolution', [[book!.dpi, book!.dpi + ' dpi (book)'], ...[150, 300, 600].filter((n) => n !== book!.dpi).map((n): [number, string] => [n, n + ' dpi'])], psd.dpi, (v) => { psd.dpi = v; refresh(); })),
+      summary,
+      h('p', { class: 'note' }, 'In Procreate, use Gallery → Import. In Photoshop, Affinity or Clip Studio Paint, open the PSD as a document. Panel masks are written as group masks; check how your app treats them before relying on clipping.'),
+      downloadBtn);
   }
   const inks: InkPair = ['#d49a55', '#243755'];
   function twoInkOptions(from: HTMLInputElement, to: HTMLInputElement): HTMLElement {
@@ -283,7 +305,7 @@ export function openExport(studio: Studio, start: Tab = 'files'): void {
   function render(): void {
     buttons.length = 0;
     body.replaceChildren(
-      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }, { id: 'scroll', label: 'Vertical scroll' }, { id: 'apps', label: 'Open in another app' }], tab, (v) => { tab = v; render(); }, 'Export center'),
+      seg<Tab>([{ id: 'print', label: 'Print it' }, { id: 'files', label: 'Export files' }, { id: 'scroll', label: 'Vertical scroll' }, { id: 'apps', label: 'Export for drawing' }], tab, (v) => { tab = v; render(); }, 'Export center'),
       tab === 'print' ? printTab() : tab === 'apps' ? appsTab() : tab === 'scroll' ? scrollTab() : filesTab(),
       progress,
     );

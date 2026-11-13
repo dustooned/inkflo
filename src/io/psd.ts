@@ -147,6 +147,61 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
   };
 }
 
+export interface PsdPlan {
+  /** 1-based page numbers, in book order. */
+  pages: number[];
+  file: string;
+  /** "Page 2" or "Pages 2–5 (4 PSDs in a ZIP)". */
+  pagesLabel: string;
+  trimLabel: string;
+  pixelsLabel: string;
+  contents: string[];
+  /** Too large for browser export at this resolution. */
+  tooLarge: boolean;
+}
+
+const inches = (n: number) => String(Math.round(n * 1000) / 1000) + '″';
+
+/** What a drawing export will write, shown before download. Pure, so tests can check it. */
+export function psdPlan(book: Book, range: PageRange, mode: PsdMode, dpi: number, stem: string): PsdPlan {
+  const pages = pagesIn(book, range);
+  const numbers = pages.map((p) => book.pages.indexOf(p) + 1);
+  const base = stem + (mode === 'template' ? '-template' : '');
+  const single = numbers.length === 1;
+  const file = single ? base + '-page-' + numbers[0] + '.psd' : base + '-pages-' + numbers[0] + '-' + numbers[numbers.length - 1] + '.zip';
+  const sizes = [...new Set(pages.map((p) => p.widthIn + '×' + p.heightIn))];
+  const first = pages[0];
+  const px = first ? pagePixels(first, dpi) : { width: 0, height: 0 };
+  const mixed = sizes.length > 1;
+  const tooLarge = pages.some((p) => {
+    const { width, height } = pagePixels(p, dpi);
+    return width > 30_000 || height > 30_000 || width * height > 32_000_000;
+  });
+  const contents = mode === 'template'
+    ? [
+      'Each panel group: blank Pencil, Ink and Colour layers, masked to the panel shape.',
+      'Panel borders and gutters, and the paper.',
+      'Lettering as pixels on its own layer, split by caption group when balloons are grouped.',
+      'No artwork. Your drawing starts on the blank layers.',
+    ]
+    : [
+      'Every panel group with its artwork layers (pencil, ink, colour, tones, placed images).',
+      'Background, gutter and over-panel groups, borders and the paper.',
+      'Lettering as pixels on its own layer, split by caption group when balloons are grouped.',
+      'Vector ink and screentones are rendered as pixels.',
+    ];
+  contents.push('Edit lettering, cuts and script in the .inkflo book, then export again.');
+  return {
+    pages: numbers,
+    file,
+    pagesLabel: !numbers.length ? 'No pages' : single ? 'Page ' + numbers[0] : 'Pages ' + numbers[0] + '–' + numbers[numbers.length - 1] + ' (' + numbers.length + ' PSDs in a ZIP)',
+    trimLabel: first ? (mixed ? 'Mixed sizes, first page ' : '') + inches(first.widthIn) + ' × ' + inches(first.heightIn) + ' trim, no bleed' : '',
+    pixelsLabel: first ? px.width.toLocaleString('en-US') + ' × ' + px.height.toLocaleString('en-US') + ' px at ' + dpi + ' dpi' : '',
+    contents,
+    tooLarge,
+  };
+}
+
 export async function exportPsd(studio: Studio, range: PageRange, mode: PsdMode, dpi: number, progress: Progress): Promise<Blob> {
   const book = studio.book!;
   const pages = pagesIn(book, range);

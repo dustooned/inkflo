@@ -659,11 +659,16 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const display: ChromeAction = { label: 'Display settings', glyph: '◐', run: (b) => displayMenu(b, { layout: true, composition, shell: true }) };
   const inspect: ChromeAction = { label: 'Inspector', glyph: '☰', run: (b) => toggleInspector(b), pressed: () => screen.classList.contains('insp-open') };
   const exportAction: ChromeAction = { label: 'Export', glyph: '↗', run: () => openExport(studio, stage === 'print' ? 'print' : 'files') };
+  // Plan and letter here, then continue drawing elsewhere: the Export center's PSD tab, on this page.
+  const drawingExport = stage === 'layout' || stage === 'caption';
+  const exportForDrawing = () => openExport(studio, 'apps', { page: idx + 1 });
+  const drawingAction: ChromeAction = { label: 'Export for drawing', glyph: '⇲', run: exportForDrawing };
   const deskActions = mode.actions ?? [];
   const primary = stage === 'layout' ? [...deskActions, exportAction, display, inspect] : [...deskActions, display, inspect, exportAction];
   const moreButton = () => actions.querySelector<HTMLButtonElement>('[aria-label="More document actions"]')!;
   const actions = chromeActions([
     ...primary,
+    ...(drawingExport ? [drawingAction] : []),
     { label: 'Previous page', disabled: () => idx === 0, run: () => go(pageHash(idx - 1)) },
     { label: 'Next page', disabled: () => idx === book.pages.length - 1, run: () => go(pageHash(idx + 1)) },
     ...(stage !== 'script' ? [{ label: 'Fit page', run: resetView }] : []),
@@ -695,6 +700,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       save, undoBtn(), redoBtn(), narrowInspector, stage !== 'script' ? viewButton() : null, spreadButton(studio, page, stage, go), displayButton(true, composition),
       stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null,
       layoutBtn('⤢', 'Focus layout'), doneBtn,
+      drawingExport ? h('button', { class: 'btn drawing-export', type: 'button', title: 'Layered PSD of this page for another drawing app', onclick: exportForDrawing }, 'Export for drawing') : null,
       h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio, stage === 'print' ? 'print' : 'files') }, 'Export')),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),

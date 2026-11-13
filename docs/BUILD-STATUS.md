@@ -540,3 +540,31 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - **Caption → Review script changes** shows linked lettering beside the revised script. Apply
   wording preserves placement and tail geometry. Keeping the current lettering dismisses that
   revision until the line changes again. Reassigning the line moves its balloon group.
+
+## Export for drawing, 2026-11-13
+
+- **Layout** and **Caption** have an **Export for drawing** button in Studio and an action in
+  Focus (in the ⋯ overflow when the bar is full). It opens the Export center's renamed
+  **Export for drawing** tab with the range set to the page open in the desk.
+- Before download the tab shows the page or range, trim size (no bleed), pixel size at the
+  chosen dpi, the file name and what the chosen mode contains. It updates with mode, dpi and
+  range. Pages too large for browser export disable the download.
+- One page downloads `<book>[-template]-page-N.psd`. A range downloads
+  `<book>[-template]-pages-A-B.zip` with `page-00N.psd` files inside.
+- `psdPlan` in `io/psd.ts` builds the summary and file name and is covered by `psd.test.ts`.
+- **Checks:**
+  - 353 tests, typecheck and production build.
+  - Browser (Chromium, the starter comic plus a blank page 2): the shortcut opened from Layout and
+    Caption in Studio and Focus, and from the original Export center tab, each defaulting
+    to page 2. The preview updated after changes to mode, dpi (300 → 150) and range (1–2).
+  - PSD decoding (ag-psd, in the page, no downloads): both modes at 994 × 1528 px at 150 dpi.
+    Keep artwork had populated Ink layers in both panel groups. Drawing template had blank Pencil,
+    Ink and Colour layers and a group mask for each panel. Lettering was a separate layer in the same
+    position in both. The range ZIP held `page-001.psd` and `page-002.psd`. The book JSON was
+    unchanged after export.
+  - Panel 2 was rotated 10° and moved on an in-memory copy. Decoded layers, flattened back to
+    front, matched the renderer composite with no pixel channel off by more than 64/255. Only
+    0.09% of pixels were off by more than 8/255, at anti-aliased edges. The template mask
+    matched the moved panel's pixel bounds.
+- **Not checked:** how Procreate, Photoshop, Affinity and Clip Studio Paint apply the group masks.
+  The dialog says to check clipping in the target app.

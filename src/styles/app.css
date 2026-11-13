@@ -302,6 +302,11 @@ h4.label { margin: 0 0 6px; font: 650 10px/1 var(--ui); letter-spacing: .14em; t
 .ink-proof { text-align: center; }
 .ink-proof canvas { display: block; max-width: 160px; max-height: 184px; object-fit: contain; margin-inline: auto; }
 .export-app-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
+.psd-summary { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font-size: var(--type-2); }
+.psd-summary dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0 0 8px; }
+.psd-summary dt { color: var(--ink-soft); }
+.psd-summary dd { margin: 0; overflow-wrap: anywhere; }
+.psd-summary ul { margin: 4px 0 0; padding-left: 18px; }
 .brush-controls { position: absolute; z-index: 2; left: 10px; top: 50%; transform: translateY(-50%); display: grid; gap: 8px; max-height: calc(100% - 16px); overflow: auto; padding: 8px 5px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-float); box-shadow: var(--shadow); cursor: default; }
 .brush-controls[hidden] { display: none; }
 .quickshape-actions { position: absolute; z-index: 3; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; width: max-content; max-width: calc(100% - 24px); padding: 5px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-float); box-shadow: var(--shadow); cursor: default; }
