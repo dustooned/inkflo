@@ -1,3 +1,4 @@
+import { openManual } from './manual';
 import type { Studio } from '../app/studio';
 import { STAGES } from '../doc/model';
 import { askText, h, pickFile, toast } from './dom';
@@ -79,6 +80,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         h('span', { class: 'spacer' }),
         studio.persistent ? null : h('span', { class: 'meta' }, 'Not saving: this browser has no local storage'),
         displayButton(),
+        h('button', { class: 'btn', type: 'button', onclick: () => openManual() }, 'Manual'),
         h('button', { class: 'btn', type: 'button', onclick: importBook }, 'Import .inkflo'),
         h('button', { class: 'btn primary', type: 'button', onclick: newBook }, 'New book')),
       h('main', { class: 'body' },

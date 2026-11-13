@@ -11,6 +11,7 @@ import { drawComposition } from './composition';
 import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
 import { glyphEl, icon } from './icons';
+import { openManual } from './manual';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
 import { h, slider, toast } from './dom';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
@@ -598,6 +599,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       'sep',
       ...(stage === 'layout' || stage === 'caption' ? [{ label: 'Export for drawing…', run: () => openExport(studio, 'apps', { page: idx + 1 }) }] : []),
       { label: 'Export…', run: () => openExport(studio, stage === 'print' ? 'print' : 'files') },
+      'sep',
+      { label: 'Open the manual', run: () => openManual(stage) },
     ];
     // no leading, trailing or doubled separators
     const rows = items.filter((it, i, all) => it !== 'sep' || (i > 0 && all[i - 1] !== 'sep' && i < all.length - 1));
@@ -868,6 +871,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     { label: 'Studio layout', run: () => { setPrefs({ layout: 'studio' }); screen.querySelector<HTMLElement>('.bar [aria-label="Focus layout"]')?.focus(); } },
     ...(stage === 'draw' ? [{ label: 'Simple / Focus', run: () => { setPrefs({ layout: prefs().layout === 'simple' ? 'focus' : 'simple' }); moreButton().focus(); } }] : []),
     { label: 'Mark page done', run: () => doneBtn.click(), pressed: () => page.state[stage] === 2 },
+    { label: 'Manual', run: () => openManual(stage) },
     { label: spreadPreview.getAttribute('aria-label')!, run: () => spreadPreview.click() },
   ], () => [
     h('label', { class: 'row' }, 'Desk', deskSelect),
@@ -891,6 +895,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         h('button', { type: 'button', class: 'page-jump-trigger', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, `${idx + 1} / ${book.pages.length} ▾`),
         h('button', { type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›')),
       save, undoBtn(), redoBtn(), narrowInspector, stage !== 'script' ? viewButton() : null, spreadButton(studio, page, stage, go), displayButton(true, composition),
+      h('button', { class: 'icon', type: 'button', 'aria-label': 'Manual', title: 'Manual: ' + DESK_META[stage].label + ' desk', onclick: () => openManual(stage) }, '?'),
       stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null,
       layoutBtn('⤢', 'Focus layout'), doneBtn,
       exportHeader),

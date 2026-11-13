@@ -15,6 +15,11 @@ Shipped in this round, newest last:
 - **Icons and tooltips.** An original line-icon set (`ui/icons.ts`), looked up by control label, and styled hover/focus tooltips (`ui/affordances.ts`).
 - **Canvas menu.** Right-click, or a touch long press, opens each desk's practical actions plus undo, view and export. Menus support arrow keys.
 - **Draw sidebar** docks the Layers panel. **Focus/Simple** brush column fits its fields. Customize tools has its own icon.
+- **Knife** cuts from lines drawn inside the page; **Auto Shape** snaps held cuts to line, arc, zig-zag or smooth curve.
+- **iPad performance**: fast resampling during gestures, overlay-only hover frames, no blur/masks on touch.
+- **Scroll page-break art**, **collage cut-outs** (cut, torn edge, paper edge, duplicate), **copy and paste** across layers, books and apps.
+- **Previews**: balloon kind and look pickers, style sheet strip, page-image and PSD thumbnails. Balloon **Fine-tune** fold with spike, bump and tail controls.
+- **Manual** at `public/manual/index.html`, linked from home, each desk header and the canvas menu.
 
 Checks: 358 tests, typecheck and production build. Browser checks are written up per section in BUILD-STATUS.
 

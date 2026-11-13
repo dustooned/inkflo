@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>inkflo manual</title>
+<meta name="description" content="How to make comics with inkflo: every desk and tool explained with the craft and history behind it.">
+<style>
+:root {
+  --bg: #f4efe4; --surface: #fbf8f1; --text: #1d1e22; --soft: #55575f; --faint: #8a8b90; --line: #ddd4c3;
+  --accent: #2f6f7e; --script: #a8762a; --layout: #2f6f7e; --draw: #3e6b3a; --caption: #b8432f; --print: #5b4a8a;
+  --note: #f1e9d6; --code: #ece4d2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #18181b; --surface: #202024; --text: #ecebe6; --soft: #b5b3ac; --faint: #8b8a86; --line: #34343a;
+    --accent: #6cb3c2; --script: #d7a65a; --layout: #6cb3c2; --draw: #8cbf7f; --caption: #e78a74; --print: #ab9be0;
+    --note: #2a2824; --code: #2d2c2a;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; height: 100vh; overflow: auto; padding: 24px 18px; border-right: 1px solid var(--line); }
+nav.toc .brand { font: italic 26px/1 "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 0 0 4px; }
+nav.toc p { margin: 0 0 14px; color: var(--soft); font-size: 13px; }
+nav.toc input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; }
+nav.toc ol { list-style: none; padding: 0; margin: 14px 0 0; font-size: 14px; }
+nav.toc li { margin: 2px 0; }
+nav.toc li a { display: block; padding: 4px 8px; border-radius: 6px; text-decoration: none; color: var(--text); }
+nav.toc li a:hover { background: var(--surface); }
+nav.toc li.sub a { padding-left: 22px; color: var(--soft); font-size: 13px; }
+main { padding: 32px 40px 80px; min-width: 0; }
+h1 { font: 500 40px/1.1 "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 0 0 8px; }
+h2 { font: 500 28px/1.2 "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 56px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+h2 .desk { display: inline-block; font: 650 11px/1 system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--surface); background: var(--accent); padding: 4px 8px; border-radius: 4px; vertical-align: middle; margin-right: 10px; }
+h3 { font-size: 18px; margin: 28px 0 6px; }
+p, li { max-width: 72ch; }
+.lead { font-size: 18px; color: var(--soft); max-width: 64ch; }
+.history { background: var(--note); border-left: 4px solid var(--accent); padding: 10px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 72ch; }
+.history::before { content: "From comics history"; display: block; font: 650 11px/1.8 system-ui; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.tip { background: var(--surface); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; margin: 14px 0; max-width: 72ch; }
+.tip::before { content: "Try this"; display: block; font: 650 11px/1.8 system-ui; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+kbd { font: 600 12px/1 ui-monospace, Consolas, monospace; background: var(--code); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 2px 6px; }
+table { border-collapse: collapse; margin: 12px 0; font-size: 14px; max-width: 72ch; width: 100%; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; padding: 0; list-style: none; }
+.flow li { padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+.flow li::after { content: " →"; color: var(--faint); }
+.flow li:last-child::after { content: ""; }
+section[hidden] { display: none; }
+.nohits { color: var(--soft); font-style: italic; }
+#script .desk { background: var(--script); } #layout .desk { background: var(--layout); } #draw .desk, #collage .desk { background: var(--draw); }
+#caption .desk { background: var(--caption); } #print .desk, #export .desk { background: var(--print); }
+.back { display: inline-block; margin-bottom: 18px; font-size: 14px; }
+@media (max-width: 820px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  main { padding: 20px 16px 60px; }
+  h1 { font-size: 32px; }
+}
+@media print {
+  nav.toc, .back { display: none; }
+  .layout { display: block; }
+  body { background: #fff; color: #000; }
+  h2 { break-before: page; border: 0; }
+  .history, .tip { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Manual contents">
+  <p class="brand">inkflo</p>
+  <p>The manual: how to make a comic, desk by desk, and why comics are made this way.</p>
+  <label><span class="visually-hidden" hidden>Search the manual</span><input id="q" type="search" placeholder="Search the manual" aria-label="Search the manual"></label>
+  <ol id="toc">
+    <li><a href="#start">1. Welcome</a></li>
+    <li class="sub"><a href="#workflow">The five desks</a></li>
+    <li class="sub"><a href="#books">Books, pages and saving</a></li>
+    <li><a href="#script">2. Script</a></li>
+    <li><a href="#layout">3. Layout</a></li>
+    <li class="sub"><a href="#knife">The Knife and Auto Shape</a></li>
+    <li class="sub"><a href="#grids">Grids, presets and rhythm</a></li>
+    <li class="sub"><a href="#panel-tools">Moving and shaping panels</a></li>
+    <li><a href="#draw">4. Draw</a></li>
+    <li class="sub"><a href="#layers">Layers and groups</a></li>
+    <li class="sub"><a href="#drawing-tools">Drawing tools</a></li>
+    <li class="sub"><a href="#colour">Colour and fills</a></li>
+    <li class="sub"><a href="#tone">Screentone and comic lines</a></li>
+    <li class="sub"><a href="#selecting">Selecting and transforming</a></li>
+    <li><a href="#collage">5. Collage and zines</a></li>
+    <li><a href="#caption">6. Caption (lettering)</a></li>
+    <li class="sub"><a href="#balloons">Balloon kinds</a></li>
+    <li class="sub"><a href="#stylesheet">The style sheet</a></li>
+    <li class="sub"><a href="#reading">Reading order and readability</a></li>
+    <li><a href="#print">7. Print</a></li>
+    <li><a href="#export">8. Export and sharing</a></li>
+    <li class="sub"><a href="#scroll">Vertical scroll comics</a></li>
+    <li class="sub"><a href="#psd">Export for drawing</a></li>
+    <li><a href="#everywhere">9. Everywhere in inkflo</a></li>
+    <li class="sub"><a href="#clipboard">Copy and paste</a></li>
+    <li class="sub"><a href="#menus">Right-click and long press</a></li>
+    <li class="sub"><a href="#views">Studio, Focus and Simple</a></li>
+    <li class="sub"><a href="#shortcuts">Keyboard shortcuts</a></li>
+    <li><a href="#teaching">10. For classrooms</a></li>
+    <li><a href="#glossary">11. Glossary</a></li>
+  </ol>
+</nav>
+
+<main id="content">
+<a class="back" href="../index.html">← Back to inkflo</a>
+
+<section id="start">
+<h1>Making comics with inkflo</h1>
+<p class="lead">inkflo is a comic studio that runs in your browser. It follows the order professionals have used for a century: write it, plan the page, draw it, letter it, and get it ready to print or post. Each step has its own <strong>desk</strong>.</p>
+<div class="history">Comics as a craft grew up in newspapers and then in comic book studios of the 1930s and 1940s, where the work was split between a writer, a penciller, an inker, a colourist and a letterer. Many artists now do every job themselves, but the order of the steps stuck because each one builds on the last. inkflo keeps those steps as desks so you can work like a whole studio, alone or as a team.</div>
+
+<h3 id="workflow">The five desks</h3>
+<ul class="flow"><li>Script</li><li>Layout</li><li>Draw</li><li>Caption</li><li>Print</li></ul>
+<p>The tabs along the bottom of every page switch desks. Each tab shows that step's status for the page: <em>to do</em>, <em>in progress</em> or <em>done</em>. Mark a step done with the check button in the header. You can move back and forth freely: change the script after drawing, or recut panels after lettering.</p>
+<table>
+<tr><th>Desk</th><th>What you do there</th><th>Studio job</th></tr>
+<tr><td>Script</td><td>Write what happens in each panel and what everyone says.</td><td>Writer</td></tr>
+<tr><td>Layout</td><td>Cut the page into panels and set the gutters.</td><td>Layout artist / penciller</td></tr>
+<tr><td>Draw</td><td>Pencil, ink, colour, tone, collage.</td><td>Penciller, inker, colourist</td></tr>
+<tr><td>Caption</td><td>Place balloons, captions and sound effects.</td><td>Letterer</td></tr>
+<tr><td>Print</td><td>Check sizes, bleed and page count, then print or export.</td><td>Production / editor</td></tr>
+</table>
+
+<h3 id="books">Books, pages and saving</h3>
+<p>The home screen is your shelf. <strong>New book</strong> starts a one-page book, <strong>New vertical comic</strong> starts a tall phone-width episode, and <strong>Open starter comic</strong> makes your own copy of <em>The Last Train</em>, a two-panel example to explore and change.</p>
+<p>Open a book to see its pages. Add pages, start a page from a <strong>template</strong>, reorder them, and use <strong>Continue</strong> to jump back to where you left off. <strong>Assets</strong> holds images the whole book can reuse, such as logos, reference photos and page-break art.</p>
+<p><strong>inkflo saves as you work</strong>, on this device, in the browser. Nothing is uploaded. To move a book to another computer or keep a backup, use <strong>Export → Book file (.inkflo)</strong>, and <strong>Import .inkflo</strong> on the home screen to open it again. An .inkflo file keeps everything editable: every stroke, cut, balloon and script line.</p>
+<div class="tip">Open the starter comic, change one line of dialogue in Script, and watch Caption offer to update the balloon. It's the quickest way to see how the desks talk to each other.</div>
+</section>
+
+<section id="script">
+<h2><span class="desk">Script</span>Writing the page</h2>
+<p>A comic script describes each panel and lists its words. In inkflo each panel is a <strong>beat</strong>: a scene description, then the dialogue, one line per balloon.</p>
+<ul>
+<li>Start a line with a name and a colon to name the speaker: <code>MINA: Hold that door!</code></li>
+<li><code>CAPTION:</code> makes a narration box instead of a speech balloon.</li>
+<li><strong>+ Add panel beat</strong> adds a panel; the arrows reorder beats.</li>
+<li><strong>Dialogue &amp; panels</strong> assigns each line to a panel and a lettering preset, such as a whisper style for one character.</li>
+<li><strong>Send to Layout</strong> carries the beat count over, so Layout knows how many panels the page wants.</li>
+</ul>
+<div class="history">There are two classic ways to write comics. In a <strong>full script</strong>, the writer describes every panel and every line before anyone draws, as in a film script. In the <strong>Marvel method</strong>, made famous at Marvel Comics in the 1960s, the writer handed the artist a plot; the artist designed the pages; and the dialogue was written to fit the finished art. inkflo supports both. Write everything first, or draw first and come back to Script to add the words. Caption will pick up the changes.</div>
+<div class="tip">Keep balloons short. Lettering takes up space, and a panel crowded with words leaves no room for the picture. A common rule of thumb is about 25 words per balloon and a few balloons per panel.</div>
+</section>
+
+<section id="layout">
+<h2><span class="desk">Layout</span>Panels, gutters and the page</h2>
+<p>Layout turns a blank page into panels. Panels are made by <strong>cutting</strong>: every cut splits the page or a panel in two, and the space a cut leaves is the <strong>gutter</strong>. The cuts are the page; the panels are worked out from them, so you can always move, curve or remove a cut later.</p>
+<div class="history">The gutter is where comics happen. The cartoonist and theorist Scott McCloud called it <em>closure</em> (in <em>Understanding Comics</em>, 1993): the reader's mind fills in what happens between two panels. A narrow gutter reads as a quick moment; a wide gutter, or a long walk across the page, reads as time passing. Will Eisner, who named the medium <em>sequential art</em> in 1985, treated the panel border itself as a storytelling tool.</div>
+
+<h3 id="knife">The Knife and Auto Shape</h3>
+<p>Choose the <strong>Knife</strong> (<kbd>K</kbd>) and draw a line through the page.</p>
+<ul>
+<li><strong>Across page</strong> cuts every panel the line crosses, from page edge to page edge.</li>
+<li><strong>One panel</strong> cuts only the panel you draw in.</li>
+<li>Draw anywhere: from the board around the page, or just across the part you want split. A line drawn inside the page runs on to the edges by itself.</li>
+<li>Hold <kbd>Shift</kbd> for a perfectly straight cut.</li>
+<li><strong>Auto Shape</strong> (on by default): pause at the end of a cut without lifting, and inkflo snaps it to the cleanest shape it sees: a <strong>straight line</strong>, an <strong>arc</strong>, a <strong>zig-zag</strong> for jagged action edges, or a <strong>smooth curve</strong> with the wobble taken out. Keep holding and drag to adjust the end, then lift.</li>
+<li><strong>Curve</strong> in the tool bar rounds every corner of the cut; set it to 0 for sharp zig-zags.</li>
+<li><strong>Uncut</strong> (<kbd>E</kbd>) removes a cut: click its gutter.</li>
+</ul>
+
+<h3 id="grids">Grids, presets and rhythm</h3>
+<p><strong>Presets</strong> (Splash, 2 rows, 3 tiers, 4, 6, 9) give you a classic grid in one click. <strong>Page templates</strong> stores and reuses layouts you like. The <strong>modular grid</strong> shows guides that the Knife snaps to, so panels line up across a book. <strong>Even out</strong> spaces a straight grid evenly.</p>
+<div class="history">The <strong>splash page</strong>, a single huge panel, has opened stories since the early superhero comics. The <strong>nine-panel grid</strong> is famous from <em>Watchmen</em> (Alan Moore and Dave Gibbons, 1986–87), where an unchanging grid acts like a metronome, so breaking it hits hard. Many cartoonists teach the grid as a rhythm: panel after panel like beats in a bar, with the last panel on the page (the <em>downbeat</em>) saved for the punchline or the turn.</div>
+<p>Use <strong>Mark last panel as downbeat</strong> to flag the panel that carries the page's hit. Use <strong>Spread</strong> in the header to see facing pages together. Readers take in a whole spread at once, so a big reveal is best placed after a page turn, on a left-hand page, rather than where the reader's eye can catch it early.</p>
+
+<h3 id="panel-tools">Moving and shaping panels</h3>
+<ul>
+<li><strong>Resize gutters</strong> (<kbd>R</kbd>): drag a gutter or a panel's handle to move the cut under it.</li>
+<li><strong>Transform panel</strong> (<kbd>V</kbd>): move, rotate or scale a whole panel, for tilted panels and panels that burst out of the grid. Its art moves with it, and Draw keeps working inside it.</li>
+<li><strong>Curve edges</strong> (<kbd>B</kbd>): bend a gutter with handles.</li>
+<li><strong>Gutter, Border, Round corners</strong> and <strong>Gutter background</strong> set the look of every gutter on the page. With Border at 0 and a transparent gutter you get borderless panels, where art can run right up to its neighbour.</li>
+</ul>
+</section>
+
+<section id="draw">
+<h2><span class="desk">Draw</span>Pencils, inks and colour</h2>
+<p>Draw follows the traditional path from rough to finished: <strong>pencil</strong> the drawing loosely, <strong>ink</strong> the final lines on top, then <strong>colour</strong> underneath. Each panel has its own group of layers, so your marks stay inside the panel you start in.</p>
+<div class="history">Professional pencillers often drew in <em>non-photo blue</em> pencil, a light blue that the old camera-based printing process couldn't see, so only the black ink reached print. Inkers used brushes and dip pens; in manga the springy <strong>G-pen</strong> nib became the standard tool for lines that swell and taper with pressure. inkflo's pencil layer plays the role of non-photo blue: it shows while you work and stays out of print exports.</div>
+
+<h3 id="layers">Layers and groups</h3>
+<p>Open <strong>Layers</strong> (tool bar or sidebar). Every panel has a group; there are also <strong>Background</strong>, <strong>Over panels</strong> (art that breaks out over the frames) and <strong>Gutters</strong> (art that lives in the gaps between panels).</p>
+<ul>
+<li><strong>Draw on: Panel under pen</strong> sends each stroke to the panel where you start it. <strong>Selected layer</strong> draws into one chosen layer anywhere.</li>
+<li>The eye shows or hides a layer, the lock protects it, and the panel icon masks a group to its panel shape.</li>
+<li><strong>Adjustments</strong> changes a layer's hue, saturation, brightness or blur.</li>
+</ul>
+
+<h3 id="drawing-tools">Drawing tools</h3>
+<table>
+<tr><th>Tool</th><th>Key</th><th>Use it for</th></tr>
+<tr><td>Brush</td><td><kbd>I</kbd></td><td>Inking. Pick a brush such as G-pen; set pressure to Light touch, Balanced or Firm; size and opacity are on the side bar.</td></tr>
+<tr><td>Pencil</td><td><kbd>P</kbd></td><td>Sketching and construction lines. Hide them with <em>Show pencil</em>.</td></tr>
+<tr><td>Smudge</td><td><kbd>S</kbd></td><td>Blending and softening.</td></tr>
+<tr><td>Eraser</td><td><kbd>E</kbd></td><td>Erase ink, pencil or vector lines (right-click the tool for the choice).</td></tr>
+<tr><td>Clone</td><td></td><td>Copy texture from one spot to another: set a source, then paint.</td></tr>
+<tr><td>Vector pen</td><td><kbd>V</kbd></td><td>Lines you can reshape later: smooth, sharp at any zoom.</td></tr>
+<tr><td>Edit lines</td><td><kbd>A</kbd></td><td>Pull, move, thicken or thin vector lines and edit their points.</td></tr>
+<tr><td>Rulers</td><td></td><td>Straight edges, perspective and symmetry guides that strokes snap to.</td></tr>
+</table>
+<p><strong>Brush Studio</strong> (the pencil button beside the brush name) edits a brush's tip, grain, spacing, taper and pressure response. <strong>Import brush</strong> reads Photoshop <code>.abr</code>, Clip Studio <code>.sut</code> and plain image tips.</p>
+
+<h3 id="colour">Colour and fills</h3>
+<p>The <strong>Colour</strong> tool (<kbd>F</kbd>) fills areas enclosed by your ink lines, on a colour layer under the ink, so the lines stay crisp.</p>
+<ul>
+<li><strong>Bucket</strong>: tap an area. <strong>Close gaps</strong> treats small breaks in your lines as closed. Fills stop at panel edges even where your lines don't.</li>
+<li><strong>Drag fill</strong>, <strong>Enclose and fill</strong> (lasso a region), <strong>Fill leftovers</strong> (catch the specks a fill missed) and <strong>Auto flats</strong> (fill every closed area of a panel with flat colours at once).</li>
+<li><strong>Check gaps</strong> (<kbd>C</kbd>) previews where a fill would leak before you commit.</li>
+</ul>
+<div class="history"><strong>Flats</strong> are a comic colourist's first pass: every shape filled with a plain colour so it can be selected and shaded later. Before computers, colourists painted colour guides by hand and engravers separated them into printing plates. The old <em>four-colour</em> comic look came from printing cyan, magenta, yellow and black in tiny dots.</div>
+
+<h3 id="tone">Screentone and comic lines</h3>
+<p><strong>Screentone</strong> (<kbd>T</kbd>) lays an editable dot or line pattern over a panel or a lassoed area; set dot shape, density (LPI), angle and colour. <strong>Comic lines</strong> (<kbd>L</kbd>) draws speed lines or focus lines as real ink strokes.</p>
+<div class="history">Printed dot patterns are older than comic books: Benjamin Day patented his <em>Ben-Day dots</em> process in 1879, and it gave old newspaper and comic book colour its dotty texture (later celebrated in pop art). Artists also pressed adhesive tone sheets, such as Zip-A-Tone, onto their pages. Manga made screentone an art of its own, cutting and scraping tone sheets for shading, skies and mood. Speed lines and focus lines are another manga and cartooning staple for motion and emphasis.</div>
+
+<h3 id="selecting">Selecting and transforming</h3>
+<ul>
+<li><strong>Select lines</strong> (<kbd>M</kbd>) selects vector lines to move, rotate, flip, resize or duplicate.</li>
+<li><strong>Transform</strong> (<kbd>R</kbd>) lifts painted pixels to move, scale, rotate or flip them. Choose the selection shape: rectangle, ellipse, freehand, polygon (click the first point or press <kbd>Enter</kbd> to close) or magnetic. <strong>Keep original</strong> makes a copy.</li>
+<li><strong>Position image</strong> places, moves and resizes imported pictures (see Collage).</li>
+<li>All of these work on panels you have moved or rotated in Layout.</li>
+</ul>
+</section>
+
+<section id="collage">
+<h2><span class="desk">Draw</span>Collage and zines</h2>
+<p>inkflo can paste up a page from pictures, the way zine makers have with scissors and glue. Collage pieces stay non-destructive: the original image is always kept whole.</p>
+<ol>
+<li><strong>Place image</strong> (sidebar) or paste a picture from another app with <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd>.</li>
+<li>With <strong>Position image</strong>, drag to move and drag the corner to resize.</li>
+<li><strong>Cut out piece</strong>: draw a loop around the part you want to keep.</li>
+<li><strong>Torn edge</strong> roughens the cut like ripped paper; <strong>Paper edge</strong> adds a border of any colour, like a photo cut out with a white margin.</li>
+<li><strong>Duplicate piece</strong> makes another copy to cut differently; <strong>Reset cut</strong> brings back the whole image.</li>
+</ol>
+<div class="history"><strong>Zines</strong> are small self-published magazines. Science-fiction fans made <em>fanzines</em> from the 1930s; punk bands and their fans made photocopied zines in the 1970s; the riot grrrl movement used them in the 1990s; and mini-comics and zine fairs carry on today. Cut-and-paste collage itself goes back to artists such as Picasso and Braque gluing paper into paintings in 1912, and to Hannah Höch's Dada photomontages. The look of a zine (ragged edges, mixed type, photos next to drawings) came from the tools: scissors, glue sticks and the photocopier.</div>
+<div class="tip">Make a one-sheet mini-zine: set Print kind to <em>Mini-zine</em> in the Print desk, make 8 pages, collage them, and print <strong>Mini-zine (one sheet)</strong>. The PDF comes with folding steps.</div>
+</section>
+
+<section id="caption">
+<h2><span class="desk">Caption</span>Lettering</h2>
+<p>Caption places the words from your script onto the art. Click in a panel with <strong>Letter</strong> to place its next line, or use <strong>Place from script</strong> to letter the whole page. Drag a balloon to move it; drag the yellow dot to aim its tail at the speaker; the <strong>+</strong> beside a balloon adds a joined balloon, one underneath, or another tail.</p>
+<div class="history">For most of comics history, lettering was done by hand, in ink, often by specialist letterers working with a ruled guide (the Ames Lettering Guide was a favourite) to keep letter heights even. American comics settled on all-capital letters, partly because they stayed legible on cheap, absorbent newsprint. Digital comic fonts now do the job, but letterers still decide balloon placement, reading order and sound effect design. That's a craft of its own.</div>
+
+<h3 id="balloons">Balloon kinds</h3>
+<p>The balloon's shape tells the reader <em>how</em> something is said. The inspector shows every kind as a picture; click one to switch.</p>
+<table>
+<tr><th>Kind</th><th>Means</th></tr>
+<tr><td>Speech</td><td>Ordinary talk. The tail points at the speaker's mouth.</td></tr>
+<tr><td>Thought</td><td>Unspoken thoughts; a trail of bubbles instead of a tail. Many modern comics use caption boxes for inner voice instead.</td></tr>
+<tr><td>Shout</td><td>Yelling or alarm: a spiky burst.</td></tr>
+<tr><td>Whisper</td><td>A dashed outline: quiet or secret speech.</td></tr>
+<tr><td>Caption box</td><td>Narration, time and place ("Meanwhile…"), or a character's inner voice.</td></tr>
+<tr><td>Sound effect</td><td>Lettering that is part of the picture: KRAK! WHOOSH!</td></tr>
+</table>
+<p>Under each kind, <strong>look presets</strong> (Round, Squarish, Hand-drawn; Burst, Sharp, Soft; Fluffy, Cloud, Puffy) change the shape in one click, and <strong>Fine-tune the shape</strong> opens every setting: border, width, roundness, spikes and spike depth, bumps and bump depth, hand-drawn wobble and tail width. <strong>Draw balloon</strong> (<kbd>D</kbd>) turns a loop you draw into a balloon of that shape.</p>
+
+<h3 id="stylesheet">The style sheet</h3>
+<p><strong>Style sheet</strong> sets the book's lettering sizes (Small, Body, Big, in printed points), the house font, and when lettering counts as too small. A live preview shows them at print size. Select a balloon and choose <strong>Save as character style</strong> to give a character their own font and balloon, then every new line by that character follows it. <strong>Rename</strong> a speaker there to rename them through the script and balloons at once.</p>
+
+<h3 id="reading">Reading order and readability</h3>
+<p>Readers follow balloons left to right and top to bottom (right to left in manga). The inspector warns when balloons would be read out of script order, and when lettering is too small to read at print size or on a phone. <strong>Keep readable</strong> nudges too-small lettering back up. <strong>Review script changes</strong> shows balloons whose script line has changed, so you can update the wording without losing placement.</p>
+<div class="tip">Place the first balloon of a panel near its top left, and keep tails short and pointing at mouths. Balloons should never cover a face or the key action.</div>
+</section>
+
+<section id="print">
+<h2><span class="desk">Print</span>Getting ready to print</h2>
+<p>Choose a <strong>Print kind</strong>: US comic book, trade paperback, manga digest, European album, zine, picture book, webtoon and more. Each sets the trim size, bleed, safe area, binding and the resolution to draw at.</p>
+<ul>
+<li><strong>Trim</strong> is where the page is cut. <strong>Bleed</strong> is extra art beyond the trim, so a cut that wanders slightly never leaves a white edge. Keep words and faces inside the <strong>safe area</strong>.</li>
+<li><strong>Saddle stitch</strong> (stapled through the fold, like most comic books and zines) needs a page count in multiples of 4; perfect binding needs an even count. inkflo adds blank pages where they're needed and tells you.</li>
+<li><strong>Preflight</strong> checks every page: resolution, lettering size and position, ink coverage.</li>
+</ul>
+<div class="history">A printed comic is folded from large sheets, so pages come in groups (signatures) of 4, 8 or 16. That's why a stapled comic book has a page count divisible by 4, and why a single folded sheet can hold an 8-page mini-zine.</div>
+</section>
+
+<section id="export">
+<h2><span class="desk">Export</span>Sharing your comic</h2>
+<p><strong>Export</strong> in the header opens the Export center (in Layout and Caption it's a menu with <strong>Export for drawing</strong> too). Previews show what you'll get before anything downloads.</p>
+<table>
+<tr><th>Choice</th><th>Gives you</th><th>For</th></tr>
+<tr><td>Print shop / Print-on-demand PDF</td><td>Pages with bleed (and crop marks for a shop)</td><td>Printers, KDP, IngramSpark, Lulu</td></tr>
+<tr><td>Home printer booklet</td><td>Pages already in booklet order, two per side</td><td>Fold-and-staple comics at school or home</td></tr>
+<tr><td>Mini-zine</td><td>8 pages on one sheet with fold and cut lines</td><td>Zines</td></tr>
+<tr><td>Page images</td><td>PNG/JPG/WebP pages, or separations (inks, colours, pencils, lettering)</td><td>Web posts, colourists, letterers</td></tr>
+<tr><td>Two-ink print</td><td>Two greyscale plates and a proof</td><td>Risograph and two-colour printing</td></tr>
+<tr><td>Every layer separately</td><td>Each layer as a PNG in folders</td><td>Rebuilding the page in another app</td></tr>
+<tr><td>Reader spreads PDF / Comic archive (.cbz)</td><td>Spreads for proofing; a file for comic reader apps</td><td>Reading and review</td></tr>
+<tr><td>Motion comic (.2dope)</td><td>A project that pans across your panels</td><td>Animated comics in 2Dope</td></tr>
+<tr><td>Book file (.inkflo)</td><td>The whole editable book</td><td>Backups and moving devices</td></tr>
+</table>
+<div class="history">Two-colour printing on a <strong>risograph</strong>, a stencil duplicator from Japan, became a favourite of zine makers and small presses because it's cheap, fast and gives bold, slightly imperfect colour. Designing in two inks is a classic small-press skill.</div>
+
+<h3 id="scroll">Vertical scroll comics</h3>
+<p><strong>Vertical scroll</strong> stacks pages into one long episode for phones: numbered image strips, a ready-to-upload <code>index.html</code>, and an <code>episode.json</code>. Set the space between pages and the background. <strong>Page-break art</strong> draws an image of your choice, such as a divider, a logo or a "to be continued" banner, in the break after each page, and optionally after the last. It's written into the strips themselves, so it scrolls seamlessly. The preview shows the first pages as readers will see them.</p>
+<div class="history">Vertical scrolling comics took off on Korean web platforms in the early 2000s, where they became known as <em>webtoons</em>. Instead of pages and spreads, the reader scrolls one long column, so pacing comes from <em>space</em>: a long gap can be a pause, and a reveal lands when it scrolls into view. Page-break art and gap size are your pacing tools.</div>
+
+<h3 id="psd">Export for drawing</h3>
+<p>Plan and letter in inkflo, then keep drawing in Procreate, Photoshop, Affinity or Clip Studio Paint. <strong>Keep artwork</strong> writes a layered PSD of your art and groups; <strong>Drawing template</strong> writes the layout and lettering with empty Pencil, Ink and Colour layers in every panel. One page downloads a PSD; a range downloads a ZIP. Keep the .inkflo book for editable cuts, lettering and script.</p>
+</section>
+
+<section id="everywhere">
+<h2>Everywhere in inkflo</h2>
+
+<h3 id="clipboard">Copy and paste</h3>
+<p><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>C</kbd> copies what you've selected; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> pastes it under the pointer, on any page of any book.</p>
+<ul>
+<li><strong>Draw:</strong> pixels selected with Transform, lines selected with Select lines, or a placed image with its cut.</li>
+<li><strong>Caption:</strong> a selected balloon (with any joined balloons). Pasted lettering is unlinked from the script.</li>
+<li><strong>From other apps:</strong> paste a picture to place it as an image layer; paste text in Caption to make a balloon. Copied pictures can be pasted into other apps too.</li>
+</ul>
+
+<h3 id="menus">Right-click and long press</h3>
+<p>Right-click the canvas, or hold a finger still on a tablet, for the actions that make sense where you are: switch tools, pick a colour, place a balloon of any kind, add a tail, cut tools, copy and paste, undo, fit the page, and export. Hover any button to see its name and shortcut.</p>
+
+<h3 id="views">Studio, Focus and Simple</h3>
+<p><strong>Studio</strong> shows the tool bar, sidebar and desk tabs. <strong>Focus</strong> (<kbd>Tab</kbd>) gives the canvas the whole screen with floating controls that can hide themselves; <strong>Simple</strong> (Draw only) shows only the essential tools, which is good for beginners and small screens. Pinch to zoom and turn the canvas on a tablet; tap with two fingers to undo and three to redo.</p>
+
+<h3 id="shortcuts">Keyboard shortcuts</h3>
+<table>
+<tr><th>Anywhere</th><th></th></tr>
+<tr><td><kbd>1</kbd>–<kbd>5</kbd></td><td>Script, Layout, Draw, Caption, Print</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Undo / redo</td></tr>
+<tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Copy / paste under the pointer</td></tr>
+<tr><td><kbd>Tab</kbd></td><td>Studio ↔ Focus layout</td></tr>
+<tr><td><kbd>0</kbd></td><td>Fit the page</td></tr>
+<tr><td><kbd>Space</kbd> + drag</td><td>Pan</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Cancel, close a menu, clear a selection</td></tr>
+<tr><th>Layout</th><th></th></tr>
+<tr><td><kbd>K</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>V</kbd> <kbd>B</kbd></td><td>Knife, Uncut, Resize gutters, Transform panel, Curve edges</td></tr>
+<tr><td><kbd>Shift</kbd> while cutting</td><td>Straight cut</td></tr>
+<tr><th>Draw</th><th></th></tr>
+<tr><td><kbd>I</kbd> <kbd>P</kbd> <kbd>S</kbd> <kbd>E</kbd></td><td>Brush, Pencil, Smudge, Eraser</td></tr>
+<tr><td><kbd>V</kbd> <kbd>A</kbd> <kbd>L</kbd> <kbd>F</kbd> <kbd>T</kbd></td><td>Vector pen, Edit lines, Comic lines, Colour, Screentone</td></tr>
+<tr><td><kbd>M</kbd> <kbd>R</kbd></td><td>Select lines, Transform</td></tr>
+<tr><td><kbd>Enter</kbd></td><td>Close a polygon selection / apply a transform</td></tr>
+<tr><th>Caption</th><th></th></tr>
+<tr><td><kbd>V</kbd> <kbd>D</kbd></td><td>Select, Draw balloon</td></tr>
+<tr><td><kbd>B</kbd> <kbd>T</kbd> <kbd>H</kbd> <kbd>W</kbd> <kbd>C</kbd> <kbd>S</kbd></td><td>Speech, Thought, Shout, Whisper, Caption box, Sound effect</td></tr>
+</table>
+</section>
+
+<section id="teaching">
+<h2>For classrooms</h2>
+<ul>
+<li><strong>Start from the starter comic.</strong> Students copy <em>The Last Train</em>, rewrite its two panels, then add a third: it teaches every desk in one lesson.</li>
+<li><strong>One desk per lesson.</strong> Script on day one, thumbnails and cuts on day two, pencils and inks, then lettering, then print. Each page's desk tabs show progress at a glance.</li>
+<li><strong>Studio roles.</strong> Swap .inkflo files between students so one writes, one draws and one letters, like a 1940s comic studio.</li>
+<li><strong>Zine project.</strong> Collage, a one-sheet mini-zine print, and a fold-and-staple class anthology using the booklet print mode.</li>
+<li><strong>Web comic.</strong> A vertical scroll episode with page-break art, uploaded as a simple web page.</li>
+<li><strong>Everything stays on the device.</strong> Nothing is uploaded; collect work as .inkflo files or exported PDFs.</li>
+</ul>
+</section>
+
+<section id="glossary">
+<h2>Glossary</h2>
+<table>
+<tr><td><strong>Beat</strong></td><td>One moment in the script; usually one panel.</td></tr>
+<tr><td><strong>Bleed</strong></td><td>Art printed past the trim so the cut page has no white edges.</td></tr>
+<tr><td><strong>Closure</strong></td><td>The reader filling in what happens between panels.</td></tr>
+<tr><td><strong>Downbeat</strong></td><td>The panel that lands a page's punchline or turn, usually the last.</td></tr>
+<tr><td><strong>Flats</strong></td><td>Plain colour fills laid down before shading.</td></tr>
+<tr><td><strong>G-pen</strong></td><td>A flexible pen nib used widely in manga for lines that swell with pressure.</td></tr>
+<tr><td><strong>Gutter</strong></td><td>The space between panels.</td></tr>
+<tr><td><strong>Inks</strong></td><td>The final black lines drawn over pencils.</td></tr>
+<tr><td><strong>Lettering</strong></td><td>Balloons, captions and sound effects, and the craft of placing them.</td></tr>
+<tr><td><strong>Panel</strong></td><td>One framed picture on the page.</td></tr>
+<tr><td><strong>Saddle stitch</strong></td><td>Binding with staples through the fold.</td></tr>
+<tr><td><strong>Safe area</strong></td><td>The inner part of the page where important things won't be trimmed.</td></tr>
+<tr><td><strong>Screentone</strong></td><td>A printed dot or line pattern used for shading.</td></tr>
+<tr><td><strong>Splash page</strong></td><td>A page that is one big panel.</td></tr>
+<tr><td><strong>Spread</strong></td><td>Two facing pages seen together.</td></tr>
+<tr><td><strong>Tail</strong></td><td>The pointer from a balloon to its speaker.</td></tr>
+<tr><td><strong>Trim</strong></td><td>The finished page size, where the paper is cut.</td></tr>
+<tr><td><strong>Webtoon</strong></td><td>A comic read by scrolling down one long column.</td></tr>
+<tr><td><strong>Zine</strong></td><td>A small self-published magazine, often photocopied and stapled.</td></tr>
+</table>
+<p class="nohits" id="nohits" hidden>No section mentions that. Try another word.</p>
+</section>
+</main>
+</div>
+<script>
+// Search: show only sections that mention every word typed.
+const input = document.getElementById('q');
+const sections = [...document.querySelectorAll('main > section')];
+const nohits = document.getElementById('nohits');
+input.addEventListener('input', () => {
+  const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0;
+  for (const s of sections) {
+    const hit = !words.length || words.every((w) => s.textContent.toLowerCase().includes(w));
+    s.hidden = !hit && s.id !== 'glossary';
+    if (hit) shown++;
+  }
+  nohits.hidden = shown > 0 || !words.length;
+});
+</script>
+</body>
+</html>

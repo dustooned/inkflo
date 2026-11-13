@@ -821,3 +821,22 @@ an iPad pays for on every frame:
   picture presets, and the fold stays open while you adjust. New controls: **Spike depth**
   (shout), **Bump depth** (thought) and **Tail width** (all tails). Their defaults match the
   renderer (0.26, 0.16, 1.2).
+
+## The manual, 2026-11-13
+
+- `public/manual/index.html` is a standalone page served with the app at `manual/index.html`.
+  It works offline, follows light and dark themes, prints cleanly, and has a contents sidebar
+  and search.
+- Eleven chapters follow the workflow: welcome and the five desks, Script, Layout (Knife, Auto
+  Shape, grids and rhythm, panel tools), Draw (layers, tools, colour, tone, selection), Collage
+  and zines, Caption (balloon kinds, style sheet, reading order), Print, Export (scroll and
+  page-break art, Export for drawing), copy/paste and menus, keyboard shortcuts, a classroom
+  guide and a glossary.
+- Each chapter explains features with the craft and history behind them. Examples: studio roles
+  and the pipeline; full script against the Marvel method; McCloud's closure and Eisner's
+  sequential art; the nine-panel grid and the downbeat; non-photo blue and the G-pen; flats and
+  four-colour printing; Ben-Day dots and screentone; zines from fanzines to riot grrrl and
+  collage from 1912; hand lettering and all-caps; signatures and saddle stitch; risograph; and
+  webtoons.
+- **Manual** buttons: home screen, the `?` in each desk header (opens that desk's chapter), the
+  Focus overflow menu, and **Open the manual** in the canvas menu.
