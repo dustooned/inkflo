@@ -373,7 +373,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     button.title = 'Layers · ' + hint;
     button.replaceChildren(h('span', {}, 'Layers'),
       h('small', {}, target === 'auto' ? 'Panel under pen' : pinned ?? 'Choose layer'),
-      h('span', { class: 'layer-chevron', 'aria-hidden': 'true' }, '⌄'));
+      h('span', { class: 'layer-chevron', 'aria-hidden': 'true' }, '▾'));
   }
 
   /** Add a layer of a type to a group as its own command; returns its id. */
@@ -1665,6 +1665,25 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
           h('button', { class: 'btn', type: 'button', onclick: adjustLayer }, 'Adjustments'),
           h('button', { class: 'btn', type: 'button', onclick: () => images.open() }, 'Place image')),
       );
+    },
+    contextMenu(p) {
+      const use = (id: string) => () => { mode.tool = id; ctx.chrome(); ctx.request(); };
+      const tool = (id: string, label: string, key?: string) => ({ label, key, checked: mode.tool === id, run: use(id) });
+      return [
+        { label: 'Pick colour here', run: () => {
+          const color = colourAt(p);
+          if (!color) { toast('No colour under the pointer.'); return; }
+          if (mode.tool === 'fill') state.color = color;
+          else { ink.color = color; saveInk(); }
+          ctx.chrome();
+        } },
+        'sep',
+        tool('ink', 'Brush', 'I'), tool('pencil', 'Pencil', 'P'), tool('eraser', 'Eraser', 'E'),
+        tool('fill', 'Colour', 'F'), tool('selection', 'Select lines', 'M'), tool('pixels', 'Transform', 'R'),
+        'sep',
+        { label: 'Show pencil', checked: state.showPencil, run: () => { state.showPencil = !state.showPencil; pixels.clear(); ctx.chrome(); } },
+        { label: 'Layers…', run: () => contextLayers.click() },
+      ];
     },
     down(p, e) {
       if (shapeEditor.active()) { shapeEditor.down(p, e); return; }

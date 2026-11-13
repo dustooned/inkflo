@@ -10,6 +10,7 @@ import { drawBackdrop } from './backdrop';
 import { drawComposition } from './composition';
 import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
+import { glyphEl } from './icons';
 import { h, slider, toast } from './dom';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
@@ -65,6 +66,9 @@ export interface DeskCtx {
   hint(text: string, options?: HintOptions): void;
 }
 
+/** One row of the canvas right-click menu, or a separator. */
+export type MenuItem = { label: string; run: () => void; disabled?: boolean; checked?: boolean; key?: string } | 'sep';
+
 export interface DeskMode {
   id: Stage;
   tools: Tool[];
@@ -90,6 +94,8 @@ export interface DeskMode {
   types?(): Partial<Record<LayerType, boolean>>;
   skipBalloon?(): string | undefined;
   key?(e: KeyboardEvent): boolean;
+  /** Right-click on the canvas: this desk's actions for the point under the pointer. */
+  contextMenu?(p: Pt): MenuItem[];
   dispose?(): void;
 }
 
@@ -311,6 +317,14 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     else mode.down?.(p, e);
     ctx.request();
   });
+  // Right-click (or a two-finger long press reported as contextmenu): practical actions here.
+  stageEl.addEventListener('contextmenu', (e) => {
+    if (mode.pane) return;
+    e.preventDefault();
+    if (primaryPointer !== null) return;
+    stageRect = stageEl.getBoundingClientRect();
+    openCanvasMenu(ctx.toPage(e), e.clientX, e.clientY);
+  });
   stageEl.addEventListener('pointermove', (e) => {
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       const which = e.pointerId === primaryPointer ? 'a' : 'b';
@@ -418,6 +432,20 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   // ---- tool rail: groups, flyouts, customization
   const toolRail = h('nav', { class: 'rail', 'aria-label': 'Tools' });
   const ctxBar = h('div', { class: 'ctx', role: 'toolbar', 'aria-label': 'Tool settings' });
+  // One-row tool bar: a vertical wheel scrolls it sideways, and a fade marks the side with more.
+  const ctxEdges = () => {
+    const more = ctxBar.scrollWidth - ctxBar.clientWidth;
+    ctxBar.classList.toggle('more-end', more > 1 && ctxBar.scrollLeft < more - 1);
+    ctxBar.classList.toggle('more-start', more > 1 && ctxBar.scrollLeft > 1);
+  };
+  ctxBar.addEventListener('scroll', ctxEdges, { passive: true });
+  ctxBar.addEventListener('wheel', (e) => {
+    if (ctxBar.scrollWidth <= ctxBar.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    ctxBar.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }, { passive: false });
+  new ResizeObserver(ctxEdges).observe(ctxBar);
+  new MutationObserver(() => requestAnimationFrame(ctxEdges)).observe(ctxBar, { childList: true });
   const insp = h('aside', { class: 'insp', 'aria-label': 'Inspector' });
   const paneHost = h('div', { class: 'pane' });
 
@@ -432,6 +460,35 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     return [...mode.tools].sort((a, b) => rank(a.id) - rank(b.id)).filter((t) => t.id === mode.tool || !(tp.hidden ?? []).includes(t.id));
   }
 
+  function openCanvasMenu(p: Pt, x: number, y: number): void {
+    const items: MenuItem[] = [
+      ...(mode.contextMenu?.(p) ?? []),
+      'sep',
+      { label: 'Undo', key: 'Ctrl+Z', disabled: !studio.history.canUndo, run: () => studio.undo() },
+      { label: 'Redo', key: 'Ctrl+Shift+Z', disabled: !studio.history.canRedo, run: () => studio.redo() },
+      'sep',
+      { label: 'Fit page', key: '0', run: resetView },
+      { label: 'Reset rotation', disabled: !view.angle, run: () => { view.angle = 0; ctx.request(); } },
+      { label: prefs().layout === 'focus' ? 'Studio layout' : 'Focus layout', key: 'Tab', run: () => toggleLayout() },
+      'sep',
+      ...(stage === 'layout' || stage === 'caption' ? [{ label: 'Export for drawing…', run: () => openExport(studio, 'apps', { page: idx + 1 }) }] : []),
+      { label: 'Export…', run: () => openExport(studio, stage === 'print' ? 'print' : 'files') },
+    ];
+    // no leading, trailing or doubled separators
+    const rows = items.filter((it, i, all) => it !== 'sep' || (i > 0 && all[i - 1] !== 'sep' && i < all.length - 1));
+    const anchor = h('span', { class: 'caption-menu-anchor', style: `left:${x}px;top:${y}px` });
+    document.body.append(anchor);
+    let close = () => {};
+    const menu = h('div', { class: 'chrome-menu canvas-menu', role: 'menu', 'aria-label': 'Canvas actions' },
+      rows.map((it) => it === 'sep' ? h('div', { class: 'sep', role: 'separator' }) : h('button', {
+        class: 'item', type: 'button', role: it.checked === undefined ? 'menuitem' : 'menuitemcheckbox',
+        'aria-checked': it.checked === undefined ? null : String(it.checked), disabled: !!it.disabled,
+        onclick: () => { close(); it.run(); ctx.request(); },
+      }, h('span', { 'aria-hidden': 'true' }), it.label, it.key ? h('kbd', {}, it.key) : null)));
+    close = popover(anchor, menu, 'below', 'Canvas actions', () => anchor.remove());
+    menu.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus({ preventScroll: true });
+  }
+
   function selectTool(id: string): void {
     mode.tool = id;
     chrome();
@@ -444,7 +501,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       h('h4', {}, t.label, compact && t.key ? h('kbd', { class: 'flyout-key' }, t.key.toUpperCase()) : null),
       t.variants!.map((v) =>
         h('button', { class: 'item', type: 'button', role: 'menuitemradio', 'aria-checked': String(v.id === t.variant), onclick: () => { closePopover(); mode.tool = t.id; ctx.setVariant(t.id, v.id); } },
-          h('span', { 'aria-hidden': 'true' }, v.glyph), v.label, v.key ? h('kbd', {}, v.key.toUpperCase()) : null))), compact ? 'left' : 'right', `${t.label} options`);
+          glyphEl(v.label, v.glyph), v.label, v.key ? h('kbd', {}, v.key.toUpperCase()) : null))), compact ? 'left' : 'right', `${t.label} options`);
   }
 
   function customize(anchor: HTMLElement): void {
@@ -470,7 +527,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
             setToolPrefs(stage, { hidden: [...next] });
           });
           return h('div', { class: 'row' },
-            h('label', {}, box, h('span', { 'aria-hidden': 'true' }, t.glyph), t.label),
+            h('label', {}, box, glyphEl(t.label, t.glyph), t.label),
             h('button', { type: 'button', 'aria-label': `Move ${t.label} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
             h('button', { type: 'button', 'aria-label': `Move ${t.label} down`, disabled: i === list.length - 1, onclick: () => move(i, 1) }, '↓'));
         }),
@@ -501,8 +558,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const v = t.variants?.find((x) => x.id === t.variant);
       const label = v ? `${t.label}: ${v.label}` : t.label;
       const b = h('button', { class: 'tool', type: 'button', 'aria-pressed': String(t.id === mode.tool), 'aria-haspopup': t.variants ? 'menu' : null,
-        title: `${label}${t.key ? ` (${t.key.toUpperCase()})` : ''}${t.variants ? ' · click again or right-click for options' : ''}` },
-        h('span', { 'aria-hidden': 'true' }, v?.glyph ?? t.glyph), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
+        title: `${label}${t.key ? ` (${t.key.toUpperCase()})` : ''}${t.variants ? ' · right-click for options' : ''}` },
+        glyphEl(t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
       b.setAttribute('aria-label', label);
       b.addEventListener('click', () => {
         if (t.variants && mode.tool === t.id) flyout(t, b);
@@ -540,7 +597,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     if (simple) {
       const more = h('button', { class: 'tool', type: 'button', 'aria-label': 'More tools', 'aria-haspopup': 'dialog' }, h('span', {}, '⋯'), h('em', {}, 'More'));
       more.addEventListener('click', () => popover(more, h('div', {}, available.filter((t) => !essentials.has(t.id)).map((t) =>
-        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); selectTool(t.id); } }, h('span', { 'aria-hidden': 'true' }, t.glyph), t.label, t.key ? h('kbd', {}, t.key.toUpperCase()) : null))), 'left', 'More tools'));
+        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); selectTool(t.id); } }, glyphEl(t.label, t.glyph), t.label, t.key ? h('kbd', {}, t.key.toUpperCase()) : null))), 'left', 'More tools'));
       items.push(more);
     }
     toolRail.replaceChildren(...items, opt);
@@ -638,7 +695,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const rail = h('nav', { class: 'stagerail', 'aria-label': 'Desks' },
     STAGES.map((s, i) =>
       h('button', { type: 'button', 'aria-current': String(s === stage), title: `${DESK_META[s].label} (${i + 1})`, onclick: () => go(`#desk/${book.id}/${page.id}/${s}`) },
-        h('span', { 'aria-hidden': 'true' }, DESK_META[s].glyph), h('b', {}, DESK_META[s].label), h('small', {}, STATE_LABEL[page.state[s]]))),
+        glyphEl(DESK_META[s].label, DESK_META[s].glyph, 18), h('b', {}, DESK_META[s].label), h('small', {}, STATE_LABEL[page.state[s]]))),
   );
 
   const doneBtn = h('button', { class: 'btn', type: 'button', onclick: () => {
@@ -663,6 +720,17 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const drawingExport = stage === 'layout' || stage === 'caption';
   const exportForDrawing = () => openExport(studio, 'apps', { page: idx + 1 });
   const drawingAction: ChromeAction = { label: 'Export for drawing', glyph: '⇲', run: exportForDrawing };
+  // One Export button in the header. Layout and Caption open a menu that also offers the PSD
+  // handoff, so the bar never needs a second wide button.
+  const exportHeader = h('button', { class: 'btn', type: 'button', 'aria-haspopup': drawingExport ? 'menu' : null }, drawingExport ? 'Export ▾' : 'Export');
+  exportHeader.addEventListener('click', () => {
+    if (!drawingExport) { openExport(studio, stage === 'print' ? 'print' : 'files'); return; }
+    const item = (label: string, note: string, run: () => void) => h('button', { class: 'item', type: 'button', role: 'menuitem', onclick: () => { close(); run(); } },
+      h('span', { class: 'item-text' }, h('b', {}, label), h('small', {}, note)));
+    const close = popover(exportHeader, h('div', { class: 'chrome-menu', role: 'menu', 'aria-label': 'Export' },
+      item('Export files…', 'Images, PDF, comic archive, book file', () => openExport(studio, 'files')),
+      item('Export for drawing…', 'Layered PSD of page ' + (idx + 1) + ' for another app', exportForDrawing)), 'below', 'Export');
+  });
   const deskActions = mode.actions ?? [];
   const primary = stage === 'layout' ? [...deskActions, exportAction, display, inspect] : [...deskActions, display, inspect, exportAction];
   const moreButton = () => actions.querySelector<HTMLButtonElement>('[aria-label="More document actions"]')!;
@@ -691,7 +759,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const screen = h('div', { class: 'screen', 'data-desk': stage },
     h('header', { class: 'bar', style: 'height:52px' },
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to book', onclick: () => go(`#book/${book.id}`) }, '←'),
-      h('div', { class: 'crumb' }, h('a', { href: `#book/${book.id}` }, book.title), h('b', {}, '/'), h('strong', {}, `Page ${idx + 1}`), h('b', {}, '/'), DESK_META[stage].label),
+      h('div', { class: 'crumb' }, h('a', { href: `#book/${book.id}` }, book.title), h('b', {}, '/'), h('strong', {}, `Page ${idx + 1}`), h('b', {}, '/'), h('span', {}, DESK_META[stage].label)),
       h('span', { class: 'spacer' }),
       h('div', { class: 'pager' },
         h('button', { type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
@@ -700,8 +768,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       save, undoBtn(), redoBtn(), narrowInspector, stage !== 'script' ? viewButton() : null, spreadButton(studio, page, stage, go), displayButton(true, composition),
       stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null,
       layoutBtn('⤢', 'Focus layout'), doneBtn,
-      drawingExport ? h('button', { class: 'btn drawing-export', type: 'button', title: 'Layered PSD of this page for another drawing app', onclick: exportForDrawing }, 'Export for drawing') : null,
-      h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio, stage === 'print' ? 'print' : 'files') }, 'Export')),
+      exportHeader),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),
     rail, top, compactStatus, message.el,

@@ -415,6 +415,26 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       else inspectPage(el);
       if (l) el.append(presetControls(l));
     },
+    contextMenu(p) {
+      const q = toPt(p);
+      const hit = captionGroups(page.balloons).flatMap(balloonPaintOrder).reverse().find((b) => hitLetter(b, sheet(), q, W, H));
+      const items: ReturnType<NonNullable<DeskMode['contextMenu']>> = [];
+      if (hit) {
+        selId = hit.id;
+        ctx.chrome();
+        items.push(
+          { label: 'Joined balloon', run: () => addContinuation(hit) },
+          { label: 'Add tail', disabled: hit.cap.tails.length >= 4, run: () => addTail(hit) },
+          { label: 'Delete balloon', key: 'Del', run: () => { edit('Delete balloon', () => removeLetter(hit)); selId = null; ctx.chrome(); } },
+          'sep');
+      }
+      items.push(...KINDS.map((k) => ({ label: k.label + ' here', run: () => place(p, k.id) })));
+      items.push('sep',
+        { label: 'Select', key: 'V', checked: mode.tool === 'select', run: () => { mode.tool = 'select'; ctx.chrome(); } },
+        { label: 'Script dialogue…', run: openScript },
+        { label: 'Style sheet…', run: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) });
+      return items;
+    },
     down(p, e) {
       if (mode.tool === 'draw-balloon') {
         loop = [p];

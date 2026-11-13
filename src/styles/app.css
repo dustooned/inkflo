@@ -565,3 +565,101 @@ body:has(.screen:is(.focus, .simple)) .settings-card :is(button, select, input[t
 .script-revision dt { font-weight: 650; }
 .script-revision dd { margin: 0 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .script-revision-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+
+/* ---- UI polish, 2026-11-13: one-row bars, steady tool rail, quieter scrollbars ---- */
+
+/* Thin scrollbars everywhere; the default ones cost the rail its label width. */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+/* Header: one row, 8 px inside clusters, buttons never wrap, the crumb gives way first. */
+.bar { gap: var(--gap); }
+.bar .btn, .bar .icon, .pager { white-space: nowrap; flex: none; }
+.bar .crumb { flex: 0 1 auto; min-width: 72px; }
+.bar .spacer { flex: 1 1 0; min-width: 0; }
+
+/* Tool rail: no scrollbar eating the column, sentence-case labels that fit. */
+.rail { overflow-x: hidden; scrollbar-width: none; }
+.rail::-webkit-scrollbar { display: none; }
+.rail .tool { gap: 4px; padding: 8px 2px; min-height: 54px; }
+.rail .tool span { font-size: 17px; }
+.rail .tool em { font-size: 10px; font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.15; text-align: center; max-width: 100%; overflow-wrap: anywhere; }
+
+/* Tool options: one row in Studio (the reference's tool bar), scrolling sideways when full,
+   so changing tools never moves the canvas. The hint takes what is left. */
+.screen:not(.focus):not(.simple) > .ctx { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: var(--gap-group); }
+.screen:not(.focus):not(.simple) > .ctx > * { flex: none; }
+.screen:not(.focus):not(.simple) > .ctx > .hint { flex: 1 1 160px; min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctx .mini, .ctx .btn, .ctx .seg button { white-space: nowrap; }
+
+/* A disabled primary button reads as unavailable, not as selected. */
+.btn.primary[disabled] { background: var(--btn); color: var(--text-soft); border-color: var(--line); }
+
+/* Menus with a second line. */
+.pop .item .item-text { display: grid; gap: 2px; width: auto; text-align: left; }
+.pop .item .item-text small { color: var(--text-soft); font-size: 11px; }
+.pop .item:hover .item-text small { color: var(--text); }
+
+/* Layers trigger: the chevron sits on the text line. */
+.layer-trigger .layer-chevron { font-size: 10px; line-height: 1; opacity: .7; }
+
+/* Export center: the tab row stays in view while its content scrolls. */
+dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; z-index: 2; flex: none; }
+.screen:not(.focus):not(.simple) > .ctx { scrollbar-width: none; }
+.screen:not(.focus):not(.simple) > .ctx::-webkit-scrollbar { display: none; }
+.ctx.more-end { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.ctx.more-start { mask-image: linear-gradient(to right, transparent, #000 36px); }
+.ctx.more-start.more-end { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.rail { padding: 8px 3px; }
+.rail .tool { padding: 8px 0; }
+.rail .tool em { overflow-wrap: normal; }
+.rail .tool .more { top: 5px; bottom: auto; right: 5px; border-bottom: 0; border-top: 5px solid currentColor; border-left: 5px solid transparent; }
+/* The crumb shortens the book title first and keeps the page and desk readable. */
+.bar .crumb { display: flex; align-items: baseline; min-width: 0; }
+.bar .crumb > * { flex: none; }
+.bar .crumb > a { flex: 0 1 auto; min-width: 3ch; overflow: hidden; text-overflow: ellipsis; }
+.pop .item > span.item-text:first-child { width: auto; text-align: left; }
+.chrome-menu:has(.item-text) { min-width: 260px; }
+/* Lock and eye glyphs are emoji on most systems; keep them in the monochrome UI. */
+.lt, .pop .item > span:first-child { font-variant-emoji: text; filter: grayscale(1); }
+/* Phone: the header stays one row and scrolls sideways instead of stacking four rows deep. */
+@media (max-width: 620px) {
+  .bar { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .bar::-webkit-scrollbar { display: none; }
+  .bar > * { flex: none; }
+  .bar .crumb { flex: none; max-width: 46vw; }
+  .bar .spacer { display: none; }
+}
+@media (max-width: 1100px) {
+  .bar { padding-inline: 16px; }
+  .screen[data-desk] .bar .crumb > a, .screen[data-desk] .bar .crumb > a + b { display: none; }
+  .bar .crumb { flex: none; min-width: 0; }
+}
+
+/* ---- Icons and tooltips ---- */
+.ico { display: block; flex: none; }
+.btn:has(> .ico) { display: inline-flex; align-items: center; gap: 6px; }
+.btn.icon-only { width: 34px; padding: 0; justify-content: center; }
+.btn.icon-only[aria-pressed="true"], .btn.icon-only[aria-expanded="true"] { background: var(--pressed); color: var(--pressed-text); }
+.icon > .ico { margin: auto; }
+.rail .tool > .ico { width: 20px; height: 20px; }
+.stagerail button > .ico { opacity: .85; }
+.pop .item > .ico { width: 18px; height: 18px; opacity: .9; }
+.pop .item[aria-checked="true"] > .ico, .pop .item[aria-pressed="true"] > .ico { opacity: 1; }
+.tip {
+  position: fixed; z-index: 90; max-width: 260px; padding: 5px 9px; border-radius: 6px;
+  background: var(--text); color: var(--surface); font: 500 11.5px/1.35 var(--ui);
+  box-shadow: var(--shadow); pointer-events: none; animation: tip-in 120ms ease-out;
+}
+@keyframes tip-in { from { opacity: 0; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .tip { animation: none; } }
+.pop .item[disabled] { opacity: .4; cursor: default; }
+.pop .item[disabled]:hover { background: none; }
+.canvas-menu { min-width: 230px; }
+.canvas-menu .item { min-height: 32px; padding-block: 6px; }
+.canvas-menu .item > span:first-child:empty { width: 18px; }
+/* Any width: when the header is full it scrolls sideways rather than pushing buttons off-screen. */
+.bar { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.bar::-webkit-scrollbar { display: none; }
+.bar.more-end { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.bar.more-start { mask-image: linear-gradient(to right, transparent, #000 36px); }
+.bar.more-start.more-end { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }

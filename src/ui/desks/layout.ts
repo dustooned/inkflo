@@ -325,6 +325,21 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           h('p', { class: 'note' }, 'One panel cuts the first panel you cross completely. Across page cuts every panel along the swipe.')),
       );
     },
+    contextMenu() {
+      const use = (id: string, variant?: string) => () => { if (variant) ctx.setVariant(id, variant); mode.tool = id; ctx.chrome(); ctx.request(); };
+      const knife = variantOf(mode, 'knife');
+      return [
+        { label: 'Across page', key: 'K', checked: mode.tool === 'knife' && knife === 'across', run: use('knife', 'across') },
+        { label: 'One panel', checked: mode.tool === 'knife' && knife === 'panel', run: use('knife', 'panel') },
+        { label: 'Uncut', key: 'E', checked: mode.tool === 'erase', run: use('erase') },
+        { label: 'Resize gutters', key: 'R', checked: mode.tool === 'resize', run: use('resize') },
+        { label: 'Transform panel', key: 'V', checked: mode.tool === 'place', run: use('place') },
+        { label: 'Curve edges', key: 'B', checked: mode.tool === 'curve', run: use('curve') },
+        'sep',
+        { label: 'Page templates…', run: templates },
+        { label: 'Even out', disabled: !canEvenOut(page), run: () => studio.editPage(page, 'Even out', ['cuts'], (q) => (q.cuts = evenOut(q))) },
+      ];
+    },
     down(p, e) {
       if (mode.tool === 'place') { placement.down(p, e); return; }
       if (mode.tool === 'curve') {

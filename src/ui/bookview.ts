@@ -52,7 +52,7 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
   const save = h('span', { class: 'save', 'aria-live': 'polite' });
   const status = () => {
     titleEl.textContent = book.title;
-    metaEl.textContent = `${book.pages.length} pages · ${book.dpi} dpi`;
+    metaEl.textContent = `${book.pages.length} ${book.pages.length === 1 ? 'page' : 'pages'} · ${book.dpi} dpi`;
     save.dataset.state = studio.saveState;
     save.textContent = { idle: '', dirty: 'Unsaved', saving: 'Saving…', saved: 'Saved', error: `Not saved: ${studio.saver.error ?? ''}` }[studio.saveState];
   };
@@ -67,6 +67,12 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
           const t = await askText('Rename book', 'Title', book.title, 'Rename');
           if (t !== null) await studio.renameBook(t, book.author);
         } }, 'Rename'),
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (await confirmDialog('Delete book?', `“${book.title}” and all its pages are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
+            await studio.deleteBook(book.id);
+            go('#home');
+          }
+        } }, 'Delete'),
         h('span', { class: 'spacer' }),
         save,
         displayButton(),
@@ -75,12 +81,6 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => studio.redo() }, '↷'),
         h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio) }, 'Export'),
         spreadButton(studio, undefined, 'layout', go),
-        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-          if (await confirmDialog('Delete book?', `“${book.title}” and all its pages are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
-            await studio.deleteBook(book.id);
-            go('#home');
-          }
-        } }, 'Delete'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => go(`#desk/${book.id}/${last.id}/${book.lastStage}`) }, `Continue · ${STAGE_LABEL[book.lastStage]}`)),
       h('main', { class: 'body' }, grid)),
   );

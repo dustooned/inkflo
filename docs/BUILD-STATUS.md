@@ -605,3 +605,70 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   - 356 tests, typecheck and build. `placement.test.ts` covers the mapping.
 - **Not checked:** polygon and freehand marquee shapes specifically (they share the same
   path), clone with a source point, and scaled panels in the browser (unit test only).
+
+## Interface cleanup, 2026-11-13
+
+Measured against `docs/research/procreate-ui-style.md` (one bar row, 8/14 px gaps, a single
+tool-options row, a popover for choices):
+
+- **Header:**
+  - Buttons no longer wrap to two or three lines.
+  - Layout and Caption now have one **Export ▾** menu, with Export files and Export for drawing,
+    instead of two wide buttons.
+  - Below 1100 px the crumb drops the book title, so "Page 1 / Draw" always shows.
+  - On a phone the header is one sideways-scrolling row instead of four stacked rows.
+  - The book view's spacer works again, Delete sits beside Rename instead of next to
+    Continue, and "1 pages" reads "1 page".
+- **Tool rail:**
+  - The vertical scrollbar took about 15 px of the 64 px column. It is hidden, which removes the
+    clipped labels ("Screenton e") and the stray horizontal scrollbar.
+  - Labels are sentence case at 10 px.
+  - The more-options marker moved to the top corner.
+- **Tool options (Studio):**
+  - One row instead of two or three, so changing tools no longer moves the canvas.
+  - When the row is full, it scrolls with the mouse wheel and fades at the cut-off edge.
+- **Smaller fixes:**
+  - Thin themed scrollbars.
+  - A disabled primary button now looks unavailable instead of selected.
+  - Menu rows have a second line.
+  - The Layers chevron sits on the text line.
+  - Lock and eye icons are monochrome instead of colour emoji.
+  - The Export center tab row stays visible while its content scrolls.
+- **Checks:**
+  - Chrome at 958 × 916: every desk, the Export menu and dialog, the Layers popover, light
+    and dark themes. No header overflow.
+  - DOM checks at 375 px: no page overflow on any desk or the book view; the header is 52 px.
+  - 356 tests, typecheck and build.
+- **Not changed:** Focus and Simple chrome, the Draw inspector's duplicate Layers and
+  Adjustments buttons, and the four-surface split (card, toolbar, popover, panel) from the
+  research spec.
+
+## Icons, tooltips and the canvas menu, 2026-11-13
+
+- **Icons** (`ui/icons.ts`): an original 24 px line set (about 90 icons), drawn for inkflo.
+  - They are looked up by each control's visible label, so tool and action definitions are
+    unchanged. Labels without an icon keep their text glyph.
+  - Covered: the tool rail, tool flyouts, More tools and Customize, the desk switcher, header,
+    Focus bar, tool-option buttons, inspector buttons and menu rows.
+  - Spread, Simple / Studio, Mark done and Inspector are icon-only in the header. Their name
+    stays as the aria-label.
+- **Tooltips** (`ui/affordances.ts`):
+  - Any control with a title or aria-label shows a styled tip after 450 ms hover, or on
+    keyboard focus. Rail tips appear beside the rail.
+  - Titles become `data-tip`, so the browser's own tooltip doesn't show as well. A button that
+    had only a title keeps it as its aria-label.
+- **Right-click on the canvas** (`DeskMode.contextMenu`):
+  - **Draw:** pick colour here, Brush / Pencil / Eraser / Colour / Select lines / Transform,
+    show pencil, Layers.
+  - **Layout:** each cut tool, Page templates, Even out.
+  - **Caption:** on a balloon, selects it and offers joined balloon, add tail and delete. Anywhere,
+    places any balloon kind at the pointer, plus Select, Script dialogue and Style sheet.
+  - **Every desk:** Undo / Redo (disabled when unavailable), Fit page, Reset rotation,
+    Focus/Studio layout, Export for drawing (Layout, Caption) and Export.
+- **Header:** when full, it scrolls sideways at any width, with the wheel and a fade, instead of
+  pushing Mark done and Export off-screen (seen at 662 px).
+- **Checks:**
+  - Chrome at 662 px: every desk's menu; Add tail then Undo from the menu (tails 1→2→1);
+    tooltips on the header and rail; Focus bar icons; Export reachable in the header.
+  - `icons.test.ts` checks that every label maps to a drawn icon. 358 tests, typecheck and build.
+- **Not done:** a long-press menu for touch, and arrow-key navigation inside the canvas menu.
