@@ -242,7 +242,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),
         h('button', { class: 'btn document-option', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
-        h('span', { class: 'hint' }, mode.tool === 'knife' ? (cutMode() === 'panel' ? 'Swipe through a panel from outside its border' : 'Swipe from the board, across the page, and back onto the board') : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : mode.tool === 'curve' ? 'Select a gutter, then drag a Bézier handle' : 'Click a gutter to remove it'),
+        h('span', { class: 'hint' }, mode.tool === 'knife' ? (cutMode() === 'panel' ? 'Draw a line through a panel. It runs on to the panel’s borders.' : 'Draw a line across the page. It runs on to the page edges.') : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : mode.tool === 'curve' ? 'Select a gutter, then drag a Bézier handle' : 'Click a gutter to remove it'),
       );
     },
     inspector(el) {
@@ -448,7 +448,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           studio.markStage(page, 'layout', 1);
           ctx.chrome();
         } else if (points.some((q) => Math.hypot(q.x - points[0]!.x, q.y - points[0]!.y) * ctx.scale() >= 18)) {
-          toast(cutMode() === 'panel' ? 'Start and finish outside the panel you want to cut.' : 'Start and finish on the board outside the page.');
+          toast(cutMode() === 'panel' ? 'Draw the line across the panel you want to cut.' : 'Draw a longer line across the page.');
         }
         return;
       }

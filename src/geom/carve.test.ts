@@ -49,15 +49,40 @@ describe('carving', () => {
     expect(panelAt([top!, bottom!], { x: W / 2, y: H * .25 })).toBeNull();
   });
 
-  it('requires both ends of a page swipe to be beyond the trim and uses the actual gesture', () => {
+  it('uses an off-page swipe as drawn', () => {
     const p = page();
-    expect(planKnifeCut(p, [{ x: 1, y: 4 }, { x: W + 1, y: 4 }], 'across')).toBeNull();
-    expect(planKnifeCut(p, [{ x: -1, y: 4 }, { x: W - 1, y: 4 }], 'across')).toBeNull();
     const plan = planKnifeCut(p, [{ x: -0.25, y: 4 }, { x: W + 0.25, y: 4 }], 'across');
     expect(plan?.cut.bounded).toBe(true);
     p.cuts.push({ id: 'swipe', ...plan!.cut });
     expect(derivePanels(p)).toHaveLength(2);
     expect(gutterPaths(p)[0]!.points.at(-1)!.x).toBeCloseTo(W);
+  });
+
+  it('extends a line drawn inside the page straight out to the trim', () => {
+    for (const stroke of [[{ x: 1, y: 4 }, { x: W + 1, y: 4 }], [{ x: -1, y: 4 }, { x: W - 1, y: 4 }], [{ x: 2, y: 4 }, { x: W - 2, y: 4 }]]) {
+      const p = page();
+      const plan = planKnifeCut(p, stroke, 'across');
+      expect(plan, JSON.stringify(stroke)).not.toBeNull();
+      p.cuts.push({ id: 'inside', ...plan!.cut });
+      expect(derivePanels(p)).toHaveLength(2);
+      const path = gutterPaths(p)[0]!.points;
+      expect(Math.min(path[0]!.x, path.at(-1)!.x)).toBeCloseTo(0);
+      expect(Math.max(path[0]!.x, path.at(-1)!.x)).toBeCloseTo(W);
+    }
+    // a tap or tiny flick is still not a cut
+    expect(planKnifeCut(page(), [{ x: 2, y: 4 }, { x: 2.05, y: 4 }], 'across')).toBeNull();
+  });
+
+  it('one panel cuts the panel a line is drawn inside', () => {
+    const p = page();
+    p.cuts = presetCuts(p, 'rows2');
+    // drawn wholly inside the lower panel
+    const plan = planKnifeCut(p, [{ x: 3, y: H * 0.6 }, { x: 3, y: H * 0.9 }], 'panel');
+    expect(plan).not.toBeNull();
+    const ys = plan!.paths[0]!.map((q) => q.y);
+    expect(Math.min(...ys)).toBeGreaterThan(H / 2 - 0.3);
+    p.cuts.push({ id: 'inside', ...plan!.cut });
+    expect(derivePanels(p)).toHaveLength(3);
   });
 
   it('one panel freezes only the first complete span entered from outside', () => {

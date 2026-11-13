@@ -698,3 +698,23 @@ tool-options row, a popover for choices):
   - Deterministic: two rebuilds match exactly.
   - On the starter it draws the same shapes but anti-aliased, where the saved starter bitmaps
     have hard edges. That accounts for the pixel difference seen earlier; nothing is misplaced.
+
+## Knife cuts from inside the page, 2026-11-13
+
+- The Knife refused any stroke that did not start and end beyond the trim (Across page) or
+  outside the panel (One panel). A line drawn on the page did nothing, which read as a broken
+  Knife.
+- A stroke is now planned as drawn first, so off-page swipes behave exactly as before. If that
+  fails and an end lies inside the page, the ends continue straight outward:
+  - **Across page** cuts every panel along the line, from page edge to page edge.
+  - **One panel** cuts only the panel the line was drawn in.
+  - Taps and tiny flicks are still ignored. Hints and the error text describe the new behaviour.
+- **Long press no longer swallows a slow cut.** The menu opens after a still hold, but moving
+  on closes it and the swipe continues. Only lifting in place keeps the menu, and that press
+  doesn't tap.
+- **Checks:**
+  - `carve.test.ts`: inside, half-inside and off-page strokes; One panel inside a lower panel;
+    a tiny flick is refused.
+  - Browser, with real pointer events: a mouse line inside the page cut 0 → 6.625″; a touch hold
+    of 650 ms then a swipe cut with no menu left open; hold then lift opened the menu without a
+    cut; One panel split one panel (6 → 7).

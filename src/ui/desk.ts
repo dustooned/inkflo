@@ -269,8 +269,10 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       // ignore
     }
   };
-  // Touch: hold one finger still to open the canvas menu (the right-click of a tablet).
-  let longPress: { id: number; x: number; y: number; timer: number } | null = null;
+  // Touch: hold one finger still to open the canvas menu (the right-click of a tablet). The
+  // gesture stays alive: moving on closes the menu and the swipe carries on (a slow knife cut);
+  // lifting without moving keeps the menu and the press does nothing else.
+  let longPress: { id: number; x: number; y: number; timer: number; opened: boolean } | null = null;
   const cancelLongPress = () => {
     if (longPress) clearTimeout(longPress.timer);
     longPress = null;
@@ -278,17 +280,14 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const startLongPress = (e: PointerEvent) => {
     cancelLongPress();
     const id = e.pointerId, x = e.clientX, y = e.clientY;
-    longPress = { id, x, y, timer: window.setTimeout(() => {
-      longPress = null;
-      if (primaryPointer !== id || pinch || finger?.started) return;
-      // the press becomes the menu: drop the gesture so lifting the finger does nothing
-      primaryPointer = null;
-      finger = null;
-      boardTouch = null;
-      try { stageEl.releasePointerCapture(id); } catch { /* already released */ }
+    const press = { id, x, y, opened: false, timer: 0 };
+    press.timer = window.setTimeout(() => {
+      if (longPress !== press || primaryPointer !== id || pinch || finger?.started) return;
+      press.opened = true;
       navigator.vibrate?.(12);
       openCanvasMenu(ctx.toPage({ clientX: x, clientY: y } as PointerEvent), x, y);
-    }, 550) };
+    }, 550);
+    longPress = press;
   };
   stageEl.addEventListener('pointerdown', (e) => {
     if (mode.pane) return;
@@ -349,7 +348,10 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     openCanvasMenu(ctx.toPage(e), e.clientX, e.clientY);
   });
   stageEl.addEventListener('pointermove', (e) => {
-    if (longPress && e.pointerId === longPress.id && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 10) cancelLongPress();
+    if (longPress && e.pointerId === longPress.id && Math.hypot(e.clientX - longPress.x, e.clientY - longPress.y) > 10) {
+      if (longPress.opened) closePopover();
+      cancelLongPress();
+    }
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       const which = e.pointerId === primaryPointer ? 'a' : 'b';
       pinch[which] = { x: e.clientX, y: e.clientY };
@@ -391,7 +393,17 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ctx.request();
   });
   const end = (e: PointerEvent) => {
-    if (longPress?.id === e.pointerId) cancelLongPress();
+    if (longPress?.id === e.pointerId) {
+      const opened = longPress.opened;
+      cancelLongPress();
+      if (opened) {
+        // the press became the menu: it neither taps nor draws
+        primaryPointer = null;
+        finger = null;
+        boardTouch = null;
+        return;
+      }
+    }
     if (pinch && e.pointerId === pinch.third) return;
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       if (!pinch.moved && e.type === 'pointerup' && performance.now() - pinch.at < 300) {

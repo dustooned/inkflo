@@ -442,13 +442,42 @@ export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
 export function planKnifeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): ReturnType<typeof planCut> {
   if (stroke.length < 2) return null;
   const raw = straight ? toProto([stroke[0]!, stroke.at(-1)!]) : simplify(toProto(stroke), 2);
+  const drawn = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
+  if (drawn.length < 2 || dist(drawn[0]!, drawn.at(-1)!) < 12) return null;
+  // As drawn first: a swipe that starts and ends outside behaves exactly as before.
+  const asDrawn = planFrom(page, raw, mode);
+  if (asDrawn) return asDrawn;
+  // A line drawn inside the page continues straight out of its ends, the way a frame-divide
+  // tool reads it. One panel cuts the panel the line was drawn in.
+  const trim = trimProto(page);
+  const inside = (q: Pt) => pointInPoly(q, trim) || onBoundary(q, trim);
+  if (!inside(raw[0]!) && !inside(raw.at(-1)!)) return null;
+  const mid = raw[Math.floor((raw.length - 1) / 2)]!;
+  return planFrom(page, extendInsideEnds(raw, Math.hypot(page.widthIn, page.heightIn) * K * 1.5, inside), mode, mid);
+}
+
+/** Continue a stroke's ends that lie inside the trim straight outward by `reach` (proto units). */
+function extendInsideEnds(raw: readonly Pt[], reach: number, inside: (q: Pt) => boolean): Pt[] {
+  const n = raw.length;
+  const out = (end: Pt, from: Pt): Pt => {
+    const d = dist(end, from) || 1;
+    return { x: end.x + (end.x - from.x) / d * reach, y: end.y + (end.y - from.y) / d * reach };
+  };
+  const head = inside(raw[0]!) ? [out(raw[0]!, raw[Math.min(2, n - 1)]!)] : [];
+  const tail = inside(raw[n - 1]!) ? [out(raw[n - 1]!, raw[Math.max(0, n - 3)]!)] : [];
+  return [...head, ...raw, ...tail];
+}
+
+/** Plan a cut along `raw` (proto units). `within`, when given, picks the panel containing it. */
+function planFrom(page: Page, raw: Pt[], mode: CutMode, within?: Pt): ReturnType<typeof planCut> {
   const path = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
-  if (path.length < 2 || dist(path[0]!, path.at(-1)!) < 12) return null;
+  if (path.length < 2) return null;
   const outside = (poly: Pt[]) => [path[0]!, path.at(-1)!].every((p) => !pointInPoly(p, poly) && !onBoundary(p, poly));
   const { polys } = carvePage(page);
   const cut: Omit<Cut, 'id'> = { mode, pts: toInches(raw), bounded: true };
   if (mode === 'panel') {
-    const spans = polys.filter(outside).flatMap((poly) => splitOnce(poly, path) ?? []).sort((a, b) => a.start - b.start);
+    const targets = within ? polys.filter((poly) => pointInPoly(within, poly)) : polys;
+    const spans = targets.filter(outside).flatMap((poly) => splitOnce(poly, path) ?? []).sort((a, b) => a.start - b.start);
     if (!spans.length) return null;
     cut.extended = toInches(spans[0]!.chain);
     return { cut, paths: [cut.extended] };
