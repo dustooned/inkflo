@@ -946,14 +946,14 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     previewAt = now;
     const panel = panelAt(ctx.panels(), p);
     if (!panel) {
-      preview = null;
+      if (preview) { preview = null; ctx.request(); }
       return;
     }
     const group = groupAt(page, ctx.panels(), p);
     const layer = target === 'layer' ? active()?.layer : layerOfType(group, 'colour');
     if (!layer) {
       // no colour layer yet: preview against a throwaway kit of this group's lines
-      preview = null;
+      if (preview) { preview = null; ctx.request(); }
       return;
     }
     showPreview(layer.id, baseFill(pointInLayer(p, layer.id)));

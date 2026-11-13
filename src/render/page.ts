@@ -48,6 +48,12 @@ export interface RenderOptions {
   panels?: Panel[];
   /** Balloons to skip (being dragged on the overlay, for instance). */
   skipBalloon?: string;
+  /**
+   * Resampling for scaled layer planes. Exports keep 'high'; the screen uses 'low' while a
+   * gesture is under way, because 'high' downscaling of every 300 dpi plane per frame is the
+   * heaviest work an iPad does while drawing.
+   */
+  smoothing?: ImageSmoothingQuality;
   /** Only these groups' layers (export by panel). */
   onlyGroups?: Set<string>;
   /** The book's lettering style sheet (type sizes). */
@@ -294,7 +300,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   g.beginPath(); g.rect(-bleed, -bleed, W + bleed * 2, H + bleed * 2); g.clip();
   g.clearRect(0, 0, W, H);
   if (frame) drawPagePaper(g, page, panels, s, opts.whitePaper);
-  g.imageSmoothingQuality = 'high';
+  g.imageSmoothingQuality = opts.smoothing ?? 'high';
   const bg = page.groups.filter((x) => x.kind === 'background');
   const panelGroups = page.groups.filter((x) => x.kind === 'panel');
   const over = page.groups.filter((x) => x.kind === 'over');

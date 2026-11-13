@@ -680,3 +680,18 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .screen:is(.focus, .simple) .brush-value small { display: none; }
 .screen:is(.focus, .simple) .brush-value input { width: 100%; }
 .rail .railopt > .ico { margin: auto; }
+
+/* ---- Touch tablets: skip effects that re-composite on every canvas frame ----
+   A backdrop blur over the page has to be recomputed whenever the canvas redraws (every frame of
+   a stroke), and edge-fade masks keep bars on their own masked layers. Both are cheap on desktop
+   GPUs and costly on an iPad, so touch-first devices get solid surfaces instead. */
+@media (pointer: coarse) {
+  .screen:is(.focus, .simple) :is(.chrome-top, .ctx, .rail, .brush-controls, .chrome-status, .messagebar[data-tone]),
+  body:has(.screen:is(.focus, .simple)) dialog.settings-card {
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+  .ctx.more-end, .ctx.more-start, .bar.more-end, .bar.more-start { mask-image: none; }
+  .tip { animation: none; }
+  .lt, .pop .item > span:first-child { filter: none; }
+}

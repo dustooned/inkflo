@@ -160,6 +160,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   const message = messageBar();
   let raf = 0;
+  let fullFrame = true;
+  let pageCache: HTMLCanvasElement | null = null;
   const ctx: DeskCtx = {
     studio,
     hint: message.hint,
@@ -177,6 +179,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       return panelsCache;
     },
     request: () => {
+      fullFrame = true;
       if (!raf) raf = requestAnimationFrame(draw);
     },
     chrome: () => chrome(),
@@ -213,8 +216,15 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     return { board: cssVar('--board'), grid: cssVar('--board-grid'), vignetteColor: cssVar('--board-vignette'), shadow: cssVar('--page-shadow') };
   }
 
+  /** Pointer hover only changes overlays: those frames reuse the last rendered page. */
+  function requestOverlay(): void {
+    if (!raf) raf = requestAnimationFrame(draw);
+  }
+
   function draw(): void {
     raf = 0;
+    const full = fullFrame;
+    fullFrame = false;
     stageRect = stageEl.getBoundingClientRect();
     const r = stageRect;
     const { s, ox, oy, cos, sin } = geom();
@@ -229,8 +239,19 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       canvas.style.height = `${r.height}px`;
     }
     const g = canvas.getContext('2d')!;
+    // a hover frame: put back the page as last rendered and redraw only what lies on top
+    if (!full && pageCache && pageCache.width === w && pageCache.height === hgt) {
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.drawImage(pageCache, 0, 0);
+      pageTransform(g);
+      mode.overlay?.(g, s);
+      stageEl.dataset.cursor = mode.cursor?.() ?? '';
+      return;
+    }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const p = prefs();
+    // fast resampling while a gesture runs; a gesture's end requests one sharp frame
+    const gesture = primaryPointer !== null || pinch !== null || panning !== null;
     const layout = mode.layoutPreview?.();
     const shownPage = layout?.page ?? page;
     const transparent = shownPage.layout?.gutterPaper === null;
@@ -241,12 +262,22 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       pageG.resetTransform(); pageG.clearRect(0, 0, w, hgt);
     }
     pageTransform(pageG);
-    renderPage(pageG, shownPage, art, { scale: s, bleed: mode.viewBleed?.() ? printOf(book).bleed : 0, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    renderPage(pageG, shownPage, art, { scale: s, smoothing: gesture ? 'low' : 'high', bleed: mode.viewBleed?.() ? printOf(book).bleed : 0, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
     if (transparent) {
       g.resetTransform(); g.drawImage(paper, 0, 0);
       pageTransform(g);
     }
     if (composition) drawComposition(g, p.guide, page.widthIn, page.heightIn, s);
+    // keep the settled page for hover frames (not mid-gesture: hover does not happen then)
+    if (!gesture) {
+      if (!pageCache) pageCache = document.createElement('canvas');
+      if (pageCache.width !== w || pageCache.height !== hgt) { pageCache.width = w; pageCache.height = hgt; }
+      const c = pageCache.getContext('2d')!;
+      c.globalCompositeOperation = 'copy';
+      c.drawImage(canvas, 0, 0);
+      c.globalCompositeOperation = 'source-over';
+      pageTransform(g);
+    } else if (pageCache) pageCache.width = 0;
     mode.overlay?.(g, s);
     stageEl.dataset.cursor = mode.cursor?.() ?? '';
     const viewText = Math.round(view.zoom * 100) + '% · ' + Math.round(view.angle) + '°';
@@ -389,10 +420,16 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       // coalesced events give the pen's full rate
       const events = e.getCoalescedEvents?.() ?? [e];
       for (const ev of events.length ? events : [e]) mode.move?.(ctx.toPage(ev), ev);
-    } else mode.hover?.(p);
+    } else {
+      // hover changes only overlays (cursor, previews); a mode that changes more requests a full frame
+      mode.hover?.(p);
+      requestOverlay();
+      return;
+    }
     ctx.request();
   });
   const end = (e: PointerEvent) => {
+    ctx.request(); // the frame after a gesture is drawn sharp again
     if (longPress?.id === e.pointerId) {
       const opened = longPress.opened;
       cancelLongPress();

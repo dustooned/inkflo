@@ -732,3 +732,25 @@ tool-options row, a popover for choices):
 - Checks: `cutshape.test.ts` (7 cases). Browser: a wobbly bow became an edge-to-edge arc (0.2°
   maximum turn between segments, against 3.6° without the hold); a held line aimed lower; a
   zig-zag across the page snapped to Zig-zag.
+
+## iPad responsiveness, 2026-11-13
+
+Reported: serious lag on iPad everywhere. Nothing loops while idle (no animation frames, one
+timer in 3 s), and desktop script time per frame is small, so the fixes target GPU work that
+an iPad pays for on every frame:
+
+- **Screen resampling:** `renderPage` drew every scaled 300 dpi layer plane with
+  `imageSmoothingQuality = 'high'` on every frame. The screen now uses 'low' while a stroke, pan
+  or pinch runs, and one 'high' frame follows when it ends. Exports still use 'high'
+  (`RenderOptions.smoothing`).
+- **Hover frames:** pointer hover, including Apple Pencil hover at 120 Hz, redrew the whole
+  page. Hover now redraws only overlays over a cached copy of the settled page: one blit at
+  0.1 ms, measured. A mode that changes what the page shows still requests a full frame. The
+  fill tool's gap-check preview now asks for one when it clears.
+- **Touch devices (`pointer: coarse`):** no backdrop blur on Focus/Simple surfaces (it had to
+  re-blur the canvas behind it every frame), no edge-fade masks, no tooltip animation, no
+  grayscale filters on layer icons.
+- **Checks:** 367 tests, typecheck and build. In Chrome: hover frames 1 drawImage, stroke frames
+  use 'low', a real stroke draws and undoes, and the page renders correctly after hover.
+- **Not measured on an iPad.** If it still lags, the next suspects are the canvas size at 2×
+  on large iPads, and autosave encoding big planes after each stroke.
