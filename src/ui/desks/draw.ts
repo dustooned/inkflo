@@ -12,6 +12,7 @@ import { vectorSelection } from '../vectorselection';
 import { rasterSelection } from '../rasterselection';
 import { quickShapeEditor } from '../quickshapeedit';
 import { smudgeTool } from '../smudgetool';
+import { placementOf, type Placement } from '../placement';
 import { screentoneTool } from '../screentone';
 import { openAdjustments } from '../adjustments';
 import { openBookAssets } from '../bookassets';
@@ -1182,7 +1183,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const id = groupAt(page, ctx.panels(), p).id;
     const inContext = (l: Layer) => findLayer(page, l.id)?.group.id === id;
     return [...layers.filter(inContext), ...layers.filter((l) => !inContext(l))];
-  }, editVector);
+  }, editVector, (id) => layerPlacement(id));
 
   const rasterLayersAt = (p: Pt) => {
     const allowed = (l: Layer) => l.visible && !l.locked && !l.vector && !l.image && !l.screenTone && (state.showPencil || l.type !== 'pencil');
@@ -1194,8 +1195,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (!group.visible || group.locked) return [];
     return group.layers.filter(allowed).sort((a, b) => Number(b.overFrame) - Number(a.overFrame));
   };
-  const pixels = rasterSelection(ctx, rasterLayersAt, keepResident);
-  const smudge = smudgeTool(ctx, rasterLayersAt, keepResident);
+  const pixels = rasterSelection(ctx, rasterLayersAt, keepResident, (id) => layerPlacement(id));
+  const smudge = smudgeTool(ctx, rasterLayersAt, keepResident, (id) => layerPlacement(id));
   let smudgeSize = 18;
   let smudgeStrength = 0.55;
   let cloneFrom: Pt | undefined;
@@ -1220,6 +1221,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   function layerPanel(id: string) {
     const group = findLayer(page, id)?.group;
     return group ? panelForGroup(ctx.panels(), group) : null;
+  }
+
+  /** The moved panel a layer is shown through, if any (Over, Background and Gutters never move). */
+  function layerPlacement(id: string): Placement | null {
+    return placementOf(layerPanel(id)?.transform?.matrix);
   }
 
   function pointInLayer(p: Pt, id: string): Pt {

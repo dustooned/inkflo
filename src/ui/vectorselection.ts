@@ -7,6 +7,7 @@ import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
 import { drawSelectionFrame, grabSelection, selectionCenter, selectionTransform, type SelectionGrab } from './selectiongesture';
 import { createMarquee, type MarqueeShape } from './marquee';
+import { toSource, withPlacement, type Placement } from './placement';
 
 function crosses(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
   const cross = (u: Pt, v: Pt, w: Pt) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
@@ -32,17 +33,21 @@ function boundsOf(strokes: Stroke[], indices: Set<number>): Bounds {
   return b;
 }
 
-type Selection = { id: string; source: Stroke[]; indices: Set<number> };
+type Selection = { id: string; source: Stroke[]; indices: Set<number>; place: Placement | null };
 
-export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void) {
+export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void,
+  placement: (id: string) => Placement | null = () => null) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
   const marquee = createMarquee(ctx, (poly, from) => {
     for (const l of layersAt(from)) {
+      // strokes on a moved panel are stored where the panel was carved
+      const place = placement(l.id);
+      const local = poly.map((p) => toSource(place, p));
       const indices = new Set<number>();
-      l.strokes.forEach((stroke, i) => { if (touches(stroke, poly)) indices.add(i); });
+      l.strokes.forEach((stroke, i) => { if (touches(stroke, local)) indices.add(i); });
       if (!indices.size) continue;
-      selected = { id: l.id, source: l.strokes, indices };
+      selected = { id: l.id, source: l.strokes, indices, place };
       break;
     }
     if (!selected) toast('No vector lines in this selection.');
@@ -89,9 +94,10 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const s = current();
       if (s) {
         const bounds = boundsOf(s.source, s.indices);
-        const grab = grabSelection(bounds, p, ctx.scale(), e.pointerType === 'touch');
+        const at = toSource(s.place, p);
+        const grab = grabSelection(bounds, at, ctx.scale(), e.pointerType === 'touch');
         if (grab) {
-          drag = { grab, from: p, bounds, next: null, angle: 0 };
+          drag = { grab, from: at, bounds, next: null, angle: 0 };
           studio.drawing = true;
           return;
         }
@@ -105,6 +111,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const s = current();
       if (!s || !drag) return;
       const d = drag;
+      p = toSource(s.place, p);
       const delta = { x: p.x - d.from.x, y: p.y - d.from.y };
       if (!d.next && Math.hypot(delta.x, delta.y) * ctx.scale() < 2) return;
       if (Math.hypot(delta.x, delta.y) < 1e-6) { d.next = null; d.angle = 0; return; }
@@ -177,7 +184,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const s = current();
       if (s) {
         const b = boundsOf(drag?.next ?? s.source, s.indices);
-        drawSelectionFrame(g, b, scale, drag?.grab.kind === 'rotate' ? drag.angle : undefined);
+        withPlacement(g, s.place, scale, (sc, k) => drawSelectionFrame(g, b, sc, drag?.grab.kind === 'rotate' ? drag.angle : undefined, true, 4 / k));
       }
       g.restore();
     },

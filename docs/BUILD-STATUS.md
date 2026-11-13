@@ -578,3 +578,30 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Checks: a new test in `fillkit.test.ts` (fails on the old walls). In the browser, a stroke that
   started off the page across panel 1 into panel 2 now splits panel 1, and the fill stays in it.
 - Saved colour pixels are not refilled, so fills made before this change keep their old shape.
+
+## Draw tools on moved panels, 2026-11-13
+
+- A moved, rotated or scaled panel keeps its art where the panel was carved and draws it
+  through the panel matrix. Brushes, fills and line edits already mapped the pointer back.
+  **Select lines**, **Transform** (pixel selection), **Smudge** and **Clone** did not, so on a
+  placed panel they selected, moved or smudged the wrong place.
+- `ui/placement.ts` maps page points to a layer's source space and draws selection frames
+  through the panel matrix. The three tools now:
+  - map the marquee into source space before selecting strokes or lifting pixels;
+  - grab, move, resize and rotate in source space, so pixel transforms and smudge/clone
+    points are stored where replay applies them;
+  - draw the selection frame rotated with the panel.
+- **Checks** on the starter page with panel 2 rotated 15° and moved, using pointer events in Chromium:
+  - A pixel marquee drawn around the visible lines lifted panel 2's Ink. Dragging it 0.5″ moved
+    the visible art exactly 0.5″ on the page. Undo and redo restored and reapplied it.
+  - **Rebuild from strokes** put the moved ink in the same box. The pixel differences
+    were inside the strokes.
+  - A horizontal smudge drag was stored rotated −15° and maps back to horizontal on the page.
+  - **Select lines** found a vector stroke from a page-space marquee that does not overlap
+    its stored position, and a 0.3″ drag moved it 0.3″ on the page.
+  - The bucket in panel 2 filled only panel 2's area.
+  - The layered PSD of the page flattened back to the renderer composite (0 pixels off by more
+    than 64/255).
+  - 356 tests, typecheck and build. `placement.test.ts` covers the mapping.
+- **Not checked:** polygon and freehand marquee shapes specifically (they share the same
+  path), clone with a source point, and scaled panels in the browser (unit test only).

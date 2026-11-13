@@ -7,6 +7,7 @@ import type { DeskCtx } from './desk';
 import { h, seg, toast } from './dom';
 import { drawSelectionFrame, grabSelection, selectionCenter, selectionCorners, selectionTransform, type SelectionGrab } from './selectiongesture';
 import { createMarquee, type MarqueeShape } from './marquee';
+import { toSource, withPlacement, type Placement } from './placement';
 
 interface Selection {
   id: string;
@@ -15,9 +16,11 @@ interface Selection {
   revision: number;
   polygon: Pt[];
   lifted: LiftedPixels;
+  /** The panel placement the layer is shown through; the selection works in its source space. */
+  place: Placement | null;
 }
 
-export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keepResident: () => void) {
+export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keepResident: () => void, placement: (id: string) => Placement | null = () => null) {
   const { page, art, studio, book } = ctx;
   const dpi = book.dpi;
   let selected: Selection | null = null;
@@ -25,9 +28,11 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
     for (const layer of layersAt(from)) {
       const source = art.planes[layer.id];
       if (!source) continue;
-      const lifted = liftPixels(source, polygon, dpi);
+      const place = placement(layer.id);
+      const local = polygon.map((p) => toSource(place, p));
+      const lifted = liftPixels(source, local, dpi);
       if (!lifted) continue;
-      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon, lifted };
+      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, lifted, place };
       break;
     }
       if (!selected) toast('No painted pixels in this selection.');
@@ -132,9 +137,10 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       const s = current();
       if (s) {
         const b = bounds(s);
-        const grab = grabSelection(frame(b, ctx.scale()), p, ctx.scale(), e.pointerType === 'touch');
+        const at = toSource(s.place, p);
+        const grab = grabSelection(frame(b, ctx.scale()), at, ctx.scale(), e.pointerType === 'touch');
         if (grab) {
-          drag = { grab, from: p, bounds: b, base: matrix, moved: false };
+          drag = { grab, from: at, bounds: b, base: matrix, moved: false };
           studio.drawing = true;
           return;
         }
@@ -146,7 +152,9 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
     },
     move(p: Pt, e: PointerEvent) {
       if (marquee.active()) { marquee.move(p); return; }
-      if (!drag || !current()) return;
+      const s = current();
+      if (!drag || !s) return;
+      p = toSource(s.place, p);
       if (!drag.moved && Math.hypot(p.x - drag.from.x, p.y - drag.from.y) * ctx.scale() < 2) return;
       drag.moved = true;
       const modifiers = { shiftKey: e.shiftKey || (drag.grab.kind === 'resize' && resizeMode === 'uniform'), altKey: e.altKey };
@@ -219,7 +227,7 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       g.setLineDash([5, 4]);
       marquee.overlay(g, scale);
       const s = current();
-      if (s) drawSelectionFrame(g, frame(bounds(s), scale), scale);
+      if (s) withPlacement(g, s.place, scale, (sc, k) => drawSelectionFrame(g, frame(bounds(s), sc), sc, undefined, true, 4 / k));
       g.restore();
     },
   };
