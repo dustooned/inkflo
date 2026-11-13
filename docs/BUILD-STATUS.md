@@ -754,3 +754,15 @@ an iPad pays for on every frame:
   use 'low', a real stroke draws and undoes, and the page renders correctly after hover.
 - **Not measured on an iPad.** If it still lags, the next suspects are the canvas size at 2×
   on large iPads, and autosave encoding big planes after each stroke.
+
+## Scroll page-break art, 2026-11-13
+
+- **Export center → Vertical scroll → Page-break art:** pick a book image or add one. It's drawn
+  in the break after each page: full strip width or actual size, centred in the gap, and
+  optionally after the last page as an episode footer.
+- The break is copied into the strips row by row like a page, so art that straddles two strip
+  images lines up exactly when the web reader stacks them.
+- The tab shows a live preview of the first pages with their breaks (`scrollPreview`).
+- Checks: `scroll.test.ts` covers sizing and break heights. In Chrome, a 400×60 banner after a
+  1230 px page gave 1350 px of strips, split 1280 + 70 across the boundary. The preview showed
+  the banner.

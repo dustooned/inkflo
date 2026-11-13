@@ -695,3 +695,12 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
   .tip { animation: none; }
   .lt, .pop .item > span:first-child { filter: none; }
 }
+
+/* Export center: scroll tab with a live preview beside the options. */
+.scroll-tab { display: grid; grid-template-columns: minmax(0, 1fr) 196px; gap: 16px; align-items: start; }
+.scroll-preview { position: sticky; top: 36px; max-height: 60vh; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--board); text-align: center; }
+.scroll-preview canvas { display: block; width: 100%; height: auto; margin: 0 auto; box-shadow: var(--shadow); }
+.scroll-preview .note { color: var(--text-soft); margin-top: 6px; }
+.break-art { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 12px; display: grid; gap: 8px; }
+.break-art legend { padding: 0 4px; font-weight: 650; font-size: 12px; }
+@media (max-width: 620px) { .scroll-tab { grid-template-columns: minmax(0, 1fr); } .scroll-preview { position: static; } }

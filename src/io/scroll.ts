@@ -18,10 +18,41 @@ interface Slice {
   alt: string;
 }
 
+/** Art shown in the break after a page (a divider, a footer, a "to be continued" banner). */
+export interface BreakArt {
+  image: CanvasImageSource & { width: number; height: number };
+  /** Full strip width, or the image's own pixel size centred (never wider than the strip). */
+  fit: 'width' | 'natural';
+  /** Also after the last page, as the episode's footer. */
+  end: boolean;
+}
+
 export interface ScrollOptions {
   range: PageRange;
   gap: number;
   background: string | null;
+  breakArt?: BreakArt | null;
+}
+
+/** The art's drawn size in a strip `width` pixels wide. */
+export function breakArtSize(art: BreakArt, width = SCROLL_WIDTH): { w: number; h: number } {
+  const scale = art.fit === 'width' || art.image.width > width ? width / art.image.width : 1;
+  return { w: Math.round(art.image.width * scale), h: Math.max(1, Math.round(art.image.height * scale)) };
+}
+
+/** Height of the break after page `index` of `count`: the gap, plus the art when it shows there. */
+export function breakHeight(options: Pick<ScrollOptions, 'gap' | 'breakArt'>, index: number, count: number, width = SCROLL_WIDTH): number {
+  const last = index === count - 1;
+  const art = options.breakArt && (!last || options.breakArt.end) ? breakArtSize(options.breakArt, width).h : 0;
+  const gap = last ? 0 : Math.round(Math.max(0, Math.min(960, options.gap)) * width / SCROLL_WIDTH);
+  return art ? art + gap : gap;
+}
+
+/** Paint a break band (background already filled): the art centred, the gap split around it. */
+function paintBreak(g: CanvasRenderingContext2D, art: BreakArt | null | undefined, width: number, height: number): void {
+  if (!art) return;
+  const { w, h } = breakArtSize(art, width);
+  g.drawImage(art.image, Math.round((width - w) / 2), Math.round((height - h) / 2), w, h);
 }
 
 const html = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -50,9 +81,8 @@ export async function exportScroll(studio: Studio, options: ScrollOptions, progr
   const book = studio.book!;
   const pages = pagesIn(book, options.range);
   if (!pages.length) throw new Error('Choose at least one page.');
-  const gap = Math.round(Math.max(0, Math.min(960, options.gap)));
   const heightOf = (p: typeof pages[number]) => Math.max(1, Math.round(p.heightIn * SCROLL_WIDTH / p.widthIn));
-  const total = pages.reduce((sum, p) => sum + heightOf(p), 0) + gap * (pages.length - 1);
+  const total = pages.reduce((sum, p, i) => sum + heightOf(p) + breakHeight(options, i, pages.length), 0);
   const files: ZipFile[] = [];
   const slices: Slice[] = [];
   const canvas = makeCanvas(SCROLL_WIDTH, Math.min(SCROLL_HEIGHT, total));
@@ -101,16 +131,61 @@ export async function exportScroll(studio: Studio, options: ScrollOptions, progr
         if (y === canvas.height) await flush();
       }
     } finally { studio.residency.unpin(art); }
-    let spacing = i + 1 < pages.length ? gap : 0;
-    while (spacing > 0) {
-      const rows = Math.min(spacing, canvas.height - y);
-      y += rows;
-      spacing -= rows;
-      if (y === canvas.height) await flush();
+    // the break after this page: copied row by row like a page, so art that straddles two
+    // strips lines up exactly when the reader stacks them
+    const breakRows = breakHeight(options, i, pages.length);
+    if (breakRows > 0) {
+      const band = makeCanvas(SCROLL_WIDTH, breakRows);
+      const bg = band.getContext('2d')!;
+      if (options.background) { bg.fillStyle = options.background; bg.fillRect(0, 0, SCROLL_WIDTH, breakRows); }
+      paintBreak(bg, i + 1 < pages.length || options.breakArt?.end ? options.breakArt : null, SCROLL_WIDTH, breakRows);
+      let top = 0;
+      while (top < breakRows) {
+        const rows = Math.min(breakRows - top, canvas.height - y);
+        g.clearRect(0, y, SCROLL_WIDTH, rows);
+        g.drawImage(band, 0, top, SCROLL_WIDTH, rows, 0, y, SCROLL_WIDTH, rows);
+        y += rows;
+        top += rows;
+        if (y === canvas.height) await flush();
+      }
+      band.width = band.height = 0;
     }
   }
   const encoder = new TextEncoder();
   files.push({ name: 'index.html', data: encoder.encode(scrollReader(book.title, book.author, slices, options.background)) });
   files.push({ name: 'episode.json', data: encoder.encode(JSON.stringify({ title: book.title, author: book.author, slices }, null, 2)) });
   return new Blob([writeZip(files) as BlobPart], { type: 'application/zip' });
+}
+
+/**
+ * A small picture of the episode: the first pages of the range stacked with their breaks, at
+ * `width` pixels wide. Shown in the export dialog before anything is written.
+ */
+export async function scrollPreview(studio: Studio, options: ScrollOptions, width = 180, maxPages = 3): Promise<HTMLCanvasElement> {
+  const book = studio.book!;
+  const pages = pagesIn(book, options.range).slice(0, maxPages);
+  const heights = pages.map((p) => Math.max(1, Math.round(p.heightIn * width / p.widthIn)));
+  const breaks = pages.map((_, i) => breakHeight(options, i, pages.length, width));
+  const canvas = makeCanvas(width, Math.max(1, heights.reduce((a, b) => a + b, 0) + breaks.reduce((a, b) => a + b, 0)));
+  const g = canvas.getContext('2d')!;
+  if (options.background) { g.fillStyle = options.background; g.fillRect(0, 0, canvas.width, canvas.height); }
+  let y = 0;
+  for (const [i, page] of pages.entries()) {
+    const art = studio.ensureArt(page);
+    try {
+      await studio.residency.pin(art);
+      g.setTransform(1, 0, 0, 1, 0, y);
+      renderPage(g, page, art, { scale: width / page.widthIn, printOnly: true, sheet: sheetOf(book), smoothing: 'medium' });
+    } finally { studio.residency.unpin(art); }
+    g.resetTransform();
+    y += heights[i]!;
+    if (breaks[i]) {
+      g.save();
+      g.translate(0, y);
+      paintBreak(g, i + 1 < pages.length || options.breakArt?.end ? options.breakArt : null, width, breaks[i]!);
+      g.restore();
+      y += breaks[i]!;
+    }
+  }
+  return canvas;
 }
