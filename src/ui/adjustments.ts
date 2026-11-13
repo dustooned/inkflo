@@ -4,6 +4,7 @@ import { touchLayer } from '../draw/residency';
 import { NO_HSB, isNoHSB } from '../engine/core/adjust';
 import { makeCanvas } from '../io/canvasops';
 import type { DeskCtx } from './desk';
+import { card } from './card';
 import { h, slider, toast } from './dom';
 
 export function openAdjustments(ctx: DeskCtx, layerId: string | null, keepResident: () => void): void {
@@ -57,13 +58,17 @@ export function openAdjustments(ctx: DeskCtx, layerId: string | null, keepReside
     studio.run({ label: 'Adjust paint layer', do: () => write(after, next), undo: () => write(before, old) });
     dialog.close(); ctx.chrome(); ctx.request();
   } }, 'Apply');
-  const dialog = h('dialog', { class: 'adjust-dialog', 'aria-label': 'Adjustments' },
-    h('header', {}, h('h2', {}, 'Adjustments'), h('p', { class: 'note' }, layer.name)),
-    h('div', { class: 'content' }, preview, h('label', { class: 'mini' }, enabled, 'Preview adjustment'),
+  const { dialog, open } = card({
+    title: 'Adjustments',
+    className: 'adjust-dialog',
+    detail: h('p', { class: 'note' }, layer.name),
+    preview,
+    sections: [h('label', { class: 'mini' }, enabled, 'Preview adjustment'),
       control('hue', 'Hue', -180, 180), control('sat', 'Saturation', -100, 100),
-      control('bright', 'Brightness', -100, 100), control('blur', 'Gaussian blur', 0, 10)),
-    h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel'), apply));
-  dialog.addEventListener('close', () => { if (pending) cancelAnimationFrame(pending); dialog.remove(); });
-  document.body.append(dialog);
-  dialog.showModal();
+      control('bright', 'Brightness', -100, 100), control('blur', 'Gaussian blur', 0, 10)],
+    footer: [h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel'), apply],
+    onClose: () => { if (pending) cancelAnimationFrame(pending); },
+    returnFocus: () => document.querySelector('.screen .chrome-actions [aria-label="Adjustments"], .screen .draw-actions'),
+  });
+  open();
 }

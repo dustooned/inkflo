@@ -1,0 +1,15 @@
+{
+ "ipa": "D:\\Downloads\\Programs\\Procreate-v5-4-4.ipa",
+ "bundle": {
+  "CFBundleIdentifier": "au.com.savageinteractive.procreate",
+  "CFBundleShortVersionString": "5.4.4",
+  "CFBundleVersion": "56832"
+ },
+ "executable_bytes": 19119424,
+ "pointer_formats": [
+  6
+ ],
+ "classes": 1707,
+ "unresolved_method_lists": 318,
+ "selectors": 19141
+}

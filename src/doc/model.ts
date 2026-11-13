@@ -312,6 +312,14 @@ export function baseGroups(): LayerGroup[] {
 }
 
 /** Panel layout style of a page (additive; absent = the default style). Inches. */
+export interface PanelTransform {
+  /** Point in the original carved panel, normalized to the page. */
+  at: Pt;
+  /** Affine transform in page inches. */
+  matrix: [number, number, number, number, number, number];
+  order: number;
+}
+
 export interface PageLayout {
   gutter: number;
   border: number;
@@ -320,6 +328,7 @@ export interface PageLayout {
   gutterPaper?: string | null;
   /** Ink the trim and carry gutter borders all the way to it. */
   edgeBorder?: boolean;
+  panelTransforms?: PanelTransform[];
   cornerRadius?: number;
   panelCorners?: { at: Pt; radius: number }[];
 }

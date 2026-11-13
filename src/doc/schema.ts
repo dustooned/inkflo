@@ -419,7 +419,15 @@ function layout(v: unknown, path: string): PageLayout | undefined {
     return { at: relativePoint(item.at, `${entry}.at`), radius };
   });
   const edgeBorder = o.edgeBorder === undefined ? undefined : bool(o.edgeBorder, `${path}.edgeBorder`, false);
-  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}) };
+  const panelTransforms = o.panelTransforms === undefined ? undefined : arr(o.panelTransforms, `${path}.panelTransforms`).map((value, i) => {
+    const entry = `${path}.panelTransforms[${i}]`, item = obj(value, entry);
+    const raw = arr(item.matrix, `${entry}.matrix`);
+    if (raw.length !== 6) fail(`${entry}.matrix`, 'needs six values');
+    const matrix = raw.map((v, j) => num(v, `${entry}.matrix[${j}]`)) as import('./model').PanelTransform['matrix'];
+    if (!invert(matrix) || matrix.some((n) => Math.abs(n) > 10000)) fail(`${entry}.matrix`, 'has an invalid transform');
+    return { at: relativePoint(item.at, `${entry}.at`), matrix, order: num(item.order, `${entry}.order`) };
+  });
+  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}), ...(panelTransforms?.length ? { panelTransforms } : {}) };
 }
 
 function source(o: Obj, path: string): Letter['src'] | undefined {

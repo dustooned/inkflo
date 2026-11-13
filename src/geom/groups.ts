@@ -8,15 +8,19 @@ import { inGutter } from './gutters';
  */
 
 /** Which panel each panel group belongs to (null: its anchor fell outside every panel). */
+export function panelForGroup(panels: Panel[], group: LayerGroup): Panel | null {
+  return group.anchor ? panels.find((p) => pointInPoly(group.anchor!, (p.source ?? p).pts)) ?? null : null;
+}
+
 export function groupPanels(page: Page, panels: Panel[]): Map<string, Panel | null> {
   const out = new Map<string, Panel | null>();
-  for (const g of page.groups) if (g.kind === 'panel') out.set(g.id, g.anchor ? panelAt(panels, g.anchor) : null);
+  for (const g of page.groups) if (g.kind === 'panel') out.set(g.id, panelForGroup(panels, g));
   return out;
 }
 
 /** The (first) panel group of a panel. */
 export function groupForPanel(page: Page, panels: Panel[], panel: Panel): LayerGroup | null {
-  return page.groups.find((g) => g.kind === 'panel' && g.anchor && pointInPoly(g.anchor, panel.pts)) ?? null;
+  return page.groups.find((g) => g.kind === 'panel' && panelForGroup(panels, g) === panel) ?? null;
 }
 
 /** A point well inside a panel (its centroid, or a point nudged inside for odd shapes). */
@@ -46,14 +50,14 @@ export function syncGroups(page: Page, panels: Panel[]): boolean {
   const claimed = new Set<Panel>();
   const keep: LayerGroup[] = [];
   for (const g of page.groups.filter((x) => x.kind === 'panel')) {
-    const p = g.anchor ? panelAt(panels, g.anchor) : null;
+    const p = panelForGroup(panels, g);
     const empty = g.layers.every((l) => !l.image && !l.screenTone && !l.strokes.length && !l.fills.length);
     if (empty && (!p || claimed.has(p))) continue;
     if (p) claimed.add(p);
     keep.push(g);
   }
-  for (const p of panels) if (!claimed.has(p)) keep.push(newGroup('panel', anchorFor(p)));
-  const index = (g: LayerGroup) => (g.anchor ? (panelAt(panels, g.anchor)?.index ?? 999) : 999);
+  for (const p of panels) if (!claimed.has(p)) keep.push(newGroup('panel', anchorFor(p.source ?? p)));
+  const index = (g: LayerGroup) => panelForGroup(panels, g)?.index ?? 999;
   keep.sort((a, b) => index(a) - index(b));
   page.groups = [page.groups.find((g) => g.kind === 'over')!, page.groups.find((g) => g.kind === 'gutter')!, ...keep, page.groups.find((g) => g.kind === 'background')!];
   return JSON.stringify(page.groups.map((g) => [g.id, g.kind])) !== before;
@@ -64,8 +68,8 @@ export function syncGroups(page: Page, panels: Panel[]): boolean {
  * panel group under it, else Background.
  */
 export function groupAt(page: Page, panels: Panel[], p: Pt): LayerGroup {
-  if (panels.length > 1 && inGutter(page, p)) return groupOf(page, 'gutter');
   const panel = panelAt(panels, p);
+  if (!panel?.transform && panels.length > 1 && inGutter(page, p)) return groupOf(page, 'gutter');
   return (panel && groupForPanel(page, panels, panel)) || groupOf(page, 'background');
 }
 
@@ -87,7 +91,7 @@ export function groupLabel(page: Page, panels: Panel[], g: LayerGroup): string {
   if (g.kind === 'over') return 'Over panels';
   if (g.kind === 'background') return 'Background';
   if (g.kind === 'gutter') return 'Gutters';
-  const p = g.anchor ? panelAt(panels, g.anchor) : null;
+  const p = panelForGroup(panels, g);
   if (!p) return 'Panel (off page)';
   const beat = page.beats[p.index]?.desc.trim();
   return beat ? `${p.index + 1} · ${beat.length > 22 ? `${beat.slice(0, 22)}…` : beat}` : `Panel ${p.index + 1}`;

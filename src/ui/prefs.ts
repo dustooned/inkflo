@@ -28,13 +28,16 @@ export interface Prefs {
   fingerDrawing: boolean;
   vignette: boolean;
   layout: Layout;
+  handed: 'left' | 'right';
+  autoHide: boolean;
+  autoHideDelay: number;
   guide: Guide;
   snapGuide: boolean;
   tools: Partial<Record<Stage, ToolPrefs>>;
 }
 
 const KEY = 'inkflo.prefs.v1';
-const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, boardBrightness: 0, fingerDrawing: true, vignette: true, layout: 'studio', guide: 'off', snapGuide: false, tools: {} };
+const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, boardBrightness: 0, fingerDrawing: true, vignette: true, layout: 'studio', handed: 'right', autoHide: false, autoHideDelay: 3500, guide: 'off', snapGuide: false, tools: {} };
 
 function read(): Prefs {
   try {
@@ -49,6 +52,9 @@ function read(): Prefs {
       fingerDrawing: v.fingerDrawing !== false,
       vignette: v.vignette !== false,
       layout: v.layout === 'focus' || v.layout === 'simple' ? v.layout : 'studio',
+      handed: v.handed === 'left' ? 'left' : 'right',
+      autoHide: v.autoHide === true,
+      autoHideDelay: typeof v.autoHideDelay === 'number' && Number.isFinite(v.autoHideDelay) && v.autoHideDelay > 0 ? v.autoHideDelay : DEFAULTS.autoHideDelay,
       guide: GUIDES.find((g) => g.id === v.guide)?.id ?? 'off',
       snapGuide: v.snapGuide === true,
       tools: v.tools && typeof v.tools === 'object' ? v.tools : {},

@@ -244,7 +244,7 @@ export function motionProject(name: string, pages: MotionPage[], size: { width: 
       const at = x.panelIndex === null ? 0 : (timing.arrive.get(x.panelIndex) ?? 0);
       layers.push(layer(`${cid}x${xi + 1}`, x.name, 'drawings', W, H, { in: at, exposures: [{ drawing: drawing(x.art), length: len }] }));
     });
-    // panels, last panel lowest so reading order reads top-down in 2Dope's layer list
+    // Panels in stacking order, frontmost first. Camera timing uses reading order.
     page.panels.forEach((p) => {
       const exposure: NonNullable<TwoDopeLayer['exposures']>[number] = { drawing: drawing(p.art), length: len };
       if (p.beat?.desc) exposure.action = p.beat.desc;

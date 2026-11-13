@@ -1,5 +1,5 @@
 import type { Book, ModularGrid, Page, Pt } from '../doc/model';
-import { derivePanels, gutterPaths, makeCut, newCutId, panelAt, type Panel } from './carve';
+import { derivePanels, gutterPaths, makeCut, newCutId, sourcePanelAt, type Panel } from './carve';
 import { printOf, readerSpreads } from './printkinds';
 
 export const GUIDES = [
@@ -97,7 +97,7 @@ export function snapGridCut(page: Page, grid: ModularGrid, points: Pt[], toleran
 
 export function downbeatPanel(page: Page, panels: Panel[]) {
   const a = page.downbeat;
-  return a ? panelAt(panels, { x: a.x * page.widthIn, y: a.y * page.heightIn }) : null;
+  return a ? sourcePanelAt(panels, { x: a.x * page.widthIn, y: a.y * page.heightIn }) : null;
 }
 
 /** Flag two cut segments meeting close to the trim centre in different directions. */

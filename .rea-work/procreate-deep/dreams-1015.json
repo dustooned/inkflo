@@ -1,0 +1,482 @@
+{
+ "ipa": "D:\\Downloads\\Programs\\Procreate-Dreams-v1-0-15.ipa",
+ "ipa_bytes": 796446323,
+ "ipa_sha256": "ba4666894bef40e960f2a92725547bbef1860abb4ec2c87fb453e12965539b75",
+ "members": 1572,
+ "app_prefix": "Payload/Dreams.app/",
+ "bundle": {
+  "CFBundleIdentifier": "au.com.savageinteractive.Dreams",
+  "CFBundleName": "Dreams",
+  "CFBundleShortVersionString": "1.0.15",
+  "CFBundleVersion": "17462",
+  "MinimumOSVersion": "16.0",
+  "UIDeviceFamily": [
+   2
+  ]
+ },
+ "info_plist": {
+  "bytes": 10168,
+  "sha256": "4dcb1428cc388a30a95330867e008eaa3db7ddaaf9d6142032fe9b98a0a126b9"
+ },
+ "executable": {
+  "path": "Payload/Dreams.app/Dreams",
+  "bytes": 16528768,
+  "sha256": "78c5f400e7ea4caee44712905a6c083f878c73f3c057e3b8e18ee17b28a9289a",
+  "fat": false,
+  "supported": true,
+  "cpu": "0x100000c",
+  "ncmds": 76,
+  "segments": [
+   {
+    "name": "__PAGEZERO",
+    "address": 0,
+    "size": 4294967296,
+    "file_offset": 0,
+    "file_size": 0
+   },
+   {
+    "name": "__TEXT",
+    "address": 4294967296,
+    "size": 13221888,
+    "file_offset": 0,
+    "file_size": 13221888
+   },
+   {
+    "name": "__DATA_CONST",
+    "address": 4308189184,
+    "size": 655360,
+    "file_offset": 13221888,
+    "file_size": 655360
+   },
+   {
+    "name": "__DATA",
+    "address": 4308844544,
+    "size": 13549568,
+    "file_offset": 13877248,
+    "file_size": 1130496
+   },
+   {
+    "name": "__LINKEDIT",
+    "address": 4322394112,
+    "size": 1523712,
+    "file_offset": 15007744,
+    "file_size": 1521024
+   }
+  ],
+  "sections": [
+   {
+    "name": "__text",
+    "segment": "__TEXT",
+    "address": 4295000064,
+    "size": 10654308,
+    "file_offset": 32768
+   },
+   {
+    "name": "__stubs",
+    "segment": "__TEXT",
+    "address": 4305654372,
+    "size": 16824,
+    "file_offset": 10687076
+   },
+   {
+    "name": "__objc_stubs",
+    "segment": "__TEXT",
+    "address": 4305671196,
+    "size": 147936,
+    "file_offset": 10703900
+   },
+   {
+    "name": "__init_offsets",
+    "segment": "__TEXT",
+    "address": 4305819132,
+    "size": 4,
+    "file_offset": 10851836
+   },
+   {
+    "name": "__objc_methlist",
+    "segment": "__TEXT",
+    "address": 4305819136,
+    "size": 144168,
+    "file_offset": 10851840
+   },
+   {
+    "name": "__const",
+    "segment": "__TEXT",
+    "address": 4305963312,
+    "size": 320728,
+    "file_offset": 10996016
+   },
+   {
+    "name": "__cstring",
+    "segment": "__TEXT",
+    "address": 4306284048,
+    "size": 510421,
+    "file_offset": 11316752
+   },
+   {
+    "name": "__objc_methname",
+    "segment": "__TEXT",
+    "address": 4306794469,
+    "size": 292810,
+    "file_offset": 11827173
+   },
+   {
+    "name": "__swift5_typeref",
+    "segment": "__TEXT",
+    "address": 4307087280,
+    "size": 107960,
+    "file_offset": 12119984
+   },
+   {
+    "name": "__constg_swiftt",
+    "segment": "__TEXT",
+    "address": 4307195240,
+    "size": 198596,
+    "file_offset": 12227944
+   },
+   {
+    "name": "__swift5_fieldmd",
+    "segment": "__TEXT",
+    "address": 4307393836,
+    "size": 187380,
+    "file_offset": 12426540
+   },
+   {
+    "name": "__swift5_reflstr",
+    "segment": "__TEXT",
+    "address": 4307581216,
+    "size": 154689,
+    "file_offset": 12613920
+   },
+   {
+    "name": "__swift5_builtin",
+    "segment": "__TEXT",
+    "address": 4307735908,
+    "size": 15620,
+    "file_offset": 12768612
+   },
+   {
+    "name": "__swift5_assocty",
+    "segment": "__TEXT",
+    "address": 4307751528,
+    "size": 13512,
+    "file_offset": 12784232
+   },
+   {
+    "name": "__swift5_capture",
+    "segment": "__TEXT",
+    "address": 4307765040,
+    "size": 46052,
+    "file_offset": 12797744
+   },
+   {
+    "name": "__swift5_proto",
+    "segment": "__TEXT",
+    "address": 4307811092,
+    "size": 14076,
+    "file_offset": 12843796
+   },
+   {
+    "name": "__swift5_types",
+    "segment": "__TEXT",
+    "address": 4307825168,
+    "size": 17348,
+    "file_offset": 12857872
+   },
+   {
+    "name": "__swift5_entry",
+    "segment": "__TEXT",
+    "address": 4307842516,
+    "size": 8,
+    "file_offset": 12875220
+   },
+   {
+    "name": "__swift5_mpenum",
+    "segment": "__TEXT",
+    "address": 4307842524,
+    "size": 7620,
+    "file_offset": 12875228
+   },
+   {
+    "name": "__swift5_protos",
+    "segment": "__TEXT",
+    "address": 4307850144,
+    "size": 900,
+    "file_offset": 12882848
+   },
+   {
+    "name": "__gcc_except_tab",
+    "segment": "__TEXT",
+    "address": 4307851044,
+    "size": 13376,
+    "file_offset": 12883748
+   },
+   {
+    "name": "__objc_classname",
+    "segment": "__TEXT",
+    "address": 4307864420,
+    "size": 14390,
+    "file_offset": 12897124
+   },
+   {
+    "name": "__objc_methtype",
+    "segment": "__TEXT",
+    "address": 4307878810,
+    "size": 55863,
+    "file_offset": 12911514
+   },
+   {
+    "name": "__ustring",
+    "segment": "__TEXT",
+    "address": 4307934674,
+    "size": 70,
+    "file_offset": 12967378
+   },
+   {
+    "name": "__unwind_info",
+    "segment": "__TEXT",
+    "address": 4307934744,
+    "size": 180352,
+    "file_offset": 12967448
+   },
+   {
+    "name": "__eh_frame",
+    "segment": "__TEXT",
+    "address": 4308115096,
+    "size": 66608,
+    "file_offset": 13147800
+   },
+   {
+    "name": "__got",
+    "segment": "__DATA_CONST",
+    "address": 4308189184,
+    "size": 26840,
+    "file_offset": 13221888
+   },
+   {
+    "name": "__const",
+    "segment": "__DATA_CONST",
+    "address": 4308216024,
+    "size": 525520,
+    "file_offset": 13248728
+   },
+   {
+    "name": "__cfstring",
+    "segment": "__DATA_CONST",
+    "address": 4308741544,
+    "size": 86336,
+    "file_offset": 13774248
+   },
+   {
+    "name": "__objc_classlist",
+    "segment": "__DATA_CONST",
+    "address": 4308827880,
+    "size": 10136,
+    "file_offset": 13860584
+   },
+   {
+    "name": "__objc_catlist",
+    "segment": "__DATA_CONST",
+    "address": 4308838016,
+    "size": 176,
+    "file_offset": 13870720
+   },
+   {
+    "name": "__objc_protolist",
+    "segment": "__DATA_CONST",
+    "address": 4308838192,
+    "size": 744,
+    "file_offset": 13870896
+   },
+   {
+    "name": "__objc_imageinfo",
+    "segment": "__DATA_CONST",
+    "address": 4308838936,
+    "size": 8,
+    "file_offset": 13871640
+   },
+   {
+    "name": "__objc_doubleobj",
+    "segment": "__DATA_CONST",
+    "address": 4308838944,
+    "size": 80,
+    "file_offset": 13871648
+   },
+   {
+    "name": "__objc_intobj",
+    "segment": "__DATA_CONST",
+    "address": 4308839024,
+    "size": 576,
+    "file_offset": 13871728
+   },
+   {
+    "name": "__objc_arraydata",
+    "segment": "__DATA_CONST",
+    "address": 4308839600,
+    "size": 4368,
+    "file_offset": 13872304
+   },
+   {
+    "name": "__objc_arrayobj",
+    "segment": "__DATA_CONST",
+    "address": 4308843968,
+    "size": 144,
+    "file_offset": 13876672
+   },
+   {
+    "name": "__objc_const",
+    "segment": "__DATA",
+    "address": 4308844544,
+    "size": 512984,
+    "file_offset": 13877248
+   },
+   {
+    "name": "__objc_selrefs",
+    "segment": "__DATA",
+    "address": 4309357528,
+    "size": 62240,
+    "file_offset": 14390232
+   },
+   {
+    "name": "__objc_protorefs",
+    "segment": "__DATA",
+    "address": 4309419768,
+    "size": 528,
+    "file_offset": 14452472
+   },
+   {
+    "name": "__objc_classrefs",
+    "segment": "__DATA",
+    "address": 4309420296,
+    "size": 5480,
+    "file_offset": 14453000
+   },
+   {
+    "name": "__objc_superrefs",
+    "segment": "__DATA",
+    "address": 4309425776,
+    "size": 1992,
+    "file_offset": 14458480
+   },
+   {
+    "name": "__objc_ivar",
+    "segment": "__DATA",
+    "address": 4309427768,
+    "size": 14588,
+    "file_offset": 14460472
+   },
+   {
+    "name": "__objc_data",
+    "segment": "__DATA",
+    "address": 4309442360,
+    "size": 209152,
+    "file_offset": 14475064
+   },
+   {
+    "name": "__data",
+    "segment": "__DATA",
+    "address": 4309651512,
+    "size": 313520,
+    "file_offset": 14684216
+   },
+   {
+    "name": "__thread_vars",
+    "segment": "__DATA",
+    "address": 4309965032,
+    "size": 120,
+    "file_offset": 14997736
+   },
+   {
+    "name": "__thread_bss",
+    "segment": "__DATA",
+    "address": 4309965152,
+    "size": 48,
+    "file_offset": 14997856
+   },
+   {
+    "name": "__common",
+    "segment": "__DATA",
+    "address": 4309965312,
+    "size": 13224,
+    "file_offset": 0
+   },
+   {
+    "name": "__bss",
+    "segment": "__DATA",
+    "address": 4309978624,
+    "size": 12400344,
+    "file_offset": 0
+   }
+  ],
+  "objc_classlist": 1267
+ },
+ "counts": {
+  "nib": 41,
+  "storyboard": 6,
+  "strings": 154,
+  "car": 6
+ },
+ "storyboards": [
+  "Base.lproj/LaunchScreen.storyboardc",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc",
+  "LayersResources.bundle/Layers.storyboardc",
+  "ProControlsResources.bundle/ProContextMenuOldPopover.storyboardc",
+  "ProControlsResources.bundle/ProPopoverMenu.storyboardc"
+ ],
+ "bundles": [
+  "BrushesResources.bundle/",
+  "ColorPanelResources.bundle/",
+  "DisplayListResources.bundle/",
+  "LayersResources.bundle/",
+  "ProControlsResources.bundle/",
+  "PropertiesPopoverResources.bundle/",
+  "Settings.bundle/",
+  "ValkyrieBrushResources.bundle/",
+  "ValkyrieResources.bundle/",
+  "ViewerUIResources.bundle/"
+ ],
+ "nibs": [
+  "Base.lproj/LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib",
+  "Base.lproj/LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/A9o-4C-4tl-view-bNi-5a-KfL.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Palette.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/TwT-kY-4al-view-bl4-CB-cxS.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UIViewController-pIK-IP-dSJ.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/harmony.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/pIK-IP-dSJ-view-Tn4-JW-zJJ.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/E51-qx-VZV-view-zgW-I1-7EX.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/HistoryPalette.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/LI7-Dm-8Ll-view-Uhk-NC-yo5.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/Palette.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/SPp-lC-zUY-view-UMr-n7-JJy.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/UIViewController-SPp-lC-zUY.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/harmony.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/lln-AW-X7A-view-DeB-xR-hnF.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+  "LayersResources.bundle/Layers.Applicable.Blend.nib",
+  "LayersResources.bundle/Layers.Applicable.Materials.nib",
+  "LayersResources.bundle/Layers.Cell.Background.nib",
+  "LayersResources.bundle/Layers.Cell.Group.nib",
+  "LayersResources.bundle/Layers.Cell.Layer.nib",
+  "LayersResources.bundle/Layers.Cell.MaterialLayer.nib",
+  "LayersResources.bundle/Layers.Cell.Mesh.nib",
+  "LayersResources.bundle/Layers.Cell.TextureSet.nib",
+  "LayersResources.bundle/Layers.storyboardc/UINavigationController-jts-6f-1RJ.nib",
+  "LayersResources.bundle/Layers.storyboardc/s4E-dE-waI-view-zgp-vO-Ipt.nib",
+  "ProControlsResources.bundle/ProContextMenuOldPopover.storyboardc/ProContextMenuPopoverController.nib",
+  "ProControlsResources.bundle/ProContextMenuOldPopover.storyboardc/cyJ-sw-EvA-view-E1s-ht-yfs.nib",
+  "ProControlsResources.bundle/ProNumericKeypad.nib",
+  "ProControlsResources.bundle/ProPopoverMenu.storyboardc/ProPopoverMenuController.nib",
+  "ProControlsResources.bundle/ProPopoverMenu.storyboardc/qNA-le-XKX-view-gFp-w0-geu.nib"
+ ]
+}

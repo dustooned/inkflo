@@ -377,7 +377,7 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 
 - In Draw, keep holding a snapped QuickShape and drag to adjust it. Shift or a second finger
   constrains it. In Layout, holding the Knife straightens the cut so it can be aimed before release.
-- Transform panels previews shared gutter movement on the page. Drag a gutter directly or drag
+- Resize gutters previews shared gutter movement on the page. Drag a gutter directly or drag
   a panel body along an axis with two movable boundaries. Panel-only cuts stay attached where
   possible, and the preview holds at the last valid layout when a move would collapse a panel.
 - Select lines uses a rectangular or freehand selection on one vector layer. Drag to move, resize
@@ -436,17 +436,20 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   dialogue group on one named layer under Lettering. 2Dope exports grouped dialogue as one
   rendered layer so it retains the joins and stacking.
 
-## Storyboard and vertical comics
+## Script and vertical comics
 
-- Script opens in storyboard view. Cards show the planned panel or a saved sketch, scene
-  description, and ordered dialogue with a balloon type per row. Add a dialogue row after
-  any existing line or insert a panel after any card. The beat list remains available.
+- Script uses an ordered beat list for scene descriptions and dialogue. Use Dialogue & panels
+  to assign script lines to panels and sync balloons.
 - New vertical comic starts a phone-width book. Send to Layout stacks beats in one column.
   Scroll preview shows a continuous phone-width view, and Export → Vertical scroll
   packages numbered 800 × up to 1280 PNG strips, a responsive static reader, and episode.json.
 - Layout defaults to white gutters and offers transparent or custom paper. Set a page corner radius
   or override it on an individual panel. Curve edges edits the two Bézier handles on a shared gutter, and Knife
   resamples freehand cuts to reduce small pen wobbles.
+- **Transform panel** (V) moves, scales, and rotates individual panels and their artwork.
+  Drag a handle beyond the trim to extend the panel into bleed. The finished page clips at
+  trim and the print PDF renders the portion within the configured bleed. Reorder overlapping
+  transformed panels from the toolbar. **Resize gutters** (R) adjusts shared cuts.
 
 ## Brush imports, vector points and screentone
 
@@ -501,3 +504,21 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Interface references: the local Procreate and 2Dope interface archives, and the official
   [Clip Studio tablet interface](https://help.clip-studio.com/en-us/manual_en/090_tablet/Tablet_interface.htm)
   and [Simple Mode workflow](https://help.clip-studio.com/en-us/manual_en/090_tablet/Using_Simple_Mode.htm).
+
+## Focus and Simple canvas chrome
+
+- Focus separates page navigation and document actions from the clustered tool rail. Simple shares
+  that layout with a shorter Draw tool list. The active tool uses the second toolbar row, and
+  the document overflow keeps paging, desk switching, preview and workspace controls accessible.
+- The brush sidebar mirrors with the device's handedness setting. Focus can hide chrome after
+  3.5 seconds of inactivity. Pin interface keeps it visible. The message line shows Draw hints.
+- Adjustments and Brush Studio share a keyboard-accessible settings card. The Studio workspace
+  retains its docked controls.
+
+## Canvas navigation
+
+- Pan, pinch to zoom, and twist the page with two fingers in Layout, Draw, Caption, and Print.
+  On a mouse, drag with Space or the middle button to pan, use Ctrl or Command with the wheel
+  to zoom, and use Alt with the wheel to rotate around the pointer.
+- The Canvas view control shows zoom and angle and opens sliders, quarter turns, and Fit page.
+  Press 0 to restore the upright fit. View changes are local to the open desk.

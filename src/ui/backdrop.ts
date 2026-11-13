@@ -11,6 +11,7 @@ export interface BackdropView {
   ox: number;
   oy: number;
   s: number;
+  angle?: number;
   pageW: number;
   pageH: number;
   transparent?: boolean;
@@ -110,7 +111,9 @@ export function drawBackdrop(g: CanvasRenderingContext2D, v: BackdropView, st: B
     g.shadowBlur = 28;
     g.shadowOffsetY = 12;
     g.fillStyle = '#fff';
-    g.fillRect(v.ox, v.oy, v.pageW * v.s, v.pageH * v.s);
+    g.translate(v.ox, v.oy);
+    g.rotate((v.angle ?? 0) * Math.PI / 180);
+    g.fillRect(0, 0, v.pageW * v.s, v.pageH * v.s);
   }
   g.restore();
 }

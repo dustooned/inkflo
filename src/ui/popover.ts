@@ -9,7 +9,8 @@ let open: { el: HTMLElement; close: () => void } | null = null;
  */
 export function popover(anchor: HTMLElement, content: HTMLElement, side: 'right' | 'below' | 'above' | 'left' = 'below', label = 'Menu', onClose?: () => void): () => void {
   open?.close();
-  const el = h('div', { class: 'pop', role: 'dialog', 'aria-label': label }, content);
+  const compact = anchor.closest('.screen.focus, .screen.simple, .pop.compact-pop');
+  const el = h('div', { class: compact ? 'pop compact-pop' : 'pop', role: 'dialog', 'aria-label': label }, content);
   document.body.append(el);
   const r = anchor.getBoundingClientRect();
   const w = el.offsetWidth;
@@ -47,12 +48,24 @@ export function popover(anchor: HTMLElement, content: HTMLElement, side: 'right'
   return close;
 }
 
+export const popoverIsOpen = () => open !== null;
+
 export function closePopover(): void {
   open?.close();
 }
 
 /** The display menu: theme, canvas backdrop, layout. */
-export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; composition?: boolean } = {}): void {
+export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; composition?: boolean; shell?: boolean } = {}): void {
+  const switchLayout = (layout: Layout) => {
+    setPrefs({ layout });
+    if (!opts.shell) { rebuild(); return; }
+    closePopover();
+    const compact = document.querySelector('.screen:is(.focus, .simple)');
+    const selector = compact ? '.chrome-actions [aria-label="Display settings"], .chrome-actions [aria-label="More document actions"]'
+      : '.screen .bar [aria-label="Display settings"]';
+    const target = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((el) => el.offsetWidth > 0);
+    target?.focus();
+  };
   const build = () => {
     const p = prefs();
     const vignette = h('input', { type: 'checkbox', checked: p.vignette });
@@ -78,9 +91,14 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
       ] : null,
       opts.layout
         ? [h('div', { class: 'sep' }), h('h4', {}, 'Layout'),
-          seg<Layout>([{ id: 'studio', label: 'Studio' }, { id: 'simple', label: 'Simple' }, { id: 'focus', label: 'Focus' }], p.layout, (v) => { setPrefs({ layout: v }); rebuild(); }, 'Layout'),
+          seg<Layout>([{ id: 'studio', label: 'Studio' }, { id: 'simple', label: 'Simple' }, { id: 'focus', label: 'Focus' }], p.layout, switchLayout, 'Layout'),
           h('div', { class: 'row' }, h('label', {}, finger, 'Draw with finger')),
-          h('p', { class: 'note', style: 'margin:0 8px 6px' }, 'Tab switches between Studio and Focus.')]
+          opts.shell ? h('div', { class: 'row' },
+            h('label', {}, 'Brush sidebar', h('select', { 'aria-label': 'Handedness', onchange: (e) => {
+              setPrefs({ handed: (e.target as HTMLSelectElement).value === 'left' ? 'left' : 'right' });
+            } }, h('option', { value: 'right', selected: p.handed === 'right' }, 'Right-handed'),
+              h('option', { value: 'left', selected: p.handed === 'left' }, 'Left-handed')))) : null,
+          h('p', { class: 'note', style: 'margin:0 8px 6px' }, opts.shell ? h('kbd', {}, 'Tab') : 'Tab', ' switches between Studio and Focus.')]
         : null,
     );
   };

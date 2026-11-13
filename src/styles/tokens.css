@@ -7,6 +7,23 @@
  */
 :root {
   color-scheme: light;
+  --tap: 44px;
+  --bar: 44px;
+  --bar-2: 88px;
+  --gap: 8px;
+  --gap-group: 14px;
+  --hairline: 1px;
+  --sidebar: 56px;
+  --msg: 18px;
+  --msg-tool: 32px;
+  --radius: 12px;
+  --blur: 20px;
+  --type-1: 12px;
+  --type-2: 13px;
+  --type-3: 15px;
+  --type-4: 17px;
+  --type-5: 20px;
+  --ui-scale: 1;
   /* palette (PLAN §4) */
   --paper: #ede6d8;
   --paper-lift: #f7f2e8;

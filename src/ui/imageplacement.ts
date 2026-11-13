@@ -1,6 +1,7 @@
 import { findLayer, newLayer, type BookAsset, type LayerGroup, type PlacedImage, type Pt } from '../doc/model';
-import { panelAt } from '../geom/carve';
-import { groupLabel, insertIndex } from '../geom/groups';
+import { mapPanelPoint, panelAt } from '../geom/carve';
+import { invert, type Mat } from '../engine/core/selxform';
+import { groupLabel, insertIndex, panelForGroup } from '../geom/groups';
 import { fitImage, hitsImage, imageDpi, imagePoint, type PlacementBox } from '../geom/placement';
 import { decodePngInto, makeCanvas } from '../io/canvasops';
 import { IMAGE_ACCEPT, readAssetImage } from '../io/bookassets';
@@ -10,10 +11,14 @@ import { h, toast } from './dom';
 
 export function imagePlacement(ctx: DeskCtx, selected: () => string | null, select: (id: string) => void) {
   const { page, art, studio } = ctx;
-  let drag: { id: string; start: Pt; before: PlacedImage; next: PlacedImage; resize: boolean } | null = null;
+  let drag: { id: string; start: Pt; before: PlacedImage; next: PlacedImage; resize: boolean; inverse: Mat | null } | null = null;
 
-  const box = (group: LayerGroup): PlacementBox =>
-    (group.anchor ? panelAt(ctx.panels(), group.anchor)?.bbox : null) ?? { x0: 0, y0: 0, x1: page.widthIn, y1: page.heightIn };
+  const box = (group: LayerGroup): PlacementBox => {
+    const panel = panelForGroup(ctx.panels(), group);
+    return (panel?.source ?? panel)?.bbox ?? { x0: 0, y0: 0, x1: page.widthIn, y1: page.heightIn };
+  };
+  const matrixForGroup = (group: LayerGroup) => panelForGroup(ctx.panels(), group)?.transform?.matrix;
+  const inverseForGroup = (group: LayerGroup) => { const m = matrixForGroup(group); return m ? invert(m) : null; };
 
   const get = () => {
     const id = selected();
@@ -136,22 +141,24 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
       let item = get();
       let resize = false;
       if (item && item.layer.visible && item.group.visible) {
-        const at = handle(item.image);
+        const at = mapPanelPoint(handle(item.image), matrixForGroup(item.group) ?? null);
         resize = Math.hypot(at.x - p.x, at.y - p.y) < 14 / ctx.scale();
       }
-      if (!resize && (!item || !item.layer.visible || !item.group.visible || !hitsImage(item.image, p))) {
+      if (!resize && (!item || !item.layer.visible || !item.group.visible || !hitsImage(item.image, mapPanelPoint(p, inverseForGroup(item.group))))) {
         const panels = ctx.panels();
-        const hit = page.groups.filter((g) => g.visible && (!g.anchor || !g.mask || panelAt(panels, g.anchor) === panelAt(panels, p)))
-          .flatMap((g) => g.layers).find((l) => l.visible && l.image && hitsImage(l.image, p));
+        const hit = page.groups.filter((g) => g.visible && (!g.anchor || !g.mask || panelForGroup(panels, g) === panelAt(panels, p)))
+          .flatMap((g) => g.layers.filter((l) => l.visible && l.image && hitsImage(l.image, mapPanelPoint(p, inverseForGroup(g))))).at(0);
         if (!hit) return;
         select(hit.id);
         item = get();
       }
       if (!item || item.layer.locked || item.group.locked) return;
-      drag = { id: item.layer.id, start: p, before: { ...item.image }, next: { ...item.image }, resize };
+      const inverse = inverseForGroup(item.group);
+      drag = { id: item.layer.id, start: mapPanelPoint(p, inverse), before: { ...item.image }, next: { ...item.image }, resize, inverse };
     },
     move(p: Pt) {
       if (!drag) return;
+      p = mapPanelPoint(p, drag.inverse);
       const { before, start, resize } = drag;
       if (resize) {
         const end = handle(before);
@@ -176,7 +183,8 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
       if (!item || !item.layer.visible || !item.group.visible) return;
       const image = drag?.next ?? item.image;
       const w = image.width / 2, hgt = image.height / 2;
-      const points = [imagePoint(image, -w, -hgt), imagePoint(image, w, -hgt), imagePoint(image, w, hgt), imagePoint(image, -w, hgt)];
+      const matrix = matrixForGroup(item.group) ?? null;
+      const points = [imagePoint(image, -w, -hgt), imagePoint(image, w, -hgt), imagePoint(image, w, hgt), imagePoint(image, -w, hgt)].map((p) => mapPanelPoint(p, matrix));
       g.save();
       g.lineWidth = 2;
       g.strokeStyle = '#2686af';

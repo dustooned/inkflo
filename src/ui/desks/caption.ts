@@ -262,6 +262,10 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   let lastTap: { at: number; id: string; point: Pt } | null = null;
   const mode: DeskMode = {
     id: 'caption',
+    actions: [
+      { label: 'Script dialogue', glyph: '❝', run: openScript },
+      { label: 'Style sheet', glyph: 'Aa', run: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) },
+    ],
     tools: [
       { id: 'select', label: 'Select', glyph: '➤', key: 'v', group: 'edit' },
       { id: 'letter', label: 'Letter', glyph: '💬', group: 'make', variants: KINDS.map((k) => ({ id: k.id, label: k.label, glyph: k.glyph, key: k.key })) },
@@ -291,12 +295,12 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         }));
       find.addEventListener('change', () => selectLetter(find.value || null));
       bar.append(
-        h('button', { class: 'btn', type: 'button', onclick: openScript }, 'Script dialogue'),
+        h('button', { class: 'btn document-option', type: 'button', onclick: openScript }, 'Script dialogue'),
         h('button', { class: 'btn primary', type: 'button', disabled: !left, onclick: () => edit('Place script lettering', () => reconcileDialogue(book, page, panels, true)) }, 'Place from script' + (left ? ' · ' + left : '')),
         ...(page.balloons.length ? [find] : []),
         ...(sel() ? [h('label', { class: 'mini', title: 'Resize around the centre. Turn off to anchor the opposite edge.' }, center, 'Resize from center')] : []),
         h('label', { class: 'mini', title: 'Sizes snap to readable steps and never drop below the style sheet minimum' }, keep, 'Keep readable'),
-        h('button', { class: 'btn', type: 'button', onclick: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) }, 'Style sheet…'),
+        h('button', { class: 'btn document-option', type: 'button', onclick: () => openStyleSheet(studio, () => { ctx.chrome(); ctx.request(); }) }, 'Style sheet…'),
         h('span', { class: 'hint' }, mode.tool === 'select'
           ? 'Drag body to move · edges to resize · top stem to rotate · yellow dots aim tails'
           : mode.tool === 'draw-balloon' ? 'Draw a closed outline. Return to the starting point to finish.'

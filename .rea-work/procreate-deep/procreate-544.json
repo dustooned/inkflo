@@ -1,0 +1,605 @@
+{
+ "ipa": "D:\\Downloads\\Programs\\Procreate-v5-4-4.ipa",
+ "ipa_bytes": 777430382,
+ "ipa_sha256": "7b1dad3ac95f8aeca3c22b432b5d6fd94182a3bf9f84fb93588adb126368b54e",
+ "members": 2327,
+ "app_prefix": "Payload/Procreate.app/",
+ "bundle": {
+  "CFBundleIdentifier": "au.com.savageinteractive.procreate",
+  "CFBundleName": "Procreate",
+  "CFBundleShortVersionString": "5.4.4",
+  "CFBundleVersion": "56832",
+  "MinimumOSVersion": "16.0",
+  "UIDeviceFamily": [
+   2
+  ]
+ },
+ "info_plist": {
+  "bytes": 23167,
+  "sha256": "42a04f52c302e1c2bb48aae4931dd6c3638c9ce62dbe8a599a379991edfaed5b"
+ },
+ "executable": {
+  "path": "Payload/Procreate.app/Procreate",
+  "bytes": 19119424,
+  "sha256": "76d3ff1249a987b8f03ac3ecc64c54e48f618bac467e9fbb1f238b91fab1487b",
+  "fat": false,
+  "supported": true,
+  "cpu": "0x100000c",
+  "ncmds": 90,
+  "segments": [
+   {
+    "name": "__PAGEZERO",
+    "address": 0,
+    "size": 4294967296,
+    "file_offset": 0,
+    "file_size": 0
+   },
+   {
+    "name": "__TEXT",
+    "address": 4294967296,
+    "size": 15450112,
+    "file_offset": 0,
+    "file_size": 15450112
+   },
+   {
+    "name": "__DATA_CONST",
+    "address": 4310417408,
+    "size": 671744,
+    "file_offset": 15450112,
+    "file_size": 671744
+   },
+   {
+    "name": "__DATA",
+    "address": 4311089152,
+    "size": 1900544,
+    "file_offset": 16121856,
+    "file_size": 1605632
+   },
+   {
+    "name": "__LINKEDIT",
+    "address": 4312989696,
+    "size": 1392640,
+    "file_offset": 17727488,
+    "file_size": 1391936
+   }
+  ],
+  "sections": [
+   {
+    "name": "__text",
+    "segment": "__TEXT",
+    "address": 4294983680,
+    "size": 12247856,
+    "file_offset": 16384
+   },
+   {
+    "name": "__stubs",
+    "segment": "__TEXT",
+    "address": 4307231536,
+    "size": 18204,
+    "file_offset": 12264240
+   },
+   {
+    "name": "__objc_stubs",
+    "segment": "__TEXT",
+    "address": 4307249760,
+    "size": 239712,
+    "file_offset": 12282464
+   },
+   {
+    "name": "__init_offsets",
+    "segment": "__TEXT",
+    "address": 4307489472,
+    "size": 4,
+    "file_offset": 12522176
+   },
+   {
+    "name": "__objc_methlist",
+    "segment": "__TEXT",
+    "address": 4307489480,
+    "size": 291236,
+    "file_offset": 12522184
+   },
+   {
+    "name": "__const",
+    "segment": "__TEXT",
+    "address": 4307780720,
+    "size": 296716,
+    "file_offset": 12813424
+   },
+   {
+    "name": "__cstring",
+    "segment": "__TEXT",
+    "address": 4308077440,
+    "size": 574070,
+    "file_offset": 13110144
+   },
+   {
+    "name": "__swift5_typeref",
+    "segment": "__TEXT",
+    "address": 4308651510,
+    "size": 121309,
+    "file_offset": 13684214
+   },
+   {
+    "name": "__objc_methname",
+    "segment": "__TEXT",
+    "address": 4308772819,
+    "size": 446492,
+    "file_offset": 13805523
+   },
+   {
+    "name": "__constg_swiftt",
+    "segment": "__TEXT",
+    "address": 4309219312,
+    "size": 232756,
+    "file_offset": 14252016
+   },
+   {
+    "name": "__swift5_reflstr",
+    "segment": "__TEXT",
+    "address": 4309452080,
+    "size": 220327,
+    "file_offset": 14484784
+   },
+   {
+    "name": "__swift5_fieldmd",
+    "segment": "__TEXT",
+    "address": 4309672408,
+    "size": 210816,
+    "file_offset": 14705112
+   },
+   {
+    "name": "__swift5_builtin",
+    "segment": "__TEXT",
+    "address": 4309883224,
+    "size": 7300,
+    "file_offset": 14915928
+   },
+   {
+    "name": "__swift5_assocty",
+    "segment": "__TEXT",
+    "address": 4309890524,
+    "size": 13152,
+    "file_offset": 14923228
+   },
+   {
+    "name": "__swift5_proto",
+    "segment": "__TEXT",
+    "address": 4309903676,
+    "size": 12112,
+    "file_offset": 14936380
+   },
+   {
+    "name": "__swift5_types",
+    "segment": "__TEXT",
+    "address": 4309915788,
+    "size": 11548,
+    "file_offset": 14948492
+   },
+   {
+    "name": "__swift5_capture",
+    "segment": "__TEXT",
+    "address": 4309927336,
+    "size": 91952,
+    "file_offset": 14960040
+   },
+   {
+    "name": "__swift5_mpenum",
+    "segment": "__TEXT",
+    "address": 4310019288,
+    "size": 1948,
+    "file_offset": 15051992
+   },
+   {
+    "name": "__swift5_protos",
+    "segment": "__TEXT",
+    "address": 4310021236,
+    "size": 960,
+    "file_offset": 15053940
+   },
+   {
+    "name": "__swift5_entry",
+    "segment": "__TEXT",
+    "address": 4310022196,
+    "size": 8,
+    "file_offset": 15054900
+   },
+   {
+    "name": "__gcc_except_tab",
+    "segment": "__TEXT",
+    "address": 4310022204,
+    "size": 23628,
+    "file_offset": 15054908
+   },
+   {
+    "name": "__objc_classname",
+    "segment": "__TEXT",
+    "address": 4310045832,
+    "size": 19663,
+    "file_offset": 15078536
+   },
+   {
+    "name": "__objc_methtype",
+    "segment": "__TEXT",
+    "address": 4310065495,
+    "size": 74338,
+    "file_offset": 15098199
+   },
+   {
+    "name": "__swift_as_entry",
+    "segment": "__TEXT",
+    "address": 4310139836,
+    "size": 52,
+    "file_offset": 15172540
+   },
+   {
+    "name": "__swift_as_ret",
+    "segment": "__TEXT",
+    "address": 4310139888,
+    "size": 52,
+    "file_offset": 15172592
+   },
+   {
+    "name": "__ustring",
+    "segment": "__TEXT",
+    "address": 4310139940,
+    "size": 190,
+    "file_offset": 15172644
+   },
+   {
+    "name": "__unwind_info",
+    "segment": "__TEXT",
+    "address": 4310140132,
+    "size": 209536,
+    "file_offset": 15172836
+   },
+   {
+    "name": "__eh_frame",
+    "segment": "__TEXT",
+    "address": 4310349672,
+    "size": 64284,
+    "file_offset": 15382376
+   },
+   {
+    "name": "__got",
+    "segment": "__DATA_CONST",
+    "address": 4310417408,
+    "size": 26832,
+    "file_offset": 15450112
+   },
+   {
+    "name": "__const",
+    "segment": "__DATA_CONST",
+    "address": 4310444240,
+    "size": 503320,
+    "file_offset": 15476944
+   },
+   {
+    "name": "__cfstring",
+    "segment": "__DATA_CONST",
+    "address": 4310947560,
+    "size": 103328,
+    "file_offset": 15980264
+   },
+   {
+    "name": "__objc_classlist",
+    "segment": "__DATA_CONST",
+    "address": 4311050888,
+    "size": 13656,
+    "file_offset": 16083592
+   },
+   {
+    "name": "__objc_catlist",
+    "segment": "__DATA_CONST",
+    "address": 4311064544,
+    "size": 240,
+    "file_offset": 16097248
+   },
+   {
+    "name": "__objc_protolist",
+    "segment": "__DATA_CONST",
+    "address": 4311064784,
+    "size": 1624,
+    "file_offset": 16097488
+   },
+   {
+    "name": "__objc_imageinfo",
+    "segment": "__DATA_CONST",
+    "address": 4311066408,
+    "size": 8,
+    "file_offset": 16099112
+   },
+   {
+    "name": "__objc_intobj",
+    "segment": "__DATA_CONST",
+    "address": 4311066416,
+    "size": 1200,
+    "file_offset": 16099120
+   },
+   {
+    "name": "__objc_arraydata",
+    "segment": "__DATA_CONST",
+    "address": 4311067616,
+    "size": 5248,
+    "file_offset": 16100320
+   },
+   {
+    "name": "__objc_arrayobj",
+    "segment": "__DATA_CONST",
+    "address": 4311072864,
+    "size": 1032,
+    "file_offset": 16105568
+   },
+   {
+    "name": "__objc_floatobj",
+    "segment": "__DATA_CONST",
+    "address": 4311073896,
+    "size": 240,
+    "file_offset": 16106600
+   },
+   {
+    "name": "__objc_doubleobj",
+    "segment": "__DATA_CONST",
+    "address": 4311074136,
+    "size": 48,
+    "file_offset": 16106840
+   },
+   {
+    "name": "__objc_const",
+    "segment": "__DATA",
+    "address": 4311089152,
+    "size": 757032,
+    "file_offset": 16121856
+   },
+   {
+    "name": "__objc_selrefs",
+    "segment": "__DATA",
+    "address": 4311846184,
+    "size": 102736,
+    "file_offset": 16878888
+   },
+   {
+    "name": "__objc_protorefs",
+    "segment": "__DATA",
+    "address": 4311948920,
+    "size": 1176,
+    "file_offset": 16981624
+   },
+   {
+    "name": "__objc_classrefs",
+    "segment": "__DATA",
+    "address": 4311950096,
+    "size": 7232,
+    "file_offset": 16982800
+   },
+   {
+    "name": "__objc_superrefs",
+    "segment": "__DATA",
+    "address": 4311957328,
+    "size": 2840,
+    "file_offset": 16990032
+   },
+   {
+    "name": "__objc_ivar",
+    "segment": "__DATA",
+    "address": 4311960168,
+    "size": 19596,
+    "file_offset": 16992872
+   },
+   {
+    "name": "__objc_data",
+    "segment": "__DATA",
+    "address": 4311979768,
+    "size": 380040,
+    "file_offset": 17012472
+   },
+   {
+    "name": "__data",
+    "segment": "__DATA",
+    "address": 4312359808,
+    "size": 331320,
+    "file_offset": 17392512
+   },
+   {
+    "name": "__objc_stublist",
+    "segment": "__DATA",
+    "address": 4312691128,
+    "size": 64,
+    "file_offset": 17723832
+   },
+   {
+    "name": "__thread_vars",
+    "segment": "__DATA",
+    "address": 4312691192,
+    "size": 120,
+    "file_offset": 17723896
+   },
+   {
+    "name": "__thread_bss",
+    "segment": "__DATA",
+    "address": 4312691312,
+    "size": 56,
+    "file_offset": 0
+   },
+   {
+    "name": "__common",
+    "segment": "__DATA",
+    "address": 4312691376,
+    "size": 6672,
+    "file_offset": 0
+   },
+   {
+    "name": "__bss",
+    "segment": "__DATA",
+    "address": 4312698112,
+    "size": 290936,
+    "file_offset": 0
+   }
+  ],
+  "objc_classlist": 1707
+ },
+ "counts": {
+  "nib": 115,
+  "storyboard": 18,
+  "strings": 302,
+  "car": 17
+ },
+ "storyboards": [
+  "Brush.storyboardc",
+  "CanvasInformation.storyboardc",
+  "CanvasPresetEditor.storyboardc",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc",
+  "Document.storyboardc",
+  "DocumentPocket.storyboardc",
+  "Gallery.storyboardc",
+  "GestureControls.storyboardc",
+  "Introduction.storyboardc",
+  "LaunchScreen.storyboardc",
+  "LayersResources.bundle/Layers.storyboardc",
+  "PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc",
+  "Preview.storyboardc",
+  "ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc",
+  "ProLibrary.storyboardc",
+  "ProLibraryPocket.storyboardc",
+  "ProMenuOldResources.bundle/ProPopoverMenu.storyboardc"
+ ],
+ "bundles": [
+  "ApplicationImageAssets.bundle/",
+  "BrushesResources.bundle/",
+  "ColorPanelResources.bundle/",
+  "ColorUIResources.bundle/",
+  "ContextMenuResources.bundle/",
+  "FloatingWindowsResources.bundle/",
+  "LayersResources.bundle/",
+  "ProButtonOldResources.bundle/",
+  "ProContextMenuOldResources.bundle/",
+  "ProControlsDeprecatedResources.bundle/",
+  "ProControlsEssentialsResources.bundle/",
+  "ProControlsResources.bundle/",
+  "ProMenuOldResources.bundle/",
+  "ProPressureCurveOldResources.bundle/",
+  "ProcreateModelResources.bundle/",
+  "Settings.bundle/",
+  "Valkyrie3DResources.bundle/",
+  "ValkyrieBrushResources.bundle/",
+  "ValkyrieResources.bundle/"
+ ],
+ "nibs": [
+  "Brush.storyboardc/UIViewController-tFu-jJ-qvB.nib",
+  "Brush.storyboardc/tFu-jJ-qvB-view-Wlg-OL-l8J.nib",
+  "BrushNumericKeypad.nib",
+  "BrushSettingsController.nib",
+  "CanvasFavoriteCell.nib",
+  "CanvasInformation.storyboardc/UIViewController-WdR-OD-sOk.nib",
+  "CanvasInformation.storyboardc/WdR-OD-sOk-view-vBD-GW-Lqr.nib",
+  "CanvasPresetEditor.storyboardc/UIViewController-WdR-OD-sOk.nib",
+  "CanvasPresetEditor.storyboardc/WdR-OD-sOk-view-vBD-GW-Lqr.nib",
+  "ColorBalanceCardView.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/A9o-4C-4tl-view-bNi-5a-KfL.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Palette.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/TwT-kY-4al-view-bl4-CB-cxS.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UIViewController-pIK-IP-dSJ.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/harmony.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/pIK-IP-dSJ-view-Tn4-JW-zJJ.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+  "ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/E51-qx-VZV-view-zgW-I1-7EX.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/HistoryPalette.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/LI7-Dm-8Ll-view-Uhk-NC-yo5.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/Palette.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/SPp-lC-zUY-view-UMr-n7-JJy.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/UIViewController-SPp-lC-zUY.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/classic.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/disc.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/harmony.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/lln-AW-X7A-view-DeB-xR-hnF.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/palettes.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/value.nib",
+  "ColorPanelResources.bundle/ColorPanel.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+  "ColorProfilesView.nib",
+  "CreateCustomView.nib",
+  "CreateKeyboard-Pad.nib",
+  "CreateKeyboard-Pocket.nib",
+  "CreateView.nib",
+  "CropFullscreenSpinner.nib",
+  "Document.storyboardc/4PF-zU-mI3-view-63e-do-PgX.nib",
+  "Document.storyboardc/UIViewController-4PF-zU-mI3.nib",
+  "DocumentCropCardView.nib",
+  "DocumentCropModeToolbarPocket.nib",
+  "DocumentDrawingGuideSettingsCardView.nib",
+  "DocumentLiquifyAdjustCardView.nib",
+  "DocumentLiquifyModeCardView.nib",
+  "DocumentLiquifySettingsCardView.nib",
+  "DocumentLiquifySettingsCardViewPocket.nib",
+  "DocumentNavigation.nib",
+  "DocumentPocket.storyboardc/4PF-zU-mI3-view-63e-do-PgX.nib",
+  "DocumentPocket.storyboardc/UIViewController-4PF-zU-mI3.nib",
+  "DocumentTransformSettingsCardOver.nib",
+  "DocumentVideoModeToolbarPocket.nib",
+  "FloatingToolbarWrapperView.nib",
+  "Gallery.storyboardc/About.nib",
+  "Gallery.storyboardc/Gallery.nib",
+  "Gallery.storyboardc/galleryNavigation.nib",
+  "Gallery.storyboardc/jMV-hG-exi-view-QvU-2F-PbB.nib",
+  "Gallery.storyboardc/z3n-cn-gjg-view-5cg-Ud-NWx.nib",
+  "GestureControls.storyboardc/Fmk-dZ-gRf-view-Cyd-iT-6XH.nib",
+  "GestureControls.storyboardc/UIViewController-Fmk-dZ-gRf.nib",
+  "HSBCardView.nib",
+  "IntroDemoView.nib",
+  "Introduction.storyboardc/2QD-Dm-QZX-view-LEC-Ch-6eh.nib",
+  "Introduction.storyboardc/UIViewController-2QD-Dm-QZX.nib",
+  "LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib",
+  "LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib",
+  "LayersResources.bundle/Layers.Applicable.Blend.nib",
+  "LayersResources.bundle/Layers.Applicable.Materials.nib",
+  "LayersResources.bundle/Layers.Cell.Background.nib",
+  "LayersResources.bundle/Layers.Cell.Group.nib",
+  "LayersResources.bundle/Layers.Cell.Layer.nib",
+  "LayersResources.bundle/Layers.Cell.MaterialLayer.nib",
+  "LayersResources.bundle/Layers.Cell.Mesh.nib",
+  "LayersResources.bundle/Layers.Cell.TextureSet.nib",
+  "LayersResources.bundle/Layers.storyboardc/UINavigationController-jts-6f-1RJ.nib",
+  "LayersResources.bundle/Layers.storyboardc/s4E-dE-waI-view-zgp-vO-Ipt.nib",
+  "LengthKeyboardView.nib",
+  "NotificationBar.nib",
+  "OffsetButtonConfigView.nib",
+  "PadTextAttributes.nib",
+  "PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/UIViewController-j1y-V4-xli.nib",
+  "PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/j1y-V4-xli-view-wbc-yd-nQP.nib",
+  "PocketCreateView.nib",
+  "PocketIntroDemoView.nib",
+  "PocketPreviewView.nib",
+  "PocketTextAttributes.nib",
+  "Preview.storyboardc/Preview.nib",
+  "Preview.storyboardc/XLU-HX-1gn-view-G9B-cX-s2j.nib",
+  "PreviewView.nib",
+  "ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/ProContextMenuPopoverController.nib",
+  "ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/cyJ-sw-EvA-view-E1s-ht-yfs.nib",
+  "ProControlsDeprecatedResources.bundle/ProNumericKeypad.nib",
+  "ProLibrary.storyboardc/6R8-cI-pBU-view-ICL-Yu-h5J.nib",
+  "ProLibrary.storyboardc/UIViewController-6R8-cI-pBU.nib",
+  "ProLibraryPocket.storyboardc/6R8-cI-pBU-view-ICL-Yu-h5J.nib",
+  "ProLibraryPocket.storyboardc/UIViewController-6R8-cI-pBU.nib",
+  "ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/ProPopoverMenuController.nib",
+  "ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/qNA-le-XKX-view-gFp-w0-geu.nib",
+  "ProfilesView-Pocket.nib",
+  "ProfilesView.nib",
+  "ReferenceMediaView.nib",
+  "SelectionToolbarFeatherPopover.nib",
+  "ShiftingToolbarView.nib",
+  "StylusButtonListView.nib",
+  "TextureEditFullscreenSpinnerViewController.nib",
+  "Timelapse.nib",
+  "TypefaceCell.nib",
+  "UnitNumericalFullscreenKeyboard-Pocket.nib",
+  "UnitNumericalFullscreenKeyboard.nib"
+ ]
+}

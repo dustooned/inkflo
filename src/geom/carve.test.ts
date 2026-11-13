@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, planKnifeCut, presetCuts, shiftCut } from './carve';
+import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, planKnifeCut, presetCuts, shiftCut, sourcePanelAt } from './carve';
 import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
 
@@ -34,6 +34,21 @@ function cut(p: Page, pts: Pt[], mode: 'across' | 'panel' = 'across', straight =
 }
 
 describe('carving', () => {
+  it('keeps panel ownership at the source while hit testing overlap in stack order', () => {
+    const p = page();
+    p.cuts = presetCuts(p, 'rows2');
+    p.layout = { ...p.layout!, panelTransforms: [
+      { at: { x: .5, y: .25 }, matrix: [1.1, 0, 0, 1, 0, H / 2], order: 2 },
+      { at: { x: .5, y: .75 }, matrix: [1, 0, 0, 1, 0, 0], order: -1 },
+    ] };
+    const [top, bottom] = derivePanels(p);
+    const overlap = { x: W / 2, y: H * .75 };
+    expect(top?.bbox.x1).toBeGreaterThan(W);
+    expect(panelAt([top!, bottom!], overlap)).toBe(top);
+    expect(sourcePanelAt([top!, bottom!], overlap)).toBe(bottom);
+    expect(panelAt([top!, bottom!], { x: W / 2, y: H * .25 })).toBeNull();
+  });
+
   it('requires both ends of a page swipe to be beyond the trim and uses the actual gesture', () => {
     const p = page();
     expect(planKnifeCut(p, [{ x: 1, y: 4 }, { x: W + 1, y: 4 }], 'across')).toBeNull();

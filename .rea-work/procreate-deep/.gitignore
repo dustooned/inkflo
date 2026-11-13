@@ -1,0 +1,9 @@
+# Extracted subsets and the generated tables stay local; the scripts and the summaries are committed.
+dreams-subset/
+pc-classes.tsv
+pc-methods.tsv
+pc-strings.tsv
+dr-classes.tsv
+dr-methods.tsv
+dr-strings.tsv
+sel-*.txt

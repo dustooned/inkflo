@@ -1,6 +1,7 @@
 import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
-import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelAt, type Panel } from '../geom/carve';
+import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack, type Panel } from '../geom/carve';
+import { panelForGroup } from '../geom/groups';
 import { paintBalloonGroup } from './caption';
 import { captionGroups } from '../geom/captiongroup';
 import { drawScreenTone } from './tone';
@@ -21,8 +22,6 @@ export const COLORS = {
   ink: '#191A1F',
 };
 
-const borderInset = (border: number) => Math.max(border, 0.06);
-
 export interface RenderOptions {
   /** Pixels per inch of the target. */
   scale: number;
@@ -33,6 +32,12 @@ export interface RenderOptions {
   balloons?: boolean;
   /** Panel paper and gutters. Off = art only on a transparent page. */
   frame?: boolean;
+  /** Include borders on an inks separation without painting panel paper. */
+  frameInk?: boolean;
+  whiteBackground?: boolean;
+  knockoutPanels?: boolean;
+  /** Render transformed panels into the print bleed. */
+  bleed?: number;
   /** Use unprinted white paper for tonal separation. */
   whitePaper?: boolean;
   /** A replacement canvas for a layer (the live stroke while drawing), by layer id. */
@@ -106,7 +111,7 @@ function roundedPanelPath(panel: Panel, scale: number, radius: number): Path2D {
 }
 
 export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, paper: string | null, edges = false): boolean {
-  const { cornerRadius = 0, border, panelCorners, edgeBorder } = layoutOf(page);
+  const { cornerRadius = 0, border, panelCorners } = layoutOf(page);
   if (!cornerRadius && !panelCorners?.length) return false;
   const radii = panels.map((panel) => cornerOverrides(page, panel).at(-1)?.radius ?? cornerRadius);
   if (!radii.some(Boolean)) return false;
@@ -123,7 +128,6 @@ export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Pa
   if (edges && border) {
     g.save();
     g.clip(outside, 'evenodd');
-    clipBorder(g, page, s, edgeBorder ? 0 : borderInset(border));
     g.lineWidth = border * 2 * s;
     g.lineJoin = 'round';
     g.strokeStyle = COLORS.ink;
@@ -131,12 +135,6 @@ export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Pa
     g.restore();
   }
   return true;
-}
-
-function clipBorder(g: CanvasRenderingContext2D, page: Page, s: number, inset: number): void {
-  g.beginPath();
-  g.rect(inset * s, inset * s, Math.max(0, page.widthIn - 2 * inset) * s, Math.max(0, page.heightIn - 2 * inset) * s);
-  g.clip();
 }
 
 /** Gutter bands and trim border, on top of the panel art. */
@@ -148,13 +146,19 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   g.beginPath();
   g.rect(0, 0, page.widthIn * s, page.heightIn * s);
   g.clip();
-  const rounded = roundCorners(g, page, opts.panels ?? derivePanels(page), s, paper, true);
+  const panels = opts.panels ?? derivePanels(page);
+  const fixed = panels.filter((panel) => !panel.transform);
+  if (fixed.length) roundCorners(g, page, fixed, s, paper, true);
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.strokeStyle = COLORS.ink;
   if (border) {
     g.save();
-    clipBorder(g, page, s, edgeBorder ? 0 : borderInset(border));
+    if (fixed.length !== panels.length) {
+      const visible = new Path2D();
+      for (const panel of fixed) visible.addPath(panelPath(panel.pts, s));
+      g.clip(visible);
+    }
     g.lineWidth = (gutter + border * 2) * s;
     g.stroke(path);
     g.restore();
@@ -169,7 +173,12 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   }
   g.globalCompositeOperation = 'source-over';
   g.strokeStyle = COLORS.ink;
-  if (border && edgeBorder && !rounded) {
+  if (border && edgeBorder) {
+    if (fixed.length !== panels.length) {
+      const visible = new Path2D();
+      for (const panel of fixed) visible.addPath(panelPath(panel.pts, s));
+      g.clip(visible);
+    }
     g.lineWidth = border * s * 2;
     g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
   }
@@ -188,7 +197,12 @@ export function drawPagePaper(g: CanvasRenderingContext2D, page: Page, panels: P
   g.fillStyle = white ? '#FFFFFF' : color ?? COLORS.gutter;
   g.fillRect(0, 0, page.widthIn * s, page.heightIn * s);
   g.fillStyle = white ? '#FFFFFF' : COLORS.panel;
-  for (const p of panels) g.fill(panelPath(p.pts, s));
+  for (const p of panels) if (!p.transform) g.fill(panelPath(p.pts, s));
+  if (color === null && !white && panels.some((p) => p.transform)) {
+    const vacant = new Path2D();
+    for (const p of panels) if (p.source) vacant.addPath(panelPath(p.source.pts, s));
+    g.save(); g.globalCompositeOperation = 'destination-out'; g.fill(vacant); g.restore();
+  }
   if (cutout && !white) clearGutterPaper(g, page, panels, s);
 }
 
@@ -204,7 +218,25 @@ export function clearGutterPaper(g: CanvasRenderingContext2D, page: Page, panels
     g.stroke(gutterBandPath(page, s));
     g.restore();
   }
-  roundCorners(g, page, panels, s, null, false);
+  roundCorners(g, page, panels.filter((p) => !p.transform), s, null, false);
+}
+
+export function placedPanelPath(page: Page, panel: Panel, scale: number): Path2D {
+  const radius = cornerOverrides(page, panel).at(-1)?.radius ?? layoutOf(page).cornerRadius ?? 0;
+  return radius ? roundedPanelPath(panel, scale, radius) : panelPath(panel.pts, scale);
+}
+
+export function paintPlacedFrame(g: CanvasRenderingContext2D, page: Page, panel: Panel, s: number, kind: 'paper' | 'ink', white = false): void {
+  const path = placedPanelPath(page, panel, s);
+  if (kind === 'paper') { g.fillStyle = white ? '#fff' : COLORS.panel; g.fill(path); }
+  else if (layoutOf(page).border) {
+    g.strokeStyle = COLORS.ink; g.lineJoin = 'round'; g.lineWidth = layoutOf(page).border * s; g.stroke(path);
+  }
+}
+
+export function applyPanelTransform(g: CanvasRenderingContext2D, panel: Panel, s: number): void {
+  const m = panel.transform?.matrix;
+  if (m) g.transform(m[0], m[1], m[2], m[3], m[4] * s, m[5] * s);
 }
 
 /** Should this layer draw under these options? */
@@ -258,6 +290,8 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   const frame = opts.frame !== false;
   const panels = opts.panels ?? derivePanels(page);
   g.save();
+  const bleed = (opts.bleed ?? 0) * s;
+  g.beginPath(); g.rect(-bleed, -bleed, W + bleed * 2, H + bleed * 2); g.clip();
   g.clearRect(0, 0, W, H);
   if (frame) drawPagePaper(g, page, panels, s, opts.whitePaper);
   g.imageSmoothingQuality = 'high';
@@ -268,7 +302,8 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
   // panel groups, last first so the reading-order first panel is on top where groups overlap
   for (let i = panelGroups.length - 1; i >= 0; i--) {
     const grp = panelGroups[i]!;
-    const panel = grp.anchor ? panelAt(panels, grp.anchor) : null;
+    const panel = panelForGroup(panels, grp);
+    if (panel?.transform) continue;
     g.save();
     if (grp.mask) {
       if (!panel) {
@@ -280,16 +315,39 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
     drawLayers(g, grp, art, opts, W, H, 'framed');
     g.restore();
   }
-  if (frame) drawGutters(g, page, s, { whitePaper: opts.whitePaper, panels });
+  if (frame || opts.frameInk) drawGutters(g, page, s, { paper: frame, whitePaper: opts.whitePaper, panels });
   // the Gutters group: art in the gutters and margins (borderless pages), over the gutter paper
   for (const grp of page.groups.filter((x) => x.kind === 'gutter')) {
     if (!grp.layers.some((l) => shows(l, grp, opts))) continue;
     if (grp.mask) inGutterBands(g, page, s, W, H, (o) => drawLayers(o, grp, art, opts, W, H, 'all'));
     else drawLayers(g, grp, art, opts, W, H, 'all');
   }
-  for (let i = panelGroups.length - 1; i >= 0; i--) drawLayers(g, panelGroups[i]!, art, opts, W, H, 'over');
+  for (let i = panelGroups.length - 1; i >= 0; i--) if (!panelForGroup(panels, panelGroups[i]!)?.transform) drawLayers(g, panelGroups[i]!, art, opts, W, H, 'over');
+  for (const panel of panelStack(panels)) {
+    if (!panel.transform) continue;
+    const groups = panelGroups.filter((group) => panelForGroup(panels, group) === panel);
+    if (frame) paintPlacedFrame(g, page, panel, s, 'paper', opts.whitePaper);
+    g.save();
+    g.clip(placedPanelPath(page, panel, s));
+    if (opts.knockoutPanels) {
+      g.clearRect(-bleed, -bleed, W + bleed * 2, H + bleed * 2);
+    }
+    applyPanelTransform(g, panel, s);
+    for (const group of groups) drawLayers(g, group, art, opts, W, H, 'framed');
+    g.restore();
+    if (frame || opts.frameInk) paintPlacedFrame(g, page, panel, s, 'ink');
+    g.save();
+    applyPanelTransform(g, panel, s);
+    for (const group of groups) drawLayers(g, group, art, opts, W, H, 'over');
+    g.restore();
+  }
   for (const grp of over) drawLayers(g, grp, art, opts, W, H, 'all');
   if (opts.balloons !== false) drawBalloons(g, page, s, opts.sheet, opts.skipBalloon);
+  if (opts.whiteBackground) {
+    g.globalCompositeOperation = 'destination-over';
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, W, H);
+  }
   g.restore();
 }
 

@@ -24,6 +24,7 @@ docs/
   research/procreate-ui-style.md   the control kit, metrics and surfaces, as a build spec
   research/procreate-integration-matrix.md  feature → inkflo gap → decision → order of work
   research/dreams-1.0.15-motion.md  what the Dreams package says about timeline and cues
+  research/csp-simple-mode.md      the tablet/Simple Mode UI that CSP ships on Windows
 ```
 
 The prototypes are **reference implementations**: geometry, interaction and visual language are

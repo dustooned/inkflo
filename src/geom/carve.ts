@@ -7,7 +7,8 @@
  * 520 px wide page, so geometry runs in that "proto" space: inches × K.
  */
 
-import type { Cut, CutMode, Page, PageLayout, Pt } from '../doc/model';
+import type { Cut, CutMode, Page, PageLayout, PanelTransform, Pt } from '../doc/model';
+import { applyPoint, invert } from '../engine/core/selxform';
 
 /** Proto pixels per inch (520 px / 6.625 in). */
 export const K = 520 / 6.625;
@@ -24,10 +25,12 @@ export interface Panel {
   pts: Pt[];
   centroid: Pt;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+  source?: Panel;
+  transform?: PanelTransform;
 }
 
 export function cornerOverrides(page: Page, panel: Panel): NonNullable<PageLayout['panelCorners']> {
-  return (layoutOf(page).panelCorners ?? []).filter(({ at }) => pointInPoly({ x: at.x * page.widthIn, y: at.y * page.heightIn }, panel.pts));
+  return (layoutOf(page).panelCorners ?? []).filter(({ at }) => pointInPoly({ x: at.x * page.widthIn, y: at.y * page.heightIn }, (panel.source ?? panel).pts));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -345,17 +348,40 @@ export function gutterPaths(page: Page): readonly GutterPath[] {
 
 /** Fold the page's cuts into panels, in reading order. Never stored. */
 export function derivePanels(page: Page): Panel[] {
-  return carvePage(page).polys.map((poly, index) => {
+  const bounds = (pts: Pt[]) => ({ x0: Math.min(...pts.map((p) => p.x)), y0: Math.min(...pts.map((p) => p.y)), x1: Math.max(...pts.map((p) => p.x)), y1: Math.max(...pts.map((p) => p.y)) });
+  return carvePage(page).polys.map((poly, index): Panel => {
     const pts = toInches(poly);
-    const xs = pts.map((p) => p.x);
-    const ys = pts.map((p) => p.y);
-    return { index, pts, centroid: centroid(pts), bbox: { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) } };
+    const source = { index, pts, centroid: centroid(pts), bbox: bounds(pts) };
+    const transform = layoutOf(page).panelTransforms?.filter(({ at }) => pointInPoly({ x: at.x * page.widthIn, y: at.y * page.heightIn }, pts)).at(-1);
+    if (!transform) return source;
+    const placed = pts.map((p) => mapPanelPoint(p, transform.matrix));
+    return { ...source, pts: placed, centroid: mapPanelPoint(source.centroid, transform.matrix), bbox: bounds(placed), source, transform };
   });
 }
 
+export function mapPanelPoint(p: Pt, matrix: PanelTransform['matrix'] | ReturnType<typeof invert>): Pt {
+  if (!matrix) return p;
+  const [x, y] = applyPoint(matrix, p.x, p.y);
+  return { x, y };
+}
+
+export function panelStack(panels: readonly Panel[]): Panel[] {
+  return [...panels].sort(comparePanelStack);
+}
+
+function comparePanelStack(a: Panel, b: Panel): number {
+  return Number(!!a.transform) - Number(!!b.transform)
+    || (a.transform?.order ?? 0) - (b.transform?.order ?? 0) || a.index - b.index;
+}
+
+export function sourcePanelAt(panels: readonly Panel[], pt: Pt): Panel | null {
+  return panels.find((p) => pointInPoly(pt, (p.source ?? p).pts)) ?? null;
+}
+
 export function panelAt(panels: readonly Panel[], pt: Pt): Panel | null {
-  for (let i = panels.length - 1; i >= 0; i--) if (pointInPoly(pt, panels[i]!.pts)) return panels[i]!;
-  return null;
+  let hit: Panel | null = null;
+  for (const panel of panels) if (pointInPoly(pt, panel.pts) && (!hit || comparePanelStack(panel, hit) >= 0)) hit = panel;
+  return hit;
 }
 
 function snapToTrim(p: Pt, page: Page, tol: number): Pt {

@@ -8,10 +8,10 @@ export const selectionCorners = (a: Pt, b: Pt): Pt[] => [a, { x: b.x, y: a.y }, 
 const rotationAt = (b: Bounds, scale: number) => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / scale });
 const handles = (b: Bounds, scale: number) => boxHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
 
-export function grabSelection(b: Bounds, p: Pt, scale: number, touch: boolean): SelectionGrab | null {
+export function grabSelection(b: Bounds, p: Pt, scale: number, touch: boolean, rotation = true): SelectionGrab | null {
   const reach = (touch ? 13 : 8) / scale;
   const distance = (q: Pt) => Math.hypot(p.x - q.x, p.y - q.y);
-  if (distance(rotationAt(b, scale)) <= reach) return { kind: 'rotate' };
+  if (rotation && distance(rotationAt(b, scale)) <= reach) return { kind: 'rotate' };
   const handle = handles(b, scale).sort((a, b) => distance(a.at) - distance(b.at))[0]!;
   if (distance(handle.at) <= reach) return { kind: 'resize', side: handle };
   if (p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1) return { kind: 'move' };
@@ -45,13 +45,17 @@ export function drawSelectionPath(g: CanvasRenderingContext2D, path: Pt[], scale
 }
 
 /** The shared on-canvas controls for paint and line selection. */
-export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number): void {
+export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number, rotation = true): void {
   g.strokeRect(b.x0 * scale, b.y0 * scale, (b.x1 - b.x0) * scale, (b.y1 - b.y0) * scale);
   g.setLineDash([]);
   g.fillStyle = '#FFFDF7';
   const rotate = rotationAt(b, scale);
-  g.beginPath(); g.moveTo(rotate.x * scale, b.y0 * scale); g.lineTo(rotate.x * scale, rotate.y * scale); g.stroke();
-  for (const q of [...handles(b, scale).map((h) => h.at), rotate]) {
+  if (rotation) {
+    g.beginPath(); g.moveTo(rotate.x * scale, b.y0 * scale); g.lineTo(rotate.x * scale, rotate.y * scale); g.stroke();
+  }
+  const points = handles(b, scale).map((h) => h.at);
+  if (rotation) points.push(rotate);
+  for (const q of points) {
     g.beginPath(); g.arc(q.x * scale, q.y * scale, 4, 0, Math.PI * 2); g.fill(); g.stroke();
   }
   if (angle !== undefined) g.fillText(`${Math.round(angle)}°`, rotate.x * scale + 10, rotate.y * scale);

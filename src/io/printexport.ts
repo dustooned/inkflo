@@ -6,7 +6,7 @@ import { groupLabel } from '../geom/groups';
 import { derivePanels } from '../geom/carve';
 import { bookletSheets, checkCount, miniZineCells, printOrder, printOf, readerSpreads } from '../geom/printkinds';
 import { lettersReady } from '../render/fonts';
-import { drawGutters, drawLayerBitmap, renderPage } from '../render/page';
+import { drawLayerBitmap, renderPage } from '../render/page';
 import { encodePng, makeCanvas } from './canvasops';
 import { withPages, type Progress } from './exports';
 import { browserDeflate, PdfDoc, PdfPage, type PdfImage } from './pdf';
@@ -51,17 +51,15 @@ export async function renderSeparation(page: Page, art: PageArt | null, dpi: num
   const g = c.getContext('2d')!;
   const sheet = sheetOf(book);
   if (sep === 'all' || sep === 'lettering') await lettersReady(page.balloons.map((l) => l.cap));
-  if (sep !== 'all' && background === 'white') {
-    g.fillStyle = '#FFFFFF';
-    g.fillRect(0, 0, c.width, c.height);
-  }
   if (sep === 'all') {
     renderPage(g, page, art, { scale: dpi, printOnly: true, sheet });
     return c;
   }
   const types = { ...ALL_OFF, ...(sep === 'inks' ? { ink: true } : sep === 'colours' ? { colour: true, tone: true } : sep === 'pencils' ? { pencil: true } : {}) };
-  renderPage(g, page, art, { scale: dpi, types, printOnly: sep !== 'pencils', frame: false, balloons: sep === 'lettering', sheet });
-  if (sep === 'inks' && borders) drawGutters(g, page, dpi, { paper: false });
+  renderPage(g, page, art, {
+    scale: dpi, types, printOnly: sep !== 'pencils', frame: false, frameInk: sep === 'inks' && borders,
+    knockoutPanels: sep !== 'lettering', whiteBackground: background === 'white', balloons: sep === 'lettering', sheet,
+  });
   return c;
 }
 
@@ -155,7 +153,17 @@ export async function exportPrintPdf(studio: Studio, opt: PrintOptions, progress
         progress(`Page ${i + 1} of ${plan.order.length}…`);
         await yieldToUi();
         const page = slot === null ? first : book.pages[slot]!;
-        const img = await pdfImage(doc, withBleed(await render(slot), bleedPx));
+        let canvas: HTMLCanvasElement;
+        if (slot !== null && bleedPx && page.layout?.panelTransforms?.length) {
+          const art = artOf(page);
+          await lettersReady(page.balloons.map((l) => l.cap));
+          canvas = makeCanvas(Math.round(page.widthIn * dpi) + bleedPx * 2, Math.round(page.heightIn * dpi) + bleedPx * 2);
+          const g = canvas.getContext('2d')!;
+          g.fillStyle = page.layout.gutterPaper ?? '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
+          g.translate(bleedPx, bleedPx);
+          renderPage(g, page, art, { scale: dpi, bleed: bleedPx / dpi, printOnly: true, sheet: sheetOf(book) });
+        } else canvas = withBleed(await render(slot), bleedPx);
+        const img = await pdfImage(doc, canvas);
         const tw = page.widthIn * PT;
         const th = page.heightIn * PT;
         const b = spec.bleed * PT;

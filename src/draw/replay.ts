@@ -121,7 +121,7 @@ export function wallLayers(page: Page, group: LayerGroup, refer: Refer): Layer[]
 /** A fill kit for a colour layer: walls from its group (or all lines), panels as the outer wall. */
 export function layerKit(page: Page, art: PageArt, layer: Layer, dpi: number, panels: Panel[]): FillKit {
   const group = page.groups.find((g) => g.layers.some((l) => l.id === layer.id))!;
-  return new FillKit((refer) => refAlpha(wallLayers(page, group, refer).filter((l) => l.id !== layer.id), art, art.width, art.height), art.width, art.height, dpi, panels, group.kind === 'gutter' ? gutterMask(page, dpi, art.width, art.height) : undefined);
+  return new FillKit((refer) => refAlpha(wallLayers(page, group, refer).filter((l) => l.id !== layer.id), art, art.width, art.height), art.width, art.height, dpi, panels.map((p) => p.source ?? p), group.kind === 'gutter' ? gutterMask(page, dpi, art.width, art.height) : undefined);
 }
 
 export interface FillPaint {

@@ -1,3 +1,4 @@
+import { scalePanelTransforms } from '../geom/pagetemplates';
 import { newBook, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
 import { assetsOf, parseBookFile, readBookAssets, stringifyBookFile } from '../doc/schema';
 import { newPageArt, referencedKeys, Residency, type PageArt } from '../draw/residency';
@@ -263,7 +264,7 @@ export class Studio {
       page.widthIn = size.widthIn;
       page.heightIn = size.heightIn;
       if (b.print?.binding === 'web') {
-        const { panelCorners: _corners, ...sectionStyle } = layoutOf(size);
+        const { panelCorners: _corners, panelTransforms: _transforms, ...sectionStyle } = layoutOf(size);
         page.layout = sectionStyle;
       }
     }
@@ -323,7 +324,7 @@ export class Studio {
     const before = b.print ? { ...b.print } : undefined;
     const after = { ...spec };
     const resize = size && this.blankArt && b.pages.some((p) => Math.abs(p.widthIn - size.w) > 1e-4 || Math.abs(p.heightIn - size.h) > 1e-4);
-    const oldPages = resize ? structuredClone(b.pages.map((p) => ({ id: p.id, w: p.widthIn, h: p.heightIn, cuts: p.cuts, balloons: p.balloons, anchors: p.groups.map((g) => g.anchor) }))) : [];
+    const oldPages = resize ? structuredClone(b.pages.map((p) => ({ id: p.id, w: p.widthIn, h: p.heightIn, cuts: p.cuts, balloons: p.balloons, layout: p.layout, anchors: p.groups.map((g) => g.anchor) }))) : [];
     const scalePages = (to: (id: string) => { w: number; h: number }) => {
       for (const p of b.pages) {
         const t = to(p.id);
@@ -333,6 +334,7 @@ export class Studio {
         p.cuts = p.cuts.map((c) => ({ ...c, pts: c.pts.map(sc), ...(c.extended ? { extended: c.extended.map(sc) } : {}), ...(c.handles ? { handles: [sc(c.handles[0]), sc(c.handles[1])] } : {}) }));
         p.balloons = p.balloons.map((l) => ({ ...l, cap: { ...l.cap, x: l.cap.x * sx, y: l.cap.y * sy, tails: l.cap.tails.map((t2) => ({ ...t2, x: t2.x * sx, y: t2.y * sy })) } }));
         for (const g of p.groups) if (g.anchor) g.anchor = sc(g.anchor);
+        if (p.layout?.panelTransforms) p.layout.panelTransforms = scalePanelTransforms(p.layout.panelTransforms, sx, sy);
         p.widthIn = t.w;
         p.heightIn = t.h;
         const { width, height } = pagePixels(p, b.dpi);
@@ -356,6 +358,7 @@ export class Studio {
           // exact restore of the scaled geometry (no rounding drift)
           for (const p of b.pages) {
             const o = was.get(p.id)!;
+            p.layout = structuredClone(o.layout);
             p.cuts = structuredClone(o.cuts);
             p.balloons = structuredClone(o.balloons);
             p.groups.forEach((g, i) => {

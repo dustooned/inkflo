@@ -1,5 +1,7 @@
 import { findLayer, newLayer, TONE_SHAPES, type Pt, type ScreenTone } from '../doc/model';
-import { groupAt, groupLabel, insertIndex } from '../geom/groups';
+import { invert } from '../engine/core/selxform';
+import { mapPanelPoint } from '../geom/carve';
+import { groupAt, groupLabel, insertIndex, panelForGroup } from '../geom/groups';
 import { drawScreenTone } from '../render/tone';
 import type { DeskCtx } from './desk';
 import { h, seg, slider, toast } from './dom';
@@ -31,7 +33,9 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void) {
     if (group.locked || !group.visible) { toast(`${groupLabel(page, panels, group)} is ${group.locked ? 'locked' : 'hidden'}.`); return; }
     const layer = newLayer('tone');
     layer.name = SHAPE_NAMES[draft.shape] + ' tone';
-    layer.screenTone = { ...draft, ...(region ? { region } : {}) };
+    const matrix = panelForGroup(panels, group)?.transform?.matrix;
+    const inverse = matrix ? invert(matrix) : null;
+    layer.screenTone = { ...draft, ...(region ? { region: region.map((p) => mapPanelPoint(p, inverse)) } : {}) };
     studio.editPage(page, 'Add screentone', ['groups'], (p) => {
       const g = p.groups.find((item) => item.id === group.id)!;
       g.layers.splice(insertIndex(g, 'tone'), 0, layer);

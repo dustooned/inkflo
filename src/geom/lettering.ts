@@ -1,7 +1,7 @@
 import { newId, PT, sheetOf, type Beat, type Book, type DialogueLine, type Letter, type LetterSheet, type Page, type Pt } from '../doc/model';
 import { BALLOON_STYLES, defaultCaption, type BalloonStyle, type CaptionSpec } from '../engine/lettering/spec';
 import { applyStyle, captureStyle, type CaptionStyle } from '../engine/lettering/styles';
-import { panelAt, pointInPoly, type Panel } from './carve';
+import { panelAt, sourcePanelAt, pointInPoly, type Panel } from './carve';
 import { anchorFor } from './groups';
 import { balloonGroup, groupWords, setGroupWords } from './captiongroup';
 
@@ -120,10 +120,13 @@ export function replaceDialogue(page: Page, beat: Beat, text: string[]): void {
 export function dialoguePanel(page: Page, panels: Panel[], beat: Beat, index: number): Panel | null {
   const anchor = beat.dialogue?.[index]?.panel;
   if (anchor) {
-    const found = panelAt(panels, { x: anchor.x * page.widthIn, y: anchor.y * page.heightIn });
+    const found = sourcePanelAt(panels, { x: anchor.x * page.widthIn, y: anchor.y * page.heightIn });
     if (found) return found;
     // A cut can land exactly on an anchor; resolve it to the closest panel.
-    const distance = (p: Panel) => Math.hypot(p.centroid.x / page.widthIn - anchor.x, p.centroid.y / page.heightIn - anchor.y);
+    const distance = (p: Panel) => {
+      const { x, y } = (p.source ?? p).centroid;
+      return Math.hypot(x / page.widthIn - anchor.x, y / page.heightIn - anchor.y);
+    };
     return panels.reduce<Panel | null>((best, p) => !best || distance(p) < distance(best) ? p : best, null);
   }
   return panels[page.beats.indexOf(beat)] ?? null;
@@ -343,7 +346,7 @@ export function reconcileDialogue(book: Book, page: Page, panels: Panel[], creat
 export function assignDialoguePanel(page: Page, panels: Panel[], beat: Beat, index: number, panel: Panel | null): void {
   const line = bindDialogue(page, beat)[index]!;
   if (panel) {
-    const anchor = anchorFor(panel);
+    const anchor = anchorFor(panel.source ?? panel);
     line.panel = { x: anchor.x / page.widthIn, y: anchor.y / page.heightIn };
   } else delete line.panel;
   const l = letterForLine(page, beat, index);

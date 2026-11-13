@@ -12,6 +12,7 @@ import { openGrid } from '../grid';
 import { openPageTemplates } from '../pagetemplates';
 import { applyPageTemplate } from '../../geom/pagetemplates';
 import { resample, pathLength } from '../../engine/core/quickshape';
+import { panelPlacement } from '../panelplacement';
 
 type Side = 'n' | 's' | 'e' | 'w';
 interface Handle {
@@ -63,6 +64,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   let holdTimer = 0;
   let autoShape = true;
   let sel: number | null = null;
+  const placement = panelPlacement(ctx, () => sel, (index) => { sel = index; });
   let hoverCut: CutMove | null = null;
   let drag: { moves: CutMove[]; start: Pt; before: Cut[]; count: number; blocked: boolean; whole: boolean } | null = null;
   let preview: ReturnType<NonNullable<DeskMode['layoutPreview']>>;
@@ -84,14 +86,15 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     return [{ x: x1!, y: y1! }, { x: x2!, y: y2! }];
   }
 
-  const displayPage = () => preview?.page ?? page;
-  const displayPanels = () => preview?.panels ?? ctx.panels();
+  const displayPage = () => (placement.preview() ?? preview)?.page ?? page;
+  const displayPanels = () => (placement.preview() ?? preview)?.panels ?? ctx.panels();
   const selected = (): Panel | null => (sel === null ? null : displayPanels()[sel] ?? null);
   const panelIndexAt = (p: Pt) => panelAt(ctx.panels(), p)?.index ?? null;
 
   function handles(): Handle[] {
-    const p = selected();
-    if (!p) return [];
+    const selectedPanel = selected();
+    if (!selectedPanel) return [];
+    const p = selectedPanel.source ?? selectedPanel;
     const { x0, x1, y0, y1 } = p.bbox;
     const mx = (x0 + x1) / 2;
     const my = (y0 + y1) / 2;
@@ -140,6 +143,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   }
 
   function cancelDrag(): void {
+    placement.clear();
     clearTimeout(holdTimer);
     trail = null;
     drag = null;
@@ -186,32 +190,46 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   function markDownbeat(panel: Panel, clear = false): void {
     studio.editPage(page, clear ? 'Clear downbeat' : 'Mark downbeat', ['downbeat'], (pg) => {
       if (clear) delete pg.downbeat;
-      else pg.downbeat = { x: panel.centroid.x / pg.widthIn, y: panel.centroid.y / pg.heightIn };
+      else {
+        const at = anchorFor(panel.source ?? panel);
+        pg.downbeat = { x: at.x / pg.widthIn, y: at.y / pg.heightIn };
+      }
     });
     ctx.chrome();
   }
 
   const mode: DeskMode = {
     id: 'layout',
+    actions: [
+      { label: 'Page templates', glyph: '▦', run: templates },
+      { label: 'Even out', glyph: '⇔', disabled: () => !canEvenOut(page), run: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) },
+      { label: 'Uncut', glyph: '⌫', run: () => { mode.tool = 'erase'; ctx.chrome(); ctx.request(); } },
+    ],
     tools: [
       { id: 'knife', label: 'Knife', glyph: '⟋', key: 'k', group: 'cut', variants: [
         { id: 'across', label: 'Across page', glyph: '⟋' },
         { id: 'panel', label: 'One panel', glyph: '⟷' },
       ] },
       { id: 'erase', label: 'Uncut', glyph: '⌫', key: 'e', group: 'cut' },
-      { id: 'resize', label: 'Transform panels', glyph: '⇔', key: 'r', group: 'edit' },
+      { id: 'resize', label: 'Resize gutters', glyph: '⇔', key: 'r', group: 'edit' },
+      { id: 'place', label: 'Transform panel', glyph: '↗', key: 'v', group: 'edit' },
       { id: 'curve', label: 'Curve edges', glyph: '⌒', key: 'b', group: 'edit' },
     ],
     tool: 'knife',
     cursor: () => {
       if (mode.tool === 'knife') return 'cross';
       if (mode.tool === 'curve') return 'cross';
+      if (mode.tool === 'place') return 'move';
       if (mode.tool !== 'resize') return '';
       const edge = drag?.moves[0] ?? hoverCut;
       return !edge || drag?.whole ? 'move' : edge.axis === 'x' ? 'ew-resize' : 'ns-resize';
     },
     ctx(bar) {
       const L = layoutOf(page);
+      if (mode.tool === 'place') {
+        bar.append(...placement.controls());
+        return;
+      }
       if (mode.tool === 'knife') {
         const snap = h('input', { type: 'checkbox', checked: autoShape });
         snap.addEventListener('change', () => (autoShape = snap.checked));
@@ -219,11 +237,11 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           h('label', { class: 'mini', title: 'Hold at the end of the cut, then drag to aim the straight edge' }, snap, 'Auto Shape'));
       }
       bar.append(
-        h('button', { class: 'btn', type: 'button', onclick: templates }, 'Page templates'),
+        h('button', { class: 'btn document-option', type: 'button', onclick: templates }, 'Page templates'),
         slider('Gutter', 0, 2, 0.01, L.gutter, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ gutter: v }, false), (v) => setLayout({ gutter: v }, true)),
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),
-        h('button', { class: 'btn', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
+        h('button', { class: 'btn document-option', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
         h('span', { class: 'hint' }, mode.tool === 'knife' ? (cutMode() === 'panel' ? 'Swipe through a panel from outside its border' : 'Swipe from the board, across the page, and back onto the board') : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : mode.tool === 'curve' ? 'Select a gutter, then drag a Bézier handle' : 'Click a gutter to remove it'),
       );
     },
@@ -242,7 +260,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         }, 'Gutter background'), paperType === 'custom' ? color : null));
       const edge = h('input', { type: 'checkbox', checked: layoutOf(page).edgeBorder ?? false });
       edge.addEventListener('change', () => setLayout({ edgeBorder: edge.checked }, true));
-      el.append(h('div', { class: 'sec' }, h('label', { class: 'mini' }, edge, 'Borders reach page edge')));
+      el.append(h('div', { class: 'sec' }, h('label', { class: 'mini' }, edge, 'Outline page edge')));
       const radius = layoutOf(page).cornerRadius ?? 0;
       el.append(h('div', { class: 'sec' }, slider('Round corners', 0, 0.5, 0.01, radius, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ cornerRadius: v }, false), (v) => setLayout({ cornerRadius: v }, true))));
       const downbeat = downbeatPanel(page, ps);
@@ -255,7 +273,10 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' },
             PRESETS.map((pr) => h('button', { class: 'btn', type: 'button', onclick: async () => {
               if (page.cuts.length && !(await confirmDialog('Replace the layout?', 'The preset replaces this page’s cuts. Undo brings them back.', 'Replace'))) return;
-              studio.editPage(page, `Preset: ${pr.label}`, ['cuts'], (pg) => (pg.cuts = presetCuts(pg, pr.id)));
+              studio.editPage(page, `Preset: ${pr.label}`, ['cuts', 'layout'], (pg) => {
+                pg.cuts = presetCuts(pg, pr.id);
+                if (pg.layout?.panelTransforms) delete pg.layout.panelTransforms;
+              });
               sel = null;
               ctx.chrome();
             } }, pr.label)))),
@@ -271,7 +292,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         const beat = page.beats[p.index];
         const overrides = cornerOverrides(page, p);
         const otherCorners = (layoutOf(page).panelCorners ?? []).filter((entry) => !overrides.includes(entry));
-        const anchor = anchorFor(p);
+        const anchor = anchorFor(p.source ?? p);
         const at = { x: anchor.x / page.widthIn, y: anchor.y / page.heightIn };
         const setRadius = (v: number, commit: boolean) => setLayout({ panelCorners: [...otherCorners, { at, radius: v }] }, commit);
         el.append(
@@ -305,6 +326,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       );
     },
     down(p, e) {
+      if (mode.tool === 'place') { placement.down(p, e); return; }
       if (mode.tool === 'curve') {
         const c = curveCut();
         const reach = (e.pointerType === 'touch' ? 16 : 10) / ctx.scale();
@@ -331,6 +353,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       }
     },
     move(p, e) {
+      if (mode.tool === 'place') { placement.move(p, e); return; }
       if (curveDrag !== undefined) {
         const original = page.cuts.find((c) => c.id === curveId);
         if (!original) return;
@@ -374,6 +397,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       if (p && (mode.tool === 'erase' || mode.tool === 'resize')) hoverCut = gutterAt(p, 8 / ctx.scale());
     },
     up(p, e) {
+      if (mode.tool === 'place') { placement.up(p, e); return; }
       clearTimeout(holdTimer);
       if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
       if (mode.tool === 'erase') {
@@ -422,7 +446,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         ctx.chrome();
       }
     },
-    layoutPreview: () => preview,
+    layoutPreview: () => placement.preview() ?? preview,
     overlay(g, s) {
       const ps = displayPanels();
       const grid = page.grid ?? book.fixedGrid;
@@ -440,7 +464,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         g.fillText((p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0'), at.x * s, at.y * s);
       }
       const p = selected();
-      if (p) {
+      if (mode.tool === 'place') placement.overlay(g, s, p);
+      else if (p) {
         g.fillStyle = 'rgba(47,111,126,.10)';
         g.fill(panelPath(p.pts, s));
         g.strokeStyle = '#2F6F7E';

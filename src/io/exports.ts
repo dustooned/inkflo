@@ -3,13 +3,13 @@ import { PT, sheetOf, type Book, type Layer, type LayerGroup, type LayerType, ty
 import { centreIn } from '../geom/lettering';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
-import { derivePanels, layoutOf, panelAt } from '../geom/carve';
+import { derivePanels, layoutOf, panelAt, panelStack } from '../geom/carve';
 import { groupPanels } from '../geom/groups';
 import { captionWithLocalTails, paintBalloonGroup, sizePt, toPx } from '../render/caption';
 import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
 import { drawScreenTone } from '../render/tone';
-import { COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, panelPath, renderPage, roundCorners } from '../render/page';
+import { applyPanelTransform, COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, paintPlacedFrame, placedPanelPath, renderPage, roundCorners } from '../render/page';
 import { assetKey } from './capture';
 import { encodePng, makeCanvas } from './canvasops';
 import { DEFAULT_MOTION, motionProject, twoDopeCaption, type LayerArt, type MotionOptions, type MotionPage } from './to2dope';
@@ -134,25 +134,31 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       const owners = groupPanels(page, panels);
       const bg = page.groups.filter((g) => g.kind === 'background');
       const panelArt: MotionPage['panels'] = [];
-      for (const p of panels) {
-        const path = panelPath(p.pts, s);
+      const inFront = panelStack(panels).filter((p) => p.transform).reverse();
+      for (const p of [...inFront, ...panels.filter((p) => !p.transform)]) {
+        const path = placedPanelPath(page, p, s);
         const mine = page.groups.filter((g) => g.kind === 'panel' && owners.get(g.id) === p);
         const f = clear(fill);
         f.save();
         f.clip(path);
         f.fillStyle = COLORS.panel;
         f.fill(path);
-        for (const g of [...bg, ...mine]) paintLayers(f, g, art, W, H, s, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
-        cutBands(f, page, s);
-        roundCorners(f, page, [p], s, null);
+        if (!p.transform) for (const g of bg) paintLayers(f, g, art, W, H, s, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
+        f.save(); applyPanelTransform(f, p, s);
+        for (const g of mine) paintLayers(f, g, art, W, H, s, (l) => FILL_TYPES.has(l.type) && !l.overFrame);
+        f.restore();
+        if (!p.transform) { cutBands(f, page, s); roundCorners(f, page, [p], s, null); }
         f.restore();
         const l = clear(line);
         l.save();
         l.clip(path);
-        for (const g of [...bg, ...mine]) paintLayers(l, g, art, W, H, s, (x) => !FILL_TYPES.has(x.type) && !x.overFrame);
-        cutBands(l, page, s);
-        drawGutters(l, page, s, { paper: false });
+        if (!p.transform) for (const g of bg) paintLayers(l, g, art, W, H, s, (x) => !FILL_TYPES.has(x.type) && !x.overFrame);
+        l.save(); applyPanelTransform(l, p, s);
+        for (const g of mine) paintLayers(l, g, art, W, H, s, (x) => !FILL_TYPES.has(x.type) && !x.overFrame);
         l.restore();
+        if (!p.transform) { cutBands(l, page, s); drawGutters(l, page, s, { paper: false }); }
+        l.restore();
+        if (p.transform) paintPlacedFrame(l, page, p, s, 'ink');
         const beat = page.beats[p.index];
         panelArt.push({
           index: p.index,
@@ -167,8 +173,10 @@ export async function exportMotionComic(studio: Studio, opt: MotionOptions = DEF
       for (const g of page.groups.filter((x) => x.kind === 'panel')) {
         if (!g.layers.some((x) => x.overFrame && x.prints && x.visible)) continue;
         const o = clear(line);
-        paintLayers(o, g, art, W, H, s, (x) => x.overFrame);
         const p = owners.get(g.id) ?? null;
+        o.save(); if (p) applyPanelTransform(o, p, s);
+        paintLayers(o, g, art, W, H, s, (x) => x.overFrame);
+        o.restore();
         extras.push({ name: `${p ? `Panel ${p.index + 1}` : 'Panel'} · over frame`, panelIndex: p?.index ?? null, art: { line: await store(line), fill: null } });
         void o;
       }

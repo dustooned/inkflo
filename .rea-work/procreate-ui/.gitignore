@@ -1,0 +1,9 @@
+# Extracted subset bundles and the exported Evidence bundle stay local; the scripts,
+# the inventory and the report in docs/ are the committed part.
+ui-subset/
+ui-subset2/
+evidence-ui.json
+localizable-en.tsv
+ui-anatomy.txt
+geometry.txt
+__pycache__/

@@ -1,3 +1,4 @@
+import { card } from './card';
 import type { Studio } from '../app/studio';
 import { allBrushes, getUserBrushes, GROUP_LABEL, PASS_STYLE, snapshotId, type BrushEntry, type BrushGroup, type LinePass } from '../draw/brushes';
 import { dabsForStroke } from '../engine/brush/dabs';
@@ -96,7 +97,7 @@ export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass,
   popover(anchor, h('div', { style: 'width:300px' }, list,
     h('div', { class: 'sep' }),
     vector ? null : h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); void importBrushes(studio, onPick); } }, h('span', {}, '↓'), 'Import brush…'),
-    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); if (cur) brushStudio(studio, cur, onPick, vector); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes');
+    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); anchor.focus(); if (cur) brushStudio(studio, cur, onPick, vector, anchor); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes');
 }
 
 export async function warmBrush(b: BrushSettings): Promise<void> {
@@ -175,7 +176,7 @@ const SECTIONS: { title: string; knobs: Knob[] }[] = [
  * Edit a brush. Library brushes are never changed: saving makes a copy in "My brushes". Strokes
  * already drawn keep their own snapshot, so editing never changes finished art.
  */
-export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: BrushEntry) => void, vector = false): void {
+export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: BrushEntry) => void, vector = false, trigger?: HTMLElement): void {
   const mine = start.group === 'mine';
   const draft: BrushEntry = { ...start, settings: cloneBrush(start.settings) };
   const big = h('canvas', { width: 520, height: 120, class: 'brushpad' });
@@ -251,16 +252,19 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
   };
   SECTIONS.forEach((s, i) => tabs.append(h('button', { type: 'button', role: 'tab', onclick: () => show(i) }, s.title)));
 
-  const d = h('dialog', { class: 'brushstudio', 'aria-label': 'Brush Studio' },
-    h('header', {}, h('h2', {}, 'Brush Studio'), h('p', { class: 'note', style: 'margin:4px 0 0' }, mine ? 'Changes apply to new strokes. Finished art keeps the brush it was drawn with.' : 'Library brushes stay as they are: saving makes a copy in My brushes.')),
-    h('div', { class: 'content' },
-      big,
+  const { dialog: d, open } = card({
+    title: 'Brush Studio',
+    className: 'brushstudio',
+    detail: h('p', { class: 'note', style: 'margin:4px 0 0' }, mine ? 'Changes apply to new strokes. Finished art keeps the brush it was drawn with.' : 'Library brushes stay as they are: saving makes a copy in My brushes.'),
+    preview: big,
+    sections: [
       h('div', { class: 'row', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
         h('label', { class: 'field', style: 'flex:1' }, 'Name', name),
         h('label', { class: 'mini' }, 'Width', width, widthOut),
         h('label', { class: 'mini' }, 'Colour', passSel)),
-      tabs, panel),
-    h('footer', {},
+      tabs, panel,
+    ],
+    footer: [
       mine ? h('button', { class: 'btn danger', type: 'button', style: 'margin-right:auto', onclick: async () => {
         if (!(await confirmDialog('Delete this brush?', `“${draft.name}” is removed from My brushes on this device. Art already drawn with it is not changed.`, 'Delete'))) return;
         await studio.saveUserBrushes(getUserBrushes().filter((b) => b.id !== draft.id));
@@ -277,11 +281,11 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
         d.close();
         onPick(saved);
         toast(`Saved “${label}” to My brushes.`);
-      } }, mine ? 'Save' : 'Save as my brush')),
-  );
-  d.addEventListener('close', () => d.remove());
-  document.body.append(d);
-  d.showModal();
+      } }, mine ? 'Save' : 'Save as my brush'),
+    ],
+    returnFocus: () => document.querySelector(trigger?.matches('.brushbtn') ? '.screen .brushbtn' : '.screen [aria-label="Edit brush"]'),
+  });
+  open();
   show(0);
   void warmBrush(draft.settings).then(() => { if (d.open) redraw(); });
 }

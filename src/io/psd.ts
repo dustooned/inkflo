@@ -3,11 +3,11 @@ import type { Studio } from '../app/studio';
 import { pagePixels, PT, sheetOf, TYPE_DEFAULTS, type Book, type Layer, type LayerGroup, type Page } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
-import { derivePanels, panelAt } from '../geom/carve';
-import { groupLabel, syncGroups } from '../geom/groups';
+import { derivePanels, panelAt, panelStack } from '../geom/carve';
+import { groupLabel, panelForGroup, syncGroups } from '../geom/groups';
 import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
-import { clearGutterPaper, drawBalloons, drawGutters, drawPagePaper, panelPath, renderPage } from '../render/page';
+import { clearGutterPaper, drawBalloons, drawGutters, drawPagePaper, paintPlacedFrame, placedPanelPath, renderPage } from '../render/page';
 import { makeCanvas } from './canvasops';
 import type { Progress } from './exports';
 import { pagesIn, type PageRange } from './printexport';
@@ -62,7 +62,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     ...(l.screenTone || art?.planes[l.id]?.width ? painted(l.name, () => {
       const only = { ...grp, visible: true, opacity: 1, layers: [{ ...l, visible: true, opacity: 1 }] };
       renderPage(g, { ...source, groups: [only] }, art, { scale: dpi, panels, frame: false, balloons: false });
-      if (grp.kind === 'background' || (grp.kind === 'panel' && !l.overFrame)) clearGutterPaper(g, page, panels, dpi);
+      if (grp.kind === 'background' || (grp.kind === 'panel' && !l.overFrame && !panelForGroup(panels, grp)?.transform)) clearGutterPaper(g, page, panels, dpi);
     }) : { name: l.name }),
     hidden: !l.visible,
     opacity: l.opacity * grp.opacity,
@@ -72,13 +72,13 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     const name = groupLabel(source, panels, grp);
     if (mode === 'template') {
       if (grp.kind !== 'panel' || over) return null;
-      const panel = grp.anchor ? panelAt(panels, grp.anchor) : null;
+      const panel = panelForGroup(panels, grp);
       if (!panel) return null;
       // Opaque white inside the panel, black outside. Apps that support group masks
       // can use this clip immediately when students draw on the empty layers.
       const maskLayer = painted('', () => {
         g.fillStyle = '#fff';
-        g.fill(panelPath(panel.pts, dpi));
+        g.fill(placedPanelPath(page, panel, dpi));
       });
       const imageData = maskLayer.imageData;
       if (imageData) {
@@ -110,13 +110,25 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
       return painted((panel ? `Panel ${panel.index + 1} · ` : '') + label, () => drawBalloons(g, { ...page, balloons: group }, dpi, sheet));
     }).reverse() }
     : page.balloons.length ? painted('Lettering', () => drawBalloons(g, page, dpi, sheet)) : { name: 'Lettering' };
+  const fixed = source.groups.filter((grp) => grp.kind === 'panel' && !panelForGroup(panels, grp)?.transform);
+  const placed = panelStack(panels).reverse().flatMap((panel) => {
+    if (!panel.transform) return [];
+    const groups = source.groups.filter((grp) => grp.kind === 'panel' && panelForGroup(panels, grp) === panel);
+    return [
+      ...groups.map((grp) => group(grp, true)),
+      painted(`Panel ${panel.index + 1} border`, () => paintPlacedFrame(g, page, panel, dpi, 'ink')),
+      ...groups.map((grp) => group(grp)),
+      painted(`Panel ${panel.index + 1} paper`, () => paintPlacedFrame(g, page, panel, dpi, 'paper')),
+    ];
+  });
   const children: (PsdLayer | null)[] = [
     letteringLayer,
     ...source.groups.filter((grp) => grp.kind === 'over').map((grp) => group(grp)),
-    ...source.groups.filter((grp) => grp.kind === 'panel').map((grp) => group(grp, true)),
+    ...placed,
+    ...fixed.map((grp) => group(grp, true)),
     ...source.groups.filter((grp) => grp.kind === 'gutter').map((grp) => group(grp)),
     painted('Panel borders and gutters', () => drawGutters(g, page, dpi)),
-    ...source.groups.filter((grp) => grp.kind === 'panel').map((grp) => group(grp)),
+    ...fixed.map((grp) => group(grp)),
     ...source.groups.filter((grp) => grp.kind === 'background').map((grp) => group(grp)),
     painted('Paper', () => drawPagePaper(g, page, panels, dpi, false, true)),
   ];

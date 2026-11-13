@@ -1,0 +1,3396 @@
+{
+ "ipa": "D:\\Downloads\\Misc\\Compressed\\Procreate_5.4.9_Pro.ipa",
+ "total_members": 2537,
+ "ui_members": 505,
+ "nib": 113,
+ "storyboards": [
+  "Payload/Procreate.app/Brush.storyboardc",
+  "Payload/Procreate.app/CanvasInformation.storyboardc",
+  "Payload/Procreate.app/CanvasPresetEditor.storyboardc",
+  "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc",
+  "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc",
+  "Payload/Procreate.app/Document.storyboardc",
+  "Payload/Procreate.app/DocumentPocket.storyboardc",
+  "Payload/Procreate.app/Gallery.storyboardc",
+  "Payload/Procreate.app/GestureControls.storyboardc",
+  "Payload/Procreate.app/Introduction.storyboardc",
+  "Payload/Procreate.app/LaunchScreen.storyboardc",
+  "Payload/Procreate.app/LayersResources.bundle/Layers.storyboardc",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc",
+  "Payload/Procreate.app/Preview.storyboardc",
+  "Payload/Procreate.app/ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc",
+  "Payload/Procreate.app/ProLibrary.storyboardc",
+  "Payload/Procreate.app/ProLibraryPocket.storyboardc",
+  "Payload/Procreate.app/ProMenuOldResources.bundle/ProPopoverMenu.storyboardc"
+ ],
+ "lproj_strings": [
+  "Payload/Procreate.app/Base.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/ar.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/de.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/en-AU.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/en-GB.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/en.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/es-419.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/es.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/fr.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/it.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/ja.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/ko.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/pt.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/ru.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/tr.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/zh-Hans.lproj/PocketColor.strings",
+  "Payload/Procreate.app/ColorPanelResources.bundle/zh-Hant.lproj/PocketColor.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/Base.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ar.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/de.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en-AU.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en-GB.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/es-419.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/es.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/fr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/hi.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/id.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/it.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ja.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ko.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ms.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/pl.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/pt.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ru.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/th.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/tr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/zh-Hans.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/zh-Hant.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/Base.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ar.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/de.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en-AU.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en-GB.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/es-419.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/es.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/fr.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/hi.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/id.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/it.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ja.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ko.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ms.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/pl.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/pt.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ru.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/th.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/tr.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/zh-Hans.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/zh-Hant.lproj/Localizable.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/ar.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/de.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/es.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/fr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/hi.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/it.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/ja.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/ko.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/pl.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/pt.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/ru.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/th.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/tr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/zh-hans.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/PlugIns/Thumbnails.appex/zh-hant.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ar.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/de.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/en.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/es-419.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/es.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/fr.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/hi.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/id.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/it.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ja.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ko.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ms.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/pl.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/pt.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ru.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/th.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/tr.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/zh-Hans.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/zh-Hant.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ar.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ar.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/de.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/de.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/en-AU.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/en-GB.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/en.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/es-419.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/es-419.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/es.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/es.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/fr.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/fr.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/hi.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/hi.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/it.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/it.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ja.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ja.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ko.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ko.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/pl.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/pl.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/pt.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/pt.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ru.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/ru.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/th.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/th.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/tr.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/tr.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hans.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hans.lproj/Localizable.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hant.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hant.lproj/Localizable.strings",
+  "Payload/Procreate.app/Settings.bundle/ar.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/de.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/en.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/es-419.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/es.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/fr.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/hi.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/id.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/it.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/ja.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/ko.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/ms.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/pl.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/pt.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/ru.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/th.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/tr.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/zh-Hans.lproj/Root.strings",
+  "Payload/Procreate.app/Settings.bundle/zh-Hant.lproj/Root.strings",
+  "Payload/Procreate.app/ar.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ar.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/ar.lproj/Brushes.strings",
+  "Payload/Procreate.app/ar.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/ar.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ar.lproj/Localizable.strings",
+  "Payload/Procreate.app/ar.lproj/Plurals.strings",
+  "Payload/Procreate.app/ar.lproj/URLs.strings",
+  "Payload/Procreate.app/de.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/de.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/de.lproj/Brushes.strings",
+  "Payload/Procreate.app/de.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/de.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/de.lproj/Localizable.strings",
+  "Payload/Procreate.app/de.lproj/Plurals.strings",
+  "Payload/Procreate.app/de.lproj/URLs.strings",
+  "Payload/Procreate.app/en-AU.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/en-AU.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/en-AU.lproj/Brushes.strings",
+  "Payload/Procreate.app/en-AU.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/en-AU.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/en-AU.lproj/Localizable.strings",
+  "Payload/Procreate.app/en-AU.lproj/Plurals.strings",
+  "Payload/Procreate.app/en-AU.lproj/URLs.strings",
+  "Payload/Procreate.app/en-GB.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/en-GB.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/en-GB.lproj/Brushes.strings",
+  "Payload/Procreate.app/en-GB.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/en-GB.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/en-GB.lproj/Localizable.strings",
+  "Payload/Procreate.app/en-GB.lproj/Plurals.strings",
+  "Payload/Procreate.app/en-GB.lproj/URLs.strings",
+  "Payload/Procreate.app/en.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/en.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/en.lproj/Brushes.strings",
+  "Payload/Procreate.app/en.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/en.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/en.lproj/Localizable.strings",
+  "Payload/Procreate.app/en.lproj/Plurals.strings",
+  "Payload/Procreate.app/en.lproj/URLs.strings",
+  "Payload/Procreate.app/es-419.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/es-419.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/es-419.lproj/Brushes.strings",
+  "Payload/Procreate.app/es-419.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/es-419.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/es-419.lproj/Localizable.strings",
+  "Payload/Procreate.app/es-419.lproj/Plurals.strings",
+  "Payload/Procreate.app/es-419.lproj/URLs.strings",
+  "Payload/Procreate.app/es.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/es.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/es.lproj/Brushes.strings",
+  "Payload/Procreate.app/es.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/es.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/es.lproj/Localizable.strings",
+  "Payload/Procreate.app/es.lproj/Plurals.strings",
+  "Payload/Procreate.app/es.lproj/URLs.strings",
+  "Payload/Procreate.app/fr.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/fr.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/fr.lproj/Brushes.strings",
+  "Payload/Procreate.app/fr.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/fr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/fr.lproj/Localizable.strings",
+  "Payload/Procreate.app/fr.lproj/Plurals.strings",
+  "Payload/Procreate.app/fr.lproj/URLs.strings",
+  "Payload/Procreate.app/hi.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/hi.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/hi.lproj/Brushes.strings",
+  "Payload/Procreate.app/hi.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/hi.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/hi.lproj/Localizable.strings",
+  "Payload/Procreate.app/hi.lproj/Plurals.strings",
+  "Payload/Procreate.app/hi.lproj/URLs.strings",
+  "Payload/Procreate.app/id.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/id.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/id.lproj/Brushes.strings",
+  "Payload/Procreate.app/id.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/id.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/id.lproj/Localizable.strings",
+  "Payload/Procreate.app/id.lproj/Plurals.strings",
+  "Payload/Procreate.app/id.lproj/URLs.strings",
+  "Payload/Procreate.app/it.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/it.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/it.lproj/Brushes.strings",
+  "Payload/Procreate.app/it.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/it.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/it.lproj/Localizable.strings",
+  "Payload/Procreate.app/it.lproj/Plurals.strings",
+  "Payload/Procreate.app/it.lproj/URLs.strings",
+  "Payload/Procreate.app/ja.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ja.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/ja.lproj/Brushes.strings",
+  "Payload/Procreate.app/ja.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/ja.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ja.lproj/Localizable.strings",
+  "Payload/Procreate.app/ja.lproj/Plurals.strings",
+  "Payload/Procreate.app/ja.lproj/URLs.strings",
+  "Payload/Procreate.app/ko.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ko.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/ko.lproj/Brushes.strings",
+  "Payload/Procreate.app/ko.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/ko.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ko.lproj/Localizable.strings",
+  "Payload/Procreate.app/ko.lproj/Plurals.strings",
+  "Payload/Procreate.app/ko.lproj/URLs.strings",
+  "Payload/Procreate.app/ms.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ms.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/ms.lproj/Brushes.strings",
+  "Payload/Procreate.app/ms.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/ms.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ms.lproj/Localizable.strings",
+  "Payload/Procreate.app/ms.lproj/Plurals.strings",
+  "Payload/Procreate.app/ms.lproj/URLs.strings",
+  "Payload/Procreate.app/pl.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/pl.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/pl.lproj/Brushes.strings",
+  "Payload/Procreate.app/pl.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/pl.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/pl.lproj/Localizable.strings",
+  "Payload/Procreate.app/pl.lproj/Plurals.strings",
+  "Payload/Procreate.app/pl.lproj/URLs.strings",
+  "Payload/Procreate.app/pt.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/pt.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/pt.lproj/Brushes.strings",
+  "Payload/Procreate.app/pt.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/pt.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/pt.lproj/Localizable.strings",
+  "Payload/Procreate.app/pt.lproj/Plurals.strings",
+  "Payload/Procreate.app/pt.lproj/URLs.strings",
+  "Payload/Procreate.app/ru.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/ru.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/ru.lproj/Brushes.strings",
+  "Payload/Procreate.app/ru.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/ru.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/ru.lproj/Localizable.strings",
+  "Payload/Procreate.app/ru.lproj/Plurals.strings",
+  "Payload/Procreate.app/ru.lproj/URLs.strings",
+  "Payload/Procreate.app/th.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/th.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/th.lproj/Brushes.strings",
+  "Payload/Procreate.app/th.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/th.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/th.lproj/Localizable.strings",
+  "Payload/Procreate.app/th.lproj/Plurals.strings",
+  "Payload/Procreate.app/th.lproj/URLs.strings",
+  "Payload/Procreate.app/tr.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/tr.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/tr.lproj/Brushes.strings",
+  "Payload/Procreate.app/tr.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/tr.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/tr.lproj/Localizable.strings",
+  "Payload/Procreate.app/tr.lproj/Plurals.strings",
+  "Payload/Procreate.app/tr.lproj/URLs.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/Brushes.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/Localizable.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/Plurals.strings",
+  "Payload/Procreate.app/zh-Hans.lproj/URLs.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/BrushGroups.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/BrushLibraries.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/Brushes.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/DefaultCanvasSizes.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/InfoPlist.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/Localizable.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/Plurals.strings",
+  "Payload/Procreate.app/zh-Hant.lproj/URLs.strings"
+ ],
+ "car": [
+  "Payload/Procreate.app/ApplicationImageAssets.bundle/Assets.car",
+  "Payload/Procreate.app/Assets.car",
+  "Payload/Procreate.app/BrushesResources.bundle/Assets.car",
+  "Payload/Procreate.app/ColorPanelResources.bundle/Assets.car",
+  "Payload/Procreate.app/ColorUIResources.bundle/Assets.car",
+  "Payload/Procreate.app/ContextMenuResources.bundle/Assets.car",
+  "Payload/Procreate.app/FloatingWindowsResources.bundle/Assets.car",
+  "Payload/Procreate.app/LayersResources.bundle/Assets.car",
+  "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/Assets.car",
+  "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/Assets.car",
+  "Payload/Procreate.app/ProButtonOldResources.bundle/Assets.car",
+  "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/Assets.car",
+  "Payload/Procreate.app/ProControlsEssentialsResources.bundle/Assets.car",
+  "Payload/Procreate.app/ProControlsResources.bundle/Assets.car",
+  "Payload/Procreate.app/ProPressureCurveOldResources.bundle/Assets.car",
+  "Payload/Procreate.app/Valkyrie3DResources.bundle/Assets.car",
+  "Payload/Procreate.app/ValkyrieResources.bundle/Assets.car"
+ ],
+ "files": [
+  {
+   "path": "Payload/Procreate.app/ApplicationImageAssets.bundle/Assets.car",
+   "size": 13224216,
+   "crc": 596679400,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ApplicationImageAssets.bundle/Info.plist",
+   "size": 774,
+   "crc": 1410094312,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Assets.car",
+   "size": 221400,
+   "crc": 3748664583,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Base.lproj/InfoPlist.strings",
+   "size": 1267,
+   "crc": 28668994,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Brush.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/Brush.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 2245475445,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Brush.storyboardc/UIViewController-tFu-jJ-qvB.nib",
+   "size": 1007,
+   "crc": 68804052,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Brush.storyboardc/tFu-jJ-qvB-view-Wlg-OL-l8J.nib",
+   "size": 12254,
+   "crc": 3113985992,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/BrushNumericKeypad.nib",
+   "size": 10855,
+   "crc": 1429086120,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/BrushSettingsController.nib",
+   "size": 9124,
+   "crc": 2228413420,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/BrushesResources.bundle/Assets.car",
+   "size": 917768,
+   "crc": 934273001,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/BrushesResources.bundle/Info.plist",
+   "size": 928,
+   "crc": 2750939180,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasFavoriteCell.nib",
+   "size": 8223,
+   "crc": 2126927903,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasInformation.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasInformation.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 997972553,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasInformation.storyboardc/UIViewController-WdR-OD-sOk.nib",
+   "size": 1025,
+   "crc": 1028897929,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasInformation.storyboardc/WdR-OD-sOk-view-vBD-GW-Lqr.nib",
+   "size": 10480,
+   "crc": 2951736020,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasPresetEditor.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasPresetEditor.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 997972553,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasPresetEditor.storyboardc/UIViewController-WdR-OD-sOk.nib",
+   "size": 1027,
+   "crc": 4205678475,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CanvasPresetEditor.storyboardc/WdR-OD-sOk-view-vBD-GW-Lqr.nib",
+   "size": 9600,
+   "crc": 2422384574,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorBalanceCardView.nib",
+   "size": 9755,
+   "crc": 3007269048,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Assets.car",
+   "size": 464952,
+   "crc": 222397524,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/A9o-4C-4tl-view-bNi-5a-KfL.nib",
+   "size": 2962,
+   "crc": 1946424225,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Info.plist",
+   "size": 389,
+   "crc": 2567109848,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Palette.nib",
+   "size": 1505,
+   "crc": 269113584,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+   "size": 8294,
+   "crc": 957808777,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/TwT-kY-4al-view-bl4-CB-cxS.nib",
+   "size": 4912,
+   "crc": 52579504,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+   "size": 6221,
+   "crc": 4104520356,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/UIViewController-pIK-IP-dSJ.nib",
+   "size": 1638,
+   "crc": 3378265999,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+   "size": 3413,
+   "crc": 3489544546,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/harmony.nib",
+   "size": 1722,
+   "crc": 2919962664,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/pIK-IP-dSJ-view-Tn4-JW-zJJ.nib",
+   "size": 9979,
+   "crc": 1204276715,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+   "size": 10895,
+   "crc": 2589980130,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Base.lproj/PocketColor.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+   "size": 4797,
+   "crc": 87744897,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/E51-qx-VZV-view-zgW-I1-7EX.nib",
+   "size": 9398,
+   "crc": 1986309751,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/HistoryPalette.nib",
+   "size": 1436,
+   "crc": 749364480,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/Info.plist",
+   "size": 505,
+   "crc": 1831457955,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/LI7-Dm-8Ll-view-Uhk-NC-yo5.nib",
+   "size": 4755,
+   "crc": 1642312103,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/Palette.nib",
+   "size": 1505,
+   "crc": 269113584,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/RzK-7F-bJc-view-rGj-WU-xL5.nib",
+   "size": 9914,
+   "crc": 2165077046,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/SPp-lC-zUY-view-UMr-n7-JJy.nib",
+   "size": 9357,
+   "crc": 1788037743,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/UINavigationController-gtV-aU-KcI.nib",
+   "size": 2593,
+   "crc": 1826577559,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/UIViewController-SPp-lC-zUY.nib",
+   "size": 1632,
+   "crc": 627291326,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/Y8b-sU-3iI-view-cCz-YI-r80.nib",
+   "size": 3689,
+   "crc": 909327003,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/classic.nib",
+   "size": 1699,
+   "crc": 3013818004,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/disc.nib",
+   "size": 1678,
+   "crc": 225566900,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/harmony.nib",
+   "size": 1704,
+   "crc": 1423656804,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/lln-AW-X7A-view-DeB-xR-hnF.nib",
+   "size": 4503,
+   "crc": 3145571825,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/palettes.nib",
+   "size": 1352,
+   "crc": 4229221126,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/sD4-kL-pfg-view-oxa-Jd-DcI.nib",
+   "size": 12379,
+   "crc": 670454243,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/value.nib",
+   "size": 1730,
+   "crc": 3614433945,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ColorPanel.storyboardc/yYI-mx-SxW-view-GmK-yY-bFF.nib",
+   "size": 3982,
+   "crc": 658048619,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/Info.plist",
+   "size": 768,
+   "crc": 3787978975,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ar.lproj/PocketColor.strings",
+   "size": 2847,
+   "crc": 1177344565,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/de.lproj/PocketColor.strings",
+   "size": 2665,
+   "crc": 270505591,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/en-AU.lproj/PocketColor.strings",
+   "size": 1783,
+   "crc": 1809356392,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/en-GB.lproj/PocketColor.strings",
+   "size": 1783,
+   "crc": 1809356392,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/en.lproj/PocketColor.strings",
+   "size": 2708,
+   "crc": 2702267633,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/es-419.lproj/PocketColor.strings",
+   "size": 2684,
+   "crc": 1274064437,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/es.lproj/PocketColor.strings",
+   "size": 2684,
+   "crc": 1274064437,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/fr.lproj/PocketColor.strings",
+   "size": 2701,
+   "crc": 1875625262,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/it.lproj/PocketColor.strings",
+   "size": 2683,
+   "crc": 2991184076,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ja.lproj/PocketColor.strings",
+   "size": 2758,
+   "crc": 2453576207,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ko.lproj/PocketColor.strings",
+   "size": 2700,
+   "crc": 776205665,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/pt.lproj/PocketColor.strings",
+   "size": 2668,
+   "crc": 652905334,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/ru.lproj/PocketColor.strings",
+   "size": 2885,
+   "crc": 4241246470,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/tr.lproj/PocketColor.strings",
+   "size": 2680,
+   "crc": 2163732784,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/zh-Hans.lproj/PocketColor.strings",
+   "size": 2659,
+   "crc": 83739541,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorPanelResources.bundle/zh-Hant.lproj/PocketColor.strings",
+   "size": 2656,
+   "crc": 2496755162,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorProfilesView.nib",
+   "size": 3531,
+   "crc": 2015235337,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorUIResources.bundle/Assets.car",
+   "size": 93384,
+   "crc": 294438151,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ColorUIResources.bundle/Info.plist",
+   "size": 762,
+   "crc": 2490773262,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ContextMenuResources.bundle/Assets.car",
+   "size": 33560,
+   "crc": 2187551527,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ContextMenuResources.bundle/Info.plist",
+   "size": 770,
+   "crc": 1105679308,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CreateCustomView.nib",
+   "size": 9872,
+   "crc": 1536153753,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CreateKeyboard-Pad.nib",
+   "size": 14632,
+   "crc": 2105397698,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CreateKeyboard-Pocket.nib",
+   "size": 14558,
+   "crc": 3970913677,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CreateView.nib",
+   "size": 9901,
+   "crc": 2732926028,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/CropFullscreenSpinner.nib",
+   "size": 3948,
+   "crc": 4246949464,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Document.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/Document.storyboardc/4PF-zU-mI3-view-63e-do-PgX.nib",
+   "size": 8219,
+   "crc": 1622716424,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Document.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 4055534902,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Document.storyboardc/UIViewController-4PF-zU-mI3.nib",
+   "size": 991,
+   "crc": 3832661050,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentCropCardView.nib",
+   "size": 11395,
+   "crc": 3401607783,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentCropModeToolbarPocket.nib",
+   "size": 10189,
+   "crc": 163561173,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentDrawingGuideSettingsCardView.nib",
+   "size": 13865,
+   "crc": 3705620516,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentLiquifyAdjustCardView.nib",
+   "size": 5336,
+   "crc": 1091595448,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentLiquifyModeCardView.nib",
+   "size": 8536,
+   "crc": 1468109201,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentLiquifySettingsCardView.nib",
+   "size": 8035,
+   "crc": 1109947379,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentLiquifySettingsCardViewPocket.nib",
+   "size": 7995,
+   "crc": 1178833071,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentNavigation.nib",
+   "size": 16147,
+   "crc": 2832309540,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentPocket.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentPocket.storyboardc/4PF-zU-mI3-view-63e-do-PgX.nib",
+   "size": 9562,
+   "crc": 1577984408,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentPocket.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 4055534902,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentPocket.storyboardc/UIViewController-4PF-zU-mI3.nib",
+   "size": 991,
+   "crc": 3832661050,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentTransformSettingsCardOver.nib",
+   "size": 506,
+   "crc": 4028810152,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/DocumentVideoModeToolbarPocket.nib",
+   "size": 9100,
+   "crc": 716911270,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/FloatingToolbarWrapperView.nib",
+   "size": 3733,
+   "crc": 3171784028,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/FloatingWindowsResources.bundle/Assets.car",
+   "size": 37544,
+   "crc": 2622499605,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/FloatingWindowsResources.bundle/Info.plist",
+   "size": 778,
+   "crc": 462801580,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/About.nib",
+   "size": 1045,
+   "crc": 2158676433,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/Gallery.nib",
+   "size": 1224,
+   "crc": 2518822748,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/Info.plist",
+   "size": 243,
+   "crc": 91262766,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/galleryNavigation.nib",
+   "size": 2469,
+   "crc": 3471632303,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/jMV-hG-exi-view-QvU-2F-PbB.nib",
+   "size": 34528,
+   "crc": 369852904,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Gallery.storyboardc/z3n-cn-gjg-view-5cg-Ud-NWx.nib",
+   "size": 14360,
+   "crc": 2803599202,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/GestureControls.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/GestureControls.storyboardc/Fmk-dZ-gRf-view-Cyd-iT-6XH.nib",
+   "size": 26523,
+   "crc": 2366917157,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/GestureControls.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 3644845650,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/GestureControls.storyboardc/UIViewController-Fmk-dZ-gRf.nib",
+   "size": 1021,
+   "crc": 3909009447,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/HSBCardView.nib",
+   "size": 7262,
+   "crc": 1910020891,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Info.plist",
+   "size": 23882,
+   "crc": 1673806187,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/IntroDemoView.nib",
+   "size": 7242,
+   "crc": 1526652344,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Introduction.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/Introduction.storyboardc/2QD-Dm-QZX-view-LEC-Ch-6eh.nib",
+   "size": 12904,
+   "crc": 3947877089,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Introduction.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 229401624,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Introduction.storyboardc/UIViewController-2QD-Dm-QZX.nib",
+   "size": 1013,
+   "crc": 110725353,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LaunchScreen.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/LaunchScreen.storyboardc/01J-lp-oVM-view-Ze5-6b-2t3.nib",
+   "size": 1919,
+   "crc": 2795861837,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LaunchScreen.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 1054204808,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LaunchScreen.storyboardc/UIViewController-01J-lp-oVM.nib",
+   "size": 924,
+   "crc": 996540966,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Assets.car",
+   "size": 74888,
+   "crc": 3308065947,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Info.plist",
+   "size": 760,
+   "crc": 3229598435,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Applicable.Blend.nib",
+   "size": 2379,
+   "crc": 1750999089,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Applicable.Materials.nib",
+   "size": 1223,
+   "crc": 497114011,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.Background.nib",
+   "size": 3876,
+   "crc": 2199292677,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.Group.nib",
+   "size": 8570,
+   "crc": 417762862,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.Layer.nib",
+   "size": 9245,
+   "crc": 1848225478,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.MaterialLayer.nib",
+   "size": 9697,
+   "crc": 405564998,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.Mesh.nib",
+   "size": 7947,
+   "crc": 23572539,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.Cell.TextureSet.nib",
+   "size": 2882,
+   "crc": 1326913654,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.storyboardc/Info.plist",
+   "size": 276,
+   "crc": 3186341887,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.storyboardc/UINavigationController-jts-6f-1RJ.nib",
+   "size": 3765,
+   "crc": 1697725843,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LayersResources.bundle/Layers.storyboardc/s4E-dE-waI-view-zgp-vO-Ipt.nib",
+   "size": 10840,
+   "crc": 2356129129,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/LengthKeyboardView.nib",
+   "size": 12066,
+   "crc": 2317467376,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/NotificationBar.nib",
+   "size": 4837,
+   "crc": 1814296232,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/OffsetButtonConfigView.nib",
+   "size": 506,
+   "crc": 4028810152,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PadTextAttributes.nib",
+   "size": 20393,
+   "crc": 1355081018,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/Assets.car",
+   "size": 45608,
+   "crc": 2808517612,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/Base.lproj/InfoPlist.strings",
+   "size": 44,
+   "crc": 4173412504,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/Info.plist",
+   "size": 1106,
+   "crc": 3310489375,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 3149617706,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/UIViewController-j1y-V4-xli.nib",
+   "size": 1065,
+   "crc": 923250857,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/MainInterface.storyboardc/j1y-V4-xli-view-wbc-yd-nQP.nib",
+   "size": 3778,
+   "crc": 4228994512,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ar.lproj/InfoPlist.strings",
+   "size": 62,
+   "crc": 2088553276,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/de.lproj/InfoPlist.strings",
+   "size": 52,
+   "crc": 3186542581,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en-AU.lproj/InfoPlist.strings",
+   "size": 44,
+   "crc": 4173412504,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en-GB.lproj/InfoPlist.strings",
+   "size": 44,
+   "crc": 4173412504,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/en.lproj/InfoPlist.strings",
+   "size": 44,
+   "crc": 4173412504,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/es-419.lproj/InfoPlist.strings",
+   "size": 47,
+   "crc": 1058711333,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/es.lproj/InfoPlist.strings",
+   "size": 47,
+   "crc": 1058711333,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/fr.lproj/InfoPlist.strings",
+   "size": 48,
+   "crc": 3614690810,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/hi.lproj/InfoPlist.strings",
+   "size": 66,
+   "crc": 2243929195,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/id.lproj/InfoPlist.strings",
+   "size": 50,
+   "crc": 4050058617,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/it.lproj/InfoPlist.strings",
+   "size": 48,
+   "crc": 1266015013,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ja.lproj/InfoPlist.strings",
+   "size": 46,
+   "crc": 492325712,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ko.lproj/InfoPlist.strings",
+   "size": 47,
+   "crc": 4221664361,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ms.lproj/InfoPlist.strings",
+   "size": 51,
+   "crc": 2458302761,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/pl.lproj/InfoPlist.strings",
+   "size": 46,
+   "crc": 1845781935,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/pt.lproj/InfoPlist.strings",
+   "size": 50,
+   "crc": 3311225399,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/ru.lproj/InfoPlist.strings",
+   "size": 57,
+   "crc": 2243073189,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/th.lproj/InfoPlist.strings",
+   "size": 68,
+   "crc": 1328091249,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/tr.lproj/InfoPlist.strings",
+   "size": 46,
+   "crc": 3756254946,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/zh-Hans.lproj/InfoPlist.strings",
+   "size": 47,
+   "crc": 579320758,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Add-to-Procreate.appex/zh-Hant.lproj/InfoPlist.strings",
+   "size": 47,
+   "crc": 52699049,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/Assets.car",
+   "size": 207672,
+   "crc": 1196488779,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/Base.lproj/Localizable.strings",
+   "size": 313,
+   "crc": 2202222978,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/Info.plist",
+   "size": 919,
+   "crc": 3326278540,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ar.lproj/Localizable.strings",
+   "size": 350,
+   "crc": 3289112011,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/de.lproj/Localizable.strings",
+   "size": 317,
+   "crc": 2147587216,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en-AU.lproj/Localizable.strings",
+   "size": 313,
+   "crc": 2202222978,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en-GB.lproj/Localizable.strings",
+   "size": 313,
+   "crc": 2202222978,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/en.lproj/Localizable.strings",
+   "size": 313,
+   "crc": 2202222978,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/es-419.lproj/Localizable.strings",
+   "size": 325,
+   "crc": 2346704239,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/es.lproj/Localizable.strings",
+   "size": 325,
+   "crc": 2346704239,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/fr.lproj/Localizable.strings",
+   "size": 332,
+   "crc": 484000120,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/hi.lproj/Localizable.strings",
+   "size": 445,
+   "crc": 3965145779,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/id.lproj/Localizable.strings",
+   "size": 313,
+   "crc": 1893221135,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/it.lproj/Localizable.strings",
+   "size": 308,
+   "crc": 15656333,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ja.lproj/Localizable.strings",
+   "size": 334,
+   "crc": 626239892,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ko.lproj/Localizable.strings",
+   "size": 328,
+   "crc": 2691180607,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ms.lproj/Localizable.strings",
+   "size": 324,
+   "crc": 3548573702,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/pl.lproj/Localizable.strings",
+   "size": 310,
+   "crc": 2891672809,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/pt.lproj/Localizable.strings",
+   "size": 318,
+   "crc": 3863579684,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/ru.lproj/Localizable.strings",
+   "size": 388,
+   "crc": 754390607,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/th.lproj/Localizable.strings",
+   "size": 453,
+   "crc": 2106282188,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/tr.lproj/Localizable.strings",
+   "size": 301,
+   "crc": 1604395413,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/zh-Hans.lproj/Localizable.strings",
+   "size": 298,
+   "crc": 3491234552,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/OpenRecentArtworkWidget.appex/zh-Hant.lproj/Localizable.strings",
+   "size": 292,
+   "crc": 162642821,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/Info.plist",
+   "size": 1215,
+   "crc": 2684674894,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/ar.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/de.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/es.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/fr.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/hi.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/it.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/ja.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/ko.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/pl.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/pt.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/ru.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/th.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/tr.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/zh-hans.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PlugIns/Thumbnails.appex/zh-hant.lproj/InfoPlist.strings",
+   "size": 27,
+   "crc": 2173114053,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/PocketCreateView.nib",
+   "size": 10513,
+   "crc": 2622556992,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PocketIntroDemoView.nib",
+   "size": 7043,
+   "crc": 1711591800,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/PocketTextAttributes.nib",
+   "size": 21474,
+   "crc": 1773113658,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Preview.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/Preview.storyboardc/Info.plist",
+   "size": 183,
+   "crc": 1899348988,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Preview.storyboardc/Preview.nib",
+   "size": 1869,
+   "crc": 598738318,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Preview.storyboardc/XLU-HX-1gn-view-G9B-cX-s2j.nib",
+   "size": 8332,
+   "crc": 3301499423,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProButtonOldResources.bundle/Assets.car",
+   "size": 820744,
+   "crc": 3260786567,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProButtonOldResources.bundle/Info.plist",
+   "size": 772,
+   "crc": 207788123,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProContextMenuOldResources.bundle/Info.plist",
+   "size": 782,
+   "crc": 784000343,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/Info.plist",
+   "size": 235,
+   "crc": 4142716730,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/ProContextMenuPopoverController.nib",
+   "size": 1084,
+   "crc": 4079777285,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProContextMenuOldResources.bundle/ProContextMenuOldPopover.storyboardc/cyJ-sw-EvA-view-E1s-ht-yfs.nib",
+   "size": 7474,
+   "crc": 417711791,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/Assets.car",
+   "size": 65480,
+   "crc": 2467498365,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/Info.plist",
+   "size": 790,
+   "crc": 3645066808,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ProNumericKeypad.nib",
+   "size": 12405,
+   "crc": 3880467567,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ar.lproj/Localizable.strings",
+   "size": 703,
+   "crc": 1988873372,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/de.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 2435206797,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/en.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/es-419.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 3635020841,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/es.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 3635020841,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/fr.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 2400368699,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/hi.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/id.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/it.lproj/Localizable.strings",
+   "size": 680,
+   "crc": 1065515296,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ja.lproj/Localizable.strings",
+   "size": 681,
+   "crc": 3908379710,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ko.lproj/Localizable.strings",
+   "size": 681,
+   "crc": 433935939,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ms.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/pl.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/pt.lproj/Localizable.strings",
+   "size": 677,
+   "crc": 2547935704,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/ru.lproj/Localizable.strings",
+   "size": 692,
+   "crc": 325628333,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/th.lproj/Localizable.strings",
+   "size": 352,
+   "crc": 1726016349,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/tr.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 1900645983,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/zh-Hans.lproj/Localizable.strings",
+   "size": 678,
+   "crc": 202184854,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsDeprecatedResources.bundle/zh-Hant.lproj/Localizable.strings",
+   "size": 681,
+   "crc": 54733020,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsEssentialsResources.bundle/Assets.car",
+   "size": 263752,
+   "crc": 2045482539,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsEssentialsResources.bundle/Info.plist",
+   "size": 790,
+   "crc": 4239621443,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsResources.bundle/Assets.car",
+   "size": 30504,
+   "crc": 66867448,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProControlsResources.bundle/Info.plist",
+   "size": 770,
+   "crc": 624454988,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibrary.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibrary.storyboardc/6R8-cI-pBU-view-ICL-Yu-h5J.nib",
+   "size": 11783,
+   "crc": 593960053,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibrary.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 1412381999,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibrary.storyboardc/UIViewController-6R8-cI-pBU.nib",
+   "size": 1012,
+   "crc": 639801662,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibraryPocket.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibraryPocket.storyboardc/6R8-cI-pBU-view-ICL-Yu-h5J.nib",
+   "size": 11533,
+   "crc": 3917685355,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibraryPocket.storyboardc/Info.plist",
+   "size": 258,
+   "crc": 1412381999,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProLibraryPocket.storyboardc/UIViewController-6R8-cI-pBU.nib",
+   "size": 1005,
+   "crc": 1040943603,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProMenuOldResources.bundle/Info.plist",
+   "size": 768,
+   "crc": 1217200360,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/",
+   "size": 0,
+   "crc": 0,
+   "method": 0
+  },
+  {
+   "path": "Payload/Procreate.app/ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/Info.plist",
+   "size": 221,
+   "crc": 2980793938,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/ProPopoverMenuController.nib",
+   "size": 1060,
+   "crc": 3481854579,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProMenuOldResources.bundle/ProPopoverMenu.storyboardc/qNA-le-XKX-view-gFp-w0-geu.nib",
+   "size": 6186,
+   "crc": 4272361311,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProPressureCurveOldResources.bundle/Assets.car",
+   "size": 20856,
+   "crc": 1530270279,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProPressureCurveOldResources.bundle/Info.plist",
+   "size": 786,
+   "crc": 1893338143,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/Info.plist",
+   "size": 776,
+   "crc": 635395326,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ar.lproj/BrushGroups.strings",
+   "size": 121,
+   "crc": 59150395,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ar.lproj/Localizable.strings",
+   "size": 632,
+   "crc": 4053202570,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/de.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 147076209,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/de.lproj/Localizable.strings",
+   "size": 583,
+   "crc": 2856911039,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/en-AU.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/en-GB.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/en.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/es-419.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 1883171109,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/es-419.lproj/Localizable.strings",
+   "size": 580,
+   "crc": 2275290855,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/es.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 1883171109,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/es.lproj/Localizable.strings",
+   "size": 580,
+   "crc": 2275290855,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/fr.lproj/BrushGroups.strings",
+   "size": 111,
+   "crc": 4164626964,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/fr.lproj/Localizable.strings",
+   "size": 580,
+   "crc": 1312845940,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/hi.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 147076209,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/hi.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/it.lproj/BrushGroups.strings",
+   "size": 112,
+   "crc": 1912265368,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/it.lproj/Localizable.strings",
+   "size": 601,
+   "crc": 3265913944,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ja.lproj/BrushGroups.strings",
+   "size": 121,
+   "crc": 4084178083,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ja.lproj/Localizable.strings",
+   "size": 640,
+   "crc": 835253009,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ko.lproj/BrushGroups.strings",
+   "size": 112,
+   "crc": 1998383420,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ko.lproj/Localizable.strings",
+   "size": 593,
+   "crc": 3185114841,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/pl.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 147076209,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/pl.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/pt.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 1883171109,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/pt.lproj/Localizable.strings",
+   "size": 585,
+   "crc": 1351996437,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ru.lproj/BrushGroups.strings",
+   "size": 133,
+   "crc": 3007956562,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/ru.lproj/Localizable.strings",
+   "size": 640,
+   "crc": 2327157560,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/th.lproj/BrushGroups.strings",
+   "size": 113,
+   "crc": 147076209,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/th.lproj/Localizable.strings",
+   "size": 459,
+   "crc": 844031316,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/tr.lproj/BrushGroups.strings",
+   "size": 120,
+   "crc": 973428087,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/tr.lproj/Localizable.strings",
+   "size": 564,
+   "crc": 684809443,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hans.lproj/BrushGroups.strings",
+   "size": 112,
+   "crc": 2219058974,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hans.lproj/Localizable.strings",
+   "size": 575,
+   "crc": 1256947680,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hant.lproj/BrushGroups.strings",
+   "size": 112,
+   "crc": 3440160688,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProcreateModelResources.bundle/zh-Hant.lproj/Localizable.strings",
+   "size": 581,
+   "crc": 3094546005,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProfilesView-Pocket.nib",
+   "size": 5232,
+   "crc": 671243542,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ProfilesView.nib",
+   "size": 4075,
+   "crc": 3319115343,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ReferenceMediaView.nib",
+   "size": 12682,
+   "crc": 2577664003,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/SelectionToolbarFeatherPopover.nib",
+   "size": 5383,
+   "crc": 3534094519,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/ar.lproj/Root.strings",
+   "size": 4043,
+   "crc": 1686295152,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/de.lproj/Root.strings",
+   "size": 3280,
+   "crc": 20819064,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/en.lproj/Root.strings",
+   "size": 3120,
+   "crc": 325723170,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/es-419.lproj/Root.strings",
+   "size": 3359,
+   "crc": 252242459,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/es.lproj/Root.strings",
+   "size": 3338,
+   "crc": 294007750,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/fr.lproj/Root.strings",
+   "size": 3414,
+   "crc": 2330027241,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/hi.lproj/Root.strings",
+   "size": 4840,
+   "crc": 1245365462,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/id.lproj/Root.strings",
+   "size": 3196,
+   "crc": 2617190678,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/it.lproj/Root.strings",
+   "size": 3272,
+   "crc": 2006724404,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/ja.lproj/Root.strings",
+   "size": 3564,
+   "crc": 2273317611,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/ko.lproj/Root.strings",
+   "size": 3342,
+   "crc": 1773728415,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/ms.lproj/Root.strings",
+   "size": 3255,
+   "crc": 2543019984,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/pl.lproj/Root.strings",
+   "size": 3416,
+   "crc": 733319847,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/pt.lproj/Root.strings",
+   "size": 3247,
+   "crc": 628236403,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/ru.lproj/Root.strings",
+   "size": 4190,
+   "crc": 1728382844,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/th.lproj/Root.strings",
+   "size": 4881,
+   "crc": 3916058847,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/tr.lproj/Root.strings",
+   "size": 3323,
+   "crc": 1819592425,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/zh-Hans.lproj/Root.strings",
+   "size": 2906,
+   "crc": 12546315,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Settings.bundle/zh-Hant.lproj/Root.strings",
+   "size": 2941,
+   "crc": 2920225433,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ShiftingToolbarView.nib",
+   "size": 5822,
+   "crc": 540778806,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/StylusButtonListView.nib",
+   "size": 5885,
+   "crc": 1634958737,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/TextureEditFullscreenSpinnerViewController.nib",
+   "size": 4254,
+   "crc": 3200660682,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Timelapse.nib",
+   "size": 15207,
+   "crc": 639565146,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/TypefaceCell.nib",
+   "size": 2930,
+   "crc": 162804043,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/UnitNumericalFullscreenKeyboard-Pocket.nib",
+   "size": 14361,
+   "crc": 2826456139,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/UnitNumericalFullscreenKeyboard.nib",
+   "size": 11173,
+   "crc": 1272345282,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Valkyrie3DResources.bundle/Assets.car",
+   "size": 102280,
+   "crc": 3354393527,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/Valkyrie3DResources.bundle/Info.plist",
+   "size": 768,
+   "crc": 2505319894,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ValkyrieBrushResources.bundle/Info.plist",
+   "size": 774,
+   "crc": 1325913989,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ValkyrieResources.bundle/Assets.car",
+   "size": 93912,
+   "crc": 4197837483,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ValkyrieResources.bundle/Info.plist",
+   "size": 764,
+   "crc": 4170018542,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/BrushGroups.strings",
+   "size": 2050,
+   "crc": 497964749,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/BrushLibraries.strings",
+   "size": 182,
+   "crc": 1044039744,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/Brushes.strings",
+   "size": 25115,
+   "crc": 4215752573,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/DefaultCanvasSizes.strings",
+   "size": 254,
+   "crc": 4156895953,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/InfoPlist.strings",
+   "size": 1555,
+   "crc": 3876627030,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/Localizable.strings",
+   "size": 252926,
+   "crc": 2065330735,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/Plurals.strings",
+   "size": 1875,
+   "crc": 2029909797,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ar.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/BrushGroups.strings",
+   "size": 1865,
+   "crc": 1347571016,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/BrushLibraries.strings",
+   "size": 176,
+   "crc": 1536375205,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/Brushes.strings",
+   "size": 24423,
+   "crc": 733150713,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/DefaultCanvasSizes.strings",
+   "size": 238,
+   "crc": 925317128,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/InfoPlist.strings",
+   "size": 1324,
+   "crc": 1270789606,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/Localizable.strings",
+   "size": 236483,
+   "crc": 2178033231,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/Plurals.strings",
+   "size": 1631,
+   "crc": 2619254554,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/de.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/BrushGroups.strings",
+   "size": 1005,
+   "crc": 51343980,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/BrushLibraries.strings",
+   "size": 137,
+   "crc": 1720443275,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/Brushes.strings",
+   "size": 10863,
+   "crc": 794289418,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/DefaultCanvasSizes.strings",
+   "size": 238,
+   "crc": 282155757,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/InfoPlist.strings",
+   "size": 820,
+   "crc": 3000180687,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/Localizable.strings",
+   "size": 168223,
+   "crc": 2779965214,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/Plurals.strings",
+   "size": 1026,
+   "crc": 3074187642,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-AU.lproj/URLs.strings",
+   "size": 267,
+   "crc": 77667495,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/BrushGroups.strings",
+   "size": 1008,
+   "crc": 613902834,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/BrushLibraries.strings",
+   "size": 137,
+   "crc": 1720443275,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/Brushes.strings",
+   "size": 10863,
+   "crc": 794289418,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/DefaultCanvasSizes.strings",
+   "size": 238,
+   "crc": 282155757,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/InfoPlist.strings",
+   "size": 820,
+   "crc": 3000180687,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/Localizable.strings",
+   "size": 168223,
+   "crc": 293374330,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/Plurals.strings",
+   "size": 1026,
+   "crc": 3074187642,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en-GB.lproj/URLs.strings",
+   "size": 267,
+   "crc": 77667495,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/BrushGroups.strings",
+   "size": 1859,
+   "crc": 2293051121,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/BrushLibraries.strings",
+   "size": 137,
+   "crc": 1720443275,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/Brushes.strings",
+   "size": 24095,
+   "crc": 112739117,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/DefaultCanvasSizes.strings",
+   "size": 238,
+   "crc": 282155757,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/InfoPlist.strings",
+   "size": 1267,
+   "crc": 28668994,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/Localizable.strings",
+   "size": 229535,
+   "crc": 410579211,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/Plurals.strings",
+   "size": 1523,
+   "crc": 1993878111,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/en.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/BrushGroups.strings",
+   "size": 1890,
+   "crc": 37618072,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/BrushLibraries.strings",
+   "size": 166,
+   "crc": 3059494574,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/Brushes.strings",
+   "size": 24390,
+   "crc": 1017006982,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/DefaultCanvasSizes.strings",
+   "size": 243,
+   "crc": 1778926382,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/InfoPlist.strings",
+   "size": 1348,
+   "crc": 239515852,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/Localizable.strings",
+   "size": 237330,
+   "crc": 2048946264,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/Plurals.strings",
+   "size": 1642,
+   "crc": 2091379734,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es-419.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/BrushGroups.strings",
+   "size": 1892,
+   "crc": 3973158514,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/BrushLibraries.strings",
+   "size": 166,
+   "crc": 3059494574,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/Brushes.strings",
+   "size": 24382,
+   "crc": 2353529928,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/DefaultCanvasSizes.strings",
+   "size": 240,
+   "crc": 2068551418,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/InfoPlist.strings",
+   "size": 1352,
+   "crc": 2064908294,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/Localizable.strings",
+   "size": 237248,
+   "crc": 3095397892,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/Plurals.strings",
+   "size": 1635,
+   "crc": 2025211333,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/es.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/BrushGroups.strings",
+   "size": 1895,
+   "crc": 3884486826,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/BrushLibraries.strings",
+   "size": 173,
+   "crc": 1636705290,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/Brushes.strings",
+   "size": 24320,
+   "crc": 3645344960,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/DefaultCanvasSizes.strings",
+   "size": 234,
+   "crc": 1521204957,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/InfoPlist.strings",
+   "size": 1345,
+   "crc": 2231903026,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/Localizable.strings",
+   "size": 241968,
+   "crc": 2655698299,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/Plurals.strings",
+   "size": 1676,
+   "crc": 1072063330,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/fr.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/BrushGroups.strings",
+   "size": 2399,
+   "crc": 1383094048,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/BrushLibraries.strings",
+   "size": 213,
+   "crc": 3954906647,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/Brushes.strings",
+   "size": 30237,
+   "crc": 2414282145,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/DefaultCanvasSizes.strings",
+   "size": 276,
+   "crc": 205083986,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/InfoPlist.strings",
+   "size": 1946,
+   "crc": 2962264987,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/Localizable.strings",
+   "size": 286411,
+   "crc": 2094867119,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/Plurals.strings",
+   "size": 2452,
+   "crc": 2569042443,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/hi.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/BrushGroups.strings",
+   "size": 1827,
+   "crc": 2667728602,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/BrushLibraries.strings",
+   "size": 168,
+   "crc": 3683339073,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/Brushes.strings",
+   "size": 24197,
+   "crc": 2034243504,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/DefaultCanvasSizes.strings",
+   "size": 236,
+   "crc": 327842221,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/InfoPlist.strings",
+   "size": 1281,
+   "crc": 987754500,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/Localizable.strings",
+   "size": 232892,
+   "crc": 3919780520,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/Plurals.strings",
+   "size": 1562,
+   "crc": 1655067292,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/id.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/BrushGroups.strings",
+   "size": 1876,
+   "crc": 3973503323,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/BrushLibraries.strings",
+   "size": 162,
+   "crc": 1218894399,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/Brushes.strings",
+   "size": 24461,
+   "crc": 762305934,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/DefaultCanvasSizes.strings",
+   "size": 240,
+   "crc": 2722488442,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/InfoPlist.strings",
+   "size": 1316,
+   "crc": 2265050397,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/Localizable.strings",
+   "size": 236567,
+   "crc": 134029397,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/Plurals.strings",
+   "size": 1577,
+   "crc": 3596143747,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/it.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/BrushGroups.strings",
+   "size": 2065,
+   "crc": 1929658828,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/BrushLibraries.strings",
+   "size": 181,
+   "crc": 3789795359,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/Brushes.strings",
+   "size": 27286,
+   "crc": 2147471101,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/DefaultCanvasSizes.strings",
+   "size": 252,
+   "crc": 4293528096,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/InfoPlist.strings",
+   "size": 1500,
+   "crc": 4235642392,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/Localizable.strings",
+   "size": 249659,
+   "crc": 854276184,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/Plurals.strings",
+   "size": 1848,
+   "crc": 1313561960,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ja.lproj/URLs.strings",
+   "size": 308,
+   "crc": 1580760509,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/BrushGroups.strings",
+   "size": 1896,
+   "crc": 311023192,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/BrushLibraries.strings",
+   "size": 177,
+   "crc": 3472776309,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/Brushes.strings",
+   "size": 25371,
+   "crc": 3833428510,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/DefaultCanvasSizes.strings",
+   "size": 243,
+   "crc": 1015405176,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/InfoPlist.strings",
+   "size": 1409,
+   "crc": 4242516008,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/Localizable.strings",
+   "size": 240072,
+   "crc": 3340142957,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/Plurals.strings",
+   "size": 1785,
+   "crc": 1457466983,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ko.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/BrushGroups.strings",
+   "size": 1838,
+   "crc": 1027267523,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/BrushLibraries.strings",
+   "size": 158,
+   "crc": 4009603899,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/Brushes.strings",
+   "size": 24246,
+   "crc": 3206250589,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/DefaultCanvasSizes.strings",
+   "size": 246,
+   "crc": 206534832,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/InfoPlist.strings",
+   "size": 1304,
+   "crc": 1935322758,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/Localizable.strings",
+   "size": 234517,
+   "crc": 3876895358,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/Plurals.strings",
+   "size": 1636,
+   "crc": 171040396,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ms.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/BrushGroups.strings",
+   "size": 1898,
+   "crc": 1700018242,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/BrushLibraries.strings",
+   "size": 167,
+   "crc": 4213911540,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/Brushes.strings",
+   "size": 24432,
+   "crc": 4183695347,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/DefaultCanvasSizes.strings",
+   "size": 243,
+   "crc": 2304664254,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/InfoPlist.strings",
+   "size": 1334,
+   "crc": 694041347,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/Localizable.strings",
+   "size": 238801,
+   "crc": 1647323254,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/Plurals.strings",
+   "size": 1607,
+   "crc": 2497175440,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pl.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/BrushGroups.strings",
+   "size": 1869,
+   "crc": 223384582,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/BrushLibraries.strings",
+   "size": 170,
+   "crc": 2245944169,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/Brushes.strings",
+   "size": 24374,
+   "crc": 2971431128,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/DefaultCanvasSizes.strings",
+   "size": 242,
+   "crc": 2800654528,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/InfoPlist.strings",
+   "size": 1343,
+   "crc": 1446967847,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/Localizable.strings",
+   "size": 237532,
+   "crc": 3237997357,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/Plurals.strings",
+   "size": 1600,
+   "crc": 692143597,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/pt.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/BrushGroups.strings",
+   "size": 2172,
+   "crc": 1264180277,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/BrushLibraries.strings",
+   "size": 202,
+   "crc": 1163504169,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/Brushes.strings",
+   "size": 25855,
+   "crc": 696637953,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/DefaultCanvasSizes.strings",
+   "size": 262,
+   "crc": 1259675749,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/InfoPlist.strings",
+   "size": 1625,
+   "crc": 3861547960,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/Localizable.strings",
+   "size": 267138,
+   "crc": 369341314,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/Plurals.strings",
+   "size": 1859,
+   "crc": 2488771263,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/ru.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/BrushGroups.strings",
+   "size": 2441,
+   "crc": 2140921601,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/BrushLibraries.strings",
+   "size": 209,
+   "crc": 176446099,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/Brushes.strings",
+   "size": 31047,
+   "crc": 4153196405,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/DefaultCanvasSizes.strings",
+   "size": 291,
+   "crc": 4268598057,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/InfoPlist.strings",
+   "size": 1826,
+   "crc": 1867277837,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/Localizable.strings",
+   "size": 285793,
+   "crc": 186012616,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/Plurals.strings",
+   "size": 2142,
+   "crc": 4018672603,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/th.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/BrushGroups.strings",
+   "size": 1915,
+   "crc": 103094165,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/BrushLibraries.strings",
+   "size": 168,
+   "crc": 2792240941,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/Brushes.strings",
+   "size": 24332,
+   "crc": 3961284114,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/DefaultCanvasSizes.strings",
+   "size": 248,
+   "crc": 3278677473,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/InfoPlist.strings",
+   "size": 1352,
+   "crc": 784039683,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/Localizable.strings",
+   "size": 236498,
+   "crc": 3369293317,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/Plurals.strings",
+   "size": 1521,
+   "crc": 4186519448,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/tr.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/BrushGroups.strings",
+   "size": 1816,
+   "crc": 3924335357,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/BrushLibraries.strings",
+   "size": 149,
+   "crc": 2915117740,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/Brushes.strings",
+   "size": 24556,
+   "crc": 2119948018,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/DefaultCanvasSizes.strings",
+   "size": 243,
+   "crc": 2470573417,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/InfoPlist.strings",
+   "size": 1233,
+   "crc": 58920847,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/Localizable.strings",
+   "size": 226981,
+   "crc": 1273768170,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/Plurals.strings",
+   "size": 1498,
+   "crc": 1897113258,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hans.lproj/URLs.strings",
+   "size": 307,
+   "crc": 4240209305,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/BrushGroups.strings",
+   "size": 1828,
+   "crc": 765767448,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/BrushLibraries.strings",
+   "size": 161,
+   "crc": 2540893743,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/Brushes.strings",
+   "size": 24757,
+   "crc": 1150647346,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/DefaultCanvasSizes.strings",
+   "size": 240,
+   "crc": 2854396770,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/InfoPlist.strings",
+   "size": 1274,
+   "crc": 341850481,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/Localizable.strings",
+   "size": 228224,
+   "crc": 2288821541,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/Plurals.strings",
+   "size": 1538,
+   "crc": 1761281851,
+   "method": 8
+  },
+  {
+   "path": "Payload/Procreate.app/zh-Hant.lproj/URLs.strings",
+   "size": 288,
+   "crc": 2608524439,
+   "method": 8
+  }
+ ]
+}

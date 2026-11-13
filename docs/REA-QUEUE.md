@@ -45,6 +45,13 @@ covers brushes).
 **Deliverable:** `docs/research/clip-studio-page-model.md` — page model, frame model, balloon
 model, tone model, export presets.
 
+**Local build, 2026-11-12:** the installed app is **CSP 5.0.4**. Its Windows package ships the
+tablet (Simple Mode) interface: a "Switch to tablet interface" preference, three Android workspaces
+as SQLite (`Illustration`, `Comic`, `By category`) with palette placements and shortcut maps, and
+the full Simple Mode string set. Written up in
+[research/csp-simple-mode.md](research/csp-simple-mode.md); useful for the Focus layout and for
+layout presets.
+
 ### 2. Krita — `C:\Program Files\Krita (x64)` (GPL source available)
 
 Cheap, honest evidence for the parts we would otherwise guess.

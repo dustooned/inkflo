@@ -1,0 +1,15 @@
+{
+ "ipa": "D:\\Downloads\\Programs\\Procreate-Dreams-v1-0-15.ipa",
+ "bundle": {
+  "CFBundleIdentifier": "au.com.savageinteractive.Dreams",
+  "CFBundleShortVersionString": "1.0.15",
+  "CFBundleVersion": "17462"
+ },
+ "executable_bytes": 16528768,
+ "pointer_formats": [
+  6
+ ],
+ "classes": 1267,
+ "unresolved_method_lists": 435,
+ "selectors": 9986
+}

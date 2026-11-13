@@ -26,16 +26,17 @@ import { DabWalker } from '../../engine/brush/dabs';
 import { putPixels, RasterEngine } from '../../engine/brush/raster';
 import { Smoother } from '../../engine/brush/smoothing';
 import type { StrokePoint, StrokeRecord } from '../../engine/core/stroke';
-import { panelAt } from '../../geom/carve';
+import { mapPanelPoint, panelAt } from '../../geom/carve';
+import { invert, type Mat } from '../../engine/core/selxform';
 import { nearestGuide } from '../../geom/composition';
 import { prefs } from '../prefs';
-import { groupAt, groupLabel, insertIndex, layerOfType } from '../../geom/groups';
+import { groupAt, groupLabel, insertIndex, layerOfType, panelForGroup } from '../../geom/groups';
 import { browserPlaneOps } from '../../io/canvasops';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { confirmDialog, h, seg, slider, toast } from '../dom';
 import { layersPanel, type LayerScope, type LayerTarget, type LayerView } from '../layerspanel';
 import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
-import { renderPage } from '../../render/page';
+import { applyPanelTransform, renderPage } from '../../render/page';
 import { brushWidth, eraseStrokes, hitStroke, pointAt, removePoint, reshape, scaleWidth, simplify, smooth, type VectorErase } from '../../draw/vectoredit';
 
 type SizedTool = 'pencil' | 'ink' | 'eraser';
@@ -120,10 +121,11 @@ const vstate = {
   /** Width brush radius, inches. */
   widthR: 0.12,
 };
+const FILL_GAP = 0.02;
 const state = {
   showPencil: true,
   color: PALETTE[1]!,
-  gap: 0.02,
+  gap: FILL_GAP,
   /** Line alpha that counts as a wall (Procreate's threshold; drag sideways while filling). */
   threshold: FILL_THRESHOLD,
   /** Grow (+) / shrink (−) fills, inches. */
@@ -190,6 +192,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     shape: { original: Shape; shown: Shape; grab: Pt; at: Pt; pressure: number[]; shift: boolean } | null;
     /** Vector pen: no dabs; the outline is drawn in the overlay until it lands. */
     vector: boolean;
+    inverse: Mat | null;
   } | null = null;
   /** Vector edits in progress. */
   let vdrag: { layerId: string; before: Stroke[]; index: number; grabbed: Stroke; grab: number; from: Pt; moved: boolean; kind: 'pull' | 'move' } | null = null;
@@ -211,7 +214,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   let pour: { at: Pt; layerId: string; created: boolean; x0: number; base: number; threshold: number } | null = null;
   /** Drag / lasso / leftover path in progress (page inches). */
   let sweep: Pt[] | null = null;
-  let preview: { img: HTMLCanvasElement; x0: number; y0: number } | null = null;
+  let preview: { layerId: string; img: HTMLCanvasElement; x0: number; y0: number } | null = null;
   let previewAt = 0;
   let endsCache: { key: string; ends: Pt[] } | null = null;
   // pages drawn on stay in memory for the session, so pixel undo always has its canvases
@@ -243,7 +246,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   };
   const controls = h('aside', { class: 'brush-controls', 'aria-label': 'Brush controls', hidden: true });
   for (const event of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'wheel']) controls.addEventListener(event, (e) => e.stopPropagation());
-  ctx.stage.append(controls);
+
   function showBrushControls(t: SizedTool | null): void {
     controls.hidden = !t;
     if (!t) return;
@@ -412,7 +415,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function sample(p: Pt, e: PointerEvent): StrokePoint {
     const pressure = e.pointerType === 'pen' ? e.pressure : e.pointerType === 'mouse' ? 1 : e.pressure || 0.5;
-    return { x: p.x * dpi, y: p.y * dpi, pressure, tiltX: e.tiltX || 0, tiltY: e.tiltY || 0, t: Math.max(0, e.timeStamp - t0) };
+    const tilt = ctx.toPageDirection({ x: Math.tan((e.tiltX || 0) * Math.PI / 180), y: Math.tan((e.tiltY || 0) * Math.PI / 180) });
+    return {
+      x: p.x * dpi, y: p.y * dpi, pressure,
+      tiltX: Math.atan(tilt.x) * 180 / Math.PI, tiltY: Math.atan(tilt.y) * 180 / Math.PI,
+      t: Math.max(0, e.timeStamp - t0),
+    };
   }
 
   function colourAt(p: Pt): string | null {
@@ -455,6 +463,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     }
     createdForStroke = target.created;
     const layer = findLayer(page, target.layerId)!.layer;
+    const group = findLayer(page, target.layerId)!.group;
+    const placement = panelForGroup(ctx.panels(), group)?.transform;
+    const inverse = placement ? invert(placement.matrix) : null;
+    p = mapPanelPoint(p, inverse);
     // the brush's own pass (pencil blue / ink black), recorded when it differs from the layer's
     const pass: LinePass = erase ? passForType(layer.type) : currentBrush(tool as LinePass).pass;
     const brushId = erase ? DEFAULT_BRUSH[pass] : studio.brushId(currentBrush(tool as LinePass));
@@ -492,6 +504,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       holdAt: null,
       shape: null,
       vector,
+      inverse,
     };
     studio.drawing = true;
     addPoint(sample(p, e));
@@ -726,7 +739,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   /** Where fills at a point go: its panel's colour layer (or the selected layer). */
   function fillTarget(p: Pt): { layerId: string; created: boolean } | null {
     if (!ctx.panels().length) {
-      toast('Carve panels first: fills stay inside panels (or in the gutters).');
+      ctx.hint('Carve panels first. Fills stay inside panels or gutters.', { tone: 'warn' });
       return null;
     }
     const t = resolve(p, 'colour', true);
@@ -759,7 +772,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       data.data[i + 3] = 150;
     }
     img.getContext('2d')!.putImageData(data, 0, 0);
-    preview = { img, x0: res.x0, y0: res.y0 };
+    preview = { layerId, img, x0: res.x0, y0: res.y0 };
   }
 
   function fillDown(p: Pt, e: PointerEvent): void {
@@ -768,7 +781,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (v === 'bucket') {
       const t = fillTarget(p);
       if (!t) return;
-      pour = { at: p, layerId: t.layerId, created: t.created, x0: e.clientX, base: state.threshold, threshold: state.threshold };
+      pour = { at: pointInLayer(p, t.layerId), layerId: t.layerId, created: t.created, x0: e.clientX, base: state.threshold, threshold: state.threshold };
       return;
     }
     sweep = [p];
@@ -783,7 +796,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (now - previewAt > 90) {
         previewAt = now;
         showPreview(pour.layerId, { ...baseFill(pour.at), threshold: pour.threshold });
-        toast(`Line threshold ${pour.threshold} (${dx > 0 ? 'only solid lines stop it' : 'faint lines stop it too'})`, 900);
+        ctx.hint(`Line threshold ${pour.threshold} (${dx > 0 ? 'only solid lines stop it' : 'faint lines stop it too'})`, { timeout: 1300 });
       }
       ctx.request();
       return;
@@ -807,12 +820,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       return;
     }
     if (!sweep) return;
-    const path = sweep;
+    const screenPath = sweep;
     sweep = null;
     const v = fillVariant();
-    if (v === 'flats') { autoFlats(path[0]!); return; }
-    const t = fillTarget(path[0]!);
+    if (v === 'flats') { autoFlats(screenPath[0]!); return; }
+    const t = fillTarget(screenPath[0]!);
     if (!t) return;
+    const path = screenPath.map((p) => pointInLayer(p, t.layerId));
     if (v === 'drag') {
       // one seed every 0.03": areas already reached by an earlier seed are skipped
       const kit = kitFor(t.layerId);
@@ -850,7 +864,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const t = fillTarget(p);
     if (!panel || !t) return;
     const kit = kitFor(t.layerId);
-    const seeds = kit.flats(panel, baseFill(p));
+    const seeds = kit.flats(panel.source ?? panel, baseFill(pointInLayer(p, t.layerId)));
     if (!seeds.length) {
       if (t.created) studio.undo();
       toast('No closed areas found in this panel.');
@@ -877,6 +891,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   function fillOverlay(g: CanvasRenderingContext2D, s: number): void {
     if (preview) {
       g.save();
+      const panel = layerPanel(preview.layerId);
+      if (panel) applyPanelTransform(g, panel, s);
       g.imageSmoothingEnabled = false;
       g.drawImage(preview.img, (preview.x0 / dpi) * s, (preview.y0 / dpi) * s, (preview.img.width / dpi) * s, (preview.img.height / dpi) * s);
       g.restore();
@@ -929,7 +945,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       preview = null;
       return;
     }
-    showPreview(layer.id, baseFill(p));
+    showPreview(layer.id, baseFill(pointInLayer(p, layer.id)));
     ctx.request();
   }
 
@@ -942,7 +958,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const panels = ctx.panels();
     const panel = panelAt(panels, at);
     if (!panel) {
-      toast('Click inside a panel.');
+      ctx.hint('Click inside a panel to place comic lines.', { tone: 'warn' });
       return;
     }
     const target = resolve(at, 'ink', true);
@@ -950,6 +966,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       toast(target);
       return;
     }
+    at = pointInLayer(at, target.layerId);
+    if (toward) toward = pointInLayer(toward, target.layerId);
+    const source = layerPanel(target.layerId)?.source ?? panel;
     const kind = variantOf(mode, 'lines') === 'speed' ? 'speed' : 'focus';
     const seed = Date.now() % 100000;
     let angle = ink.speed.angle;
@@ -959,8 +978,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       saveInk();
     }
     const lines: GenLine[] = kind === 'focus'
-      ? focusLines(panel.pts, at, { ...ink.focus, seed })
-      : speedLines(panel.pts, angle, { ...ink.speed, seed });
+      ? focusLines(source.pts, at, { ...ink.focus, seed })
+      : speedLines(source.pts, angle, { ...ink.speed, seed });
     if (!lines.length) {
       if (target.created) studio.undo();
       return;
@@ -1044,7 +1063,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       const r = ink.ruler;
       const kids: HTMLElement[] = [
         h('h4', {}, 'Ruler'),
-        seg<RulerKind>(RULERS, r.kind, (v) => { r.kind = v; saveInk(); rebuildMenu(); ctx.request(); anchor.textContent = `📐 ${RULERS.find((x) => x.id === v)!.label}`; }, 'Ruler'),
+        seg<RulerKind>(RULERS, r.kind, (v) => { r.kind = v; ctx.hint(v === 'off' ? 'Drawing assist off' : 'Drawing assist · ' + RULERS.find((x) => x.id === v)!.label, { timeout: 2200 }); saveInk(); rebuildMenu(); ctx.request(); anchor.textContent = `📐 ${RULERS.find((x) => x.id === v)!.label}`; }, 'Ruler'),
       ];
       if (r.kind === 'parallel') kids.push(slider('Angle', -90, 90, 1, r.angle, (v) => `${v}°`, (v) => { r.angle = v; ctx.request(); }, () => saveInk()));
       if (r.kind === 'perspective') {
@@ -1187,11 +1206,22 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const under = panelAt(panels, p);
     for (const layer of editableVectors().reverse()) {
       const group = findLayer(page, layer.id)?.group;
-      if (group?.kind === 'panel' && group.mask && !layer.overFrame && (!under || !group.anchor || panelAt(panels, group.anchor) !== under)) continue;
-      const hit = hitStroke(layer.strokes, p, reach);
+      if (group?.kind === 'panel' && group.mask && !layer.overFrame && (!under || panelForGroup(panels, group) !== under)) continue;
+      const placed = group && panelForGroup(panels, group)?.transform;
+      const hit = hitStroke(layer.strokes, mapPanelPoint(p, placed ? invert(placed.matrix) : null), reach);
       if (hit) return { layer, index: hit.index, at: hit.at };
     }
     return null;
+  }
+
+  function layerPanel(id: string) {
+    const group = findLayer(page, id)?.group;
+    return group ? panelForGroup(ctx.panels(), group) : null;
+  }
+
+  function pointInLayer(p: Pt, id: string): Pt {
+    const matrix = layerPanel(id)?.transform?.matrix;
+    return mapPanelPoint(p, matrix ? invert(matrix) : null);
   }
 
   const editVariant = (): EditVariant => (variantOf(mode, 'vedit') || 'pull') as EditVariant;
@@ -1227,7 +1257,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         ctx.chrome();
         return;
       }
-      vdrag = { layerId: hit.layer.id, before, index: hit.index, grabbed: stroke, grab: index, from: p, moved: false, kind: v === 'move' ? 'move' : 'pull' };
+      vdrag = { layerId: hit.layer.id, before, index: hit.index, grabbed: stroke, grab: index, from: pointInLayer(p, hit.layer.id), moved: false, kind: v === 'move' ? 'move' : 'pull' };
       hit.layer.strokes[hit.index] = stroke;
       ctx.chrome();
       ctx.request();
@@ -1238,7 +1268,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       toast('No vector lines here. The Vector pen (V) makes them.');
       return;
     }
-    vbrush = { layerId: layer.id, before: structuredClone(layer.strokes), last: p };
+    vbrush = { layerId: layer.id, before: structuredClone(layer.strokes), last: pointInLayer(p, layer.id) };
     widthBrush(p);
   }
 
@@ -1246,6 +1276,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (!vbrush) return;
     const layer = findLayer(page, vbrush.layerId)?.layer;
     if (!layer) return;
+    p = pointInLayer(p, layer.id);
     const factor = editVariant() === 'wider' ? 1.08 : 1 / 1.08;
     let any = false;
     layer.strokes = layer.strokes.map((st) => {
@@ -1267,6 +1298,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (vdrag) {
       const layer = findLayer(page, vdrag.layerId)?.layer;
       if (!layer) return;
+      p = pointInLayer(p, layer.id);
       const delta = { x: p.x - vdrag.from.x, y: p.y - vdrag.from.y };
       if (Math.hypot(delta.x, delta.y) * ctx.scale() > 2) vdrag.moved = true;
       layer.strokes[vdrag.index] = vdrag.kind === 'move'
@@ -1285,7 +1317,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       const r = sizeIn('eraser') / 2;
       let n = 0;
       for (const layer of editableVectors()) {
-        const next = eraseStrokes(layer.strokes, path, r, vstate.erase, passForType(layer.type), dpi, () => (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100));
+        const next = eraseStrokes(layer.strokes, path.map((p) => pointInLayer(p, layer.id)), r, vstate.erase, passForType(layer.type), dpi, () => (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100));
         if (!next) continue;
         editVector(layer.id, `Erase vector (${vstate.erase === 'whole' ? 'whole line' : vstate.erase === 'crossing' ? 'to crossings' : 'touched part'})`, next);
         n++;
@@ -1352,6 +1384,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   function vectorOverlay(g: CanvasRenderingContext2D, s: number): void {
     if (live?.vector && live.record.points.length) {
       g.save();
+      const group = findLayer(page, live.layerId)?.group;
+      const panel = group && panelForGroup(ctx.panels(), group);
+      if (panel) applyPanelTransform(g, panel, s);
       g.scale(s / dpi, s / dpi);
       drawVectorStroke(g, live.record, Infinity);
       g.restore();
@@ -1371,6 +1406,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       const st = findLayer(page, vsel.layerId)?.layer.strokes[vsel.index];
       if (!st) return;
       g.save();
+      const panel = layerPanel(vsel.layerId);
+      if (panel) applyPanelTransform(g, panel, s);
       g.strokeStyle = '#2F7FD8';
       g.lineWidth = 1.5;
       g.beginPath();
@@ -1407,6 +1444,17 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   const mode: DeskMode = {
     id: 'draw',
+    actions: [{ label: 'Adjustments', glyph: '◒', run: adjustLayer }],
+    sidebar: controls,
+    get resetOptions() {
+      if (mode.tool !== 'fill') return undefined;
+      return () => {
+        state.gap = FILL_GAP;
+        state.threshold = FILL_THRESHOLD;
+        ctx.chrome();
+        ctx.request();
+      };
+    },
     tools: [
       { id: 'ink', label: 'Brush', glyph: '✒', key: 'i', group: 'paint' },
       { id: 'smudge', label: 'Smudge', glyph: '≈', key: 's', group: 'paint' },
@@ -1541,7 +1589,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         else pickingColor = false;
         bar.append(
           slider('Close gaps', 0, 0.08, 0.005, state.gap, (v) => `${Math.round(v * dpi)}px`, (v) => (state.gap = v), () => ctx.request()),
-          slider('Threshold', 1, 254, 1, state.threshold, String, (v) => (state.threshold = v), () => ctx.request()),
+          slider('Threshold', 1, 254, 1, state.threshold, String, (v) => {
+            state.threshold = v;
+            ctx.hint('Gap closing · line threshold ' + v, { timeout: 1800 });
+          }, () => ctx.request()),
           slider('Grow', -0.02, 0.02, 0.001, state.grow, (v) => `${v > 0 ? '+' : ''}${Math.round(v * dpi)}px`, (v) => (state.grow = v)),
         );
         if (fv === 'leftover') bar.append(slider('Brush', 0.02, 0.25, 0.01, state.leftR, (v) => `${(v * 2 * 72).toFixed(0)}pt`, (v) => (state.leftR = v)));
@@ -1559,7 +1610,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); adjustLayer(); } }, h('span', {}, '◒'), 'Adjustments'),
         h('h4', {}, 'Drawing assist'),
         h('div', { class: 'row' }, h('label', {}, 'Symmetry', h('select', { 'aria-label': 'Symmetry', onchange: (e) => {
-          ink.symmetry = (e.target as HTMLSelectElement).value as SymmetryMode; saveInk(); ctx.request();
+          const select = e.target as HTMLSelectElement;
+          ink.symmetry = select.value as SymmetryMode;
+          ctx.hint(ink.symmetry === 'off' ? 'Drawing assist off' : 'Drawing assist · ' + select.selectedOptions[0]!.textContent + ' symmetry', { timeout: 2200 });
+          saveInk(); ctx.request();
         } }, (['off', 'vertical', 'horizontal', 'quadrant', 'radial'] as const).map((value) => h('option', { value, selected: (ink.symmetry ?? 'off') === value }, value[0]!.toUpperCase() + value.slice(1)))))),
         h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); void rebuild(); } }, h('span', {}, '↻'), 'Rebuild from strokes')), 'below', 'Draw actions'));
       bar.prepend(actions, contextLayers, h('button', { class: 'btn', type: 'button', onclick: () => openBookAssets(studio, images.open) }, 'Assets'));
@@ -1668,6 +1722,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (!live) return;
+      p = mapPanelPoint(p, live.inverse);
       if (live.shape) adjustShape({ x: p.x * dpi, y: p.y * dpi }, e.shiftKey);
       else addPoint(sample(p, e));
     },
@@ -1797,7 +1852,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'fill' && (e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
         state.check = !state.check;
         preview = null;
-        toast(state.check ? 'Gap check on: red rings are open line ends.' : 'Gap check off.', 1400);
+        ctx.hint(state.check ? 'Gap check on · red rings mark open line ends' : 'Gap check off', { timeout: 2200 });
         ctx.chrome();
         ctx.request();
         return true;
