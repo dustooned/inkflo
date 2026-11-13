@@ -36,6 +36,7 @@ export function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = h('input', { type: 'file', accept });
     input.addEventListener('change', () => resolve(input.files?.[0] ?? null));
+    input.addEventListener('cancel', () => resolve(null));
     input.click();
   });
 }

@@ -4,7 +4,8 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage } from './model';
+import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage, ScreenTone } from './model';
+import { TONE_SHAPES } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -165,6 +166,7 @@ function stroke(v: unknown, path: string): Stroke {
   const s: Stroke = { pts: pts(o.pts, `${path}.pts`), w: pos(o.w, `${path}.w`), brushId: str(o.brushId, `${path}.brushId`), seed: num(o.seed, `${path}.seed`) };
   if (!s.pts.length) fail(`${path}.pts`, 'needs at least one point');
   if (o.erase === true) s.erase = true;
+  if (o.styledVector === true) s.styledVector = true;
   if (o.color !== undefined) {
     const color = str(o.color, `${path}.color`);
     if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
@@ -217,6 +219,19 @@ function unit(v: unknown, path: string, def: number): number {
   return n;
 }
 
+function screenTone(v: unknown, path: string): ScreenTone {
+  const o = obj(v, path);
+  const frequency = num(o.frequency, `${path}.frequency`);
+  const angle = num(o.angle, `${path}.angle`);
+  const color = str(o.color, `${path}.color`);
+  const region = o.region === undefined ? undefined : pts(o.region, `${path}.region`);
+  if (frequency < 5 || frequency > 120) fail(`${path}.frequency`, 'should be from 5 to 120 lines per inch');
+  if (angle < 0 || angle > 180) fail(`${path}.angle`, 'should be from 0 to 180 degrees');
+  if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
+  if (region && (region.length < 3 || region.length > 8192)) fail(`${path}.region`, 'needs 3 to 8192 points');
+  return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, density: unit(o.density, `${path}.density`, 0.2), angle, color, ...(region ? { region } : {}) };
+}
+
 function layer(v: unknown, path: string): Layer {
   const o = obj(v, path);
   const type = oneOf(o.type, LAYER_TYPES, `${path}.type`);
@@ -232,6 +247,7 @@ function layer(v: unknown, path: string): Layer {
     fillRef: bool(o.fillRef, `${path}.fillRef`, d.fillRef),
     overFrame: bool(o.overFrame, `${path}.overFrame`, false),
     ...(o.vector === true ? { vector: true } : {}),
+    ...(o.screenTone !== undefined ? { screenTone: screenTone(o.screenTone, `${path}.screenTone`) } : {}),
     ...(o.image !== undefined ? { image: placedImage(o.image, `${path}.image`) } : {}),
     strokes: arr(o.strokes ?? [], `${path}.strokes`).map((x, i) => stroke(x, `${path}.strokes[${i}]`)),
     fills: arr(o.fills ?? [], `${path}.fills`).map((x, i) => fill(x, `${path}.fills[${i}]`)),

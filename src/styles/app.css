@@ -266,6 +266,9 @@ dialog footer { padding: 12px 20px 16px; display: flex; gap: 8px; justify-conten
 dialog.brushstudio { width: min(600px, calc(100vw - 32px)); }
 .brushpad { width: 100%; height: auto; aspect-ratio: 520 / 120; background: #FFFDF7; border-radius: 10px; border: 1px solid var(--line-2); }
 .knobs { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.brush-dynamics { display: grid; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.tone-preview { display: block; width: 100%; height: auto; border-radius: 8px; }
+.tone-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .knob { display: grid; grid-template-columns: 150px 1fr 70px; align-items: center; gap: 10px; font-size: 12.5px; }
 .knob b { text-align: right; font: 500 11.5px/1 var(--mono); }
 

@@ -59,7 +59,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     return { name, ...cropped(g) };
   };
   const layer = (grp: LayerGroup, l: Layer): PsdLayer => ({
-    ...(art?.planes[l.id]?.width ? painted(l.name, () => {
+    ...(l.screenTone || art?.planes[l.id]?.width ? painted(l.name, () => {
       const only = { ...grp, visible: true, opacity: 1, layers: [{ ...l, visible: true, opacity: 1 }] };
       renderPage(g, { ...source, groups: [only] }, art, { scale: dpi, panels, frame: false, balloons: false });
       if (grp.kind === 'background' || (grp.kind === 'panel' && !l.overFrame)) clearGutterPaper(g, page, panels, dpi);
@@ -120,7 +120,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     ...source.groups.filter((grp) => grp.kind === 'background').map((grp) => group(grp)),
     painted('Paper', () => drawPagePaper(g, page, panels, dpi, false, true)),
   ];
-  renderPage(g, page, mode === 'art' ? art : null, { scale: dpi, panels, sheet });
+  renderPage(g, source, mode === 'art' ? art : null, { scale: dpi, panels, sheet });
   const imageData = g.getImageData(0, 0, width, height);
   canvas.width = canvas.height = 0;
   return {

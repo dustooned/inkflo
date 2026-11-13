@@ -24,6 +24,15 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('round-trips a procedural screentone and its lasso mask', () => {
+    const f = file();
+    const layer = newLayer('tone');
+    layer.screenTone = { shape: 'diamond', frequency: 60, density: 0.25, angle: 45, color: '#191a1f', region: [{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 3 }] };
+    f.book.pages[0]!.groups[1]!.layers.push(layer);
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    layer.screenTone.frequency = 0;
+    expect(() => parseBookFile(JSON.stringify(f))).toThrow(/screenTone.frequency/);
+  });
   it('round-trips a continuation balloon and rejects missing parents', () => {
     const f = file();
     const page = f.book.pages[0]!;

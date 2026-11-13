@@ -3,6 +3,7 @@ import type { PageArt } from '../draw/residency';
 import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelAt, type Panel } from '../geom/carve';
 import { paintBalloonGroup } from './caption';
 import { captionGroups } from '../geom/captiongroup';
+import { drawScreenTone } from './tone';
 
 /**
  * The one page renderer (rule 5). Screen, thumbnails, covers, print PNGs and every export draw
@@ -227,9 +228,10 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
     if (which === 'framed' && l.overFrame) continue;
     if (which === 'over' && !l.overFrame) continue;
     if (!shows(l, group, opts)) continue;
+    g.globalAlpha = l.opacity * group.opacity;
+    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, opts.scale);
     const c = opts.live?.[l.id] ?? (art && !art.parked ? art.planes[l.id] : null);
     if (!c || !c.width) continue;
-    g.globalAlpha = l.opacity * group.opacity;
     drawLayerBitmap(g, c, W, H, opts.scale, opts.placement?.id === l.id ? opts.placement.image : l.image);
   }
   g.globalAlpha = 1;

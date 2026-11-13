@@ -47,7 +47,7 @@ export function syncGroups(page: Page, panels: Panel[]): boolean {
   const keep: LayerGroup[] = [];
   for (const g of page.groups.filter((x) => x.kind === 'panel')) {
     const p = g.anchor ? panelAt(panels, g.anchor) : null;
-    const empty = g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length);
+    const empty = g.layers.every((l) => !l.image && !l.screenTone && !l.strokes.length && !l.fills.length);
     if (empty && (!p || claimed.has(p))) continue;
     if (p) claimed.add(p);
     keep.push(g);
@@ -72,7 +72,7 @@ export function groupAt(page: Page, panels: Panel[], p: Pt): LayerGroup {
 /** The topmost layer of a type in a group, or null. */
 /** The group's first layer of a type: raster by default, or its vector layer. */
 export function layerOfType(group: LayerGroup, type: LayerType, vector = false): Layer | null {
-  return group.layers.find((l) => !l.image && l.type === type && !!l.vector === vector) ?? null;
+  return group.layers.find((l) => !l.image && !l.screenTone && l.type === type && !!l.vector === vector) ?? null;
 }
 
 /** Where a new layer of this type sits in the stack: above lower-ranked types. */

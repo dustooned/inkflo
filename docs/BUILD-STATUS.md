@@ -447,3 +447,20 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Layout defaults to white gutters and offers transparent or custom paper. Set a page corner radius
   or override it on an individual panel. Curve edges edits the two Bézier handles on a shared gutter, and Knife
   resamples freehand cuts to reduce small pen wobbles.
+
+## Brush imports, vector points and screentone
+
+- **Draw → Brush picker → Import brush** accepts Photoshop `.abr`, Clip Studio `.sut`, and
+  PNG/JPG/WebP tips. ABR imports supported computed and sampled shapes and their editable settings.
+  SUT imports basic brush settings and available embedded tip PNGs. Multiple SUT tips become
+  separate brushes. Source-app effects such as ribbons, dual brushes and mixers are approximated
+  or omitted. Use an original ABR or PNG tip for SUT files that reference an external material.
+- **Brush Studio** edits tip and grain images, spacing, scatter, flow, opacity, taper, smoothing,
+  and size/flow/opacity dynamics. Imported presets live under My brushes on the device. An
+  `.inkflo` backup carries the brushes used by its strokes, so finished strokes survive preset edits.
+- **Vector pen** has a separate brush slot. **Edit lines → Points** drags individual points,
+  inserts with Shift-click, and removes a selected point. The width brush also works on simplified
+  straight segments. Vector eraser's **To crossings** trims overshoots.
+- **Screentone (T)** applies an editable layer to a panel or a lasso region. Choose a preset or
+  adjust shape, density, LPI, angle and color. Edit via the selected tone or its Layers menu.
+  Tones remain editable in `.inkflo`; PSD, print and web exports render their appearance.

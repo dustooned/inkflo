@@ -138,6 +138,8 @@ export interface Stroke {
   pw?: number[];
   /** Vector lines: ends left square by an eraser cut (no taper) at [start, end]. */
   flat?: [boolean, boolean];
+  /** Vector lines drawn with the procedural appearance of their brush preset. */
+  styledVector?: boolean;
 }
 
 /**
@@ -202,6 +204,17 @@ export interface SmudgeStroke {
 
 export type PixelEdit = PixelTransform | SmudgeStroke;
 
+export const TONE_SHAPES = ['dot', 'square', 'diamond', 'line', 'cross'] as const;
+export interface ScreenTone {
+  shape: typeof TONE_SHAPES[number];
+  frequency: number;
+  density: number;
+  angle: number;
+  color: string;
+  /** Freehand mask in page inches. Otherwise the layer group's mask applies. */
+  region?: Pt[];
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -221,6 +234,7 @@ export interface Layer {
    * only a cache redrawn from them after every edit. No raster strokes or fills on it.
    */
   vector?: boolean;
+  screenTone?: ScreenTone;
   image?: PlacedImage;
   strokes: Stroke[];
   fills: Fill[];

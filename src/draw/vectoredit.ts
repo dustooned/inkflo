@@ -78,17 +78,43 @@ export function reshape(s: Stroke, grab: number, delta: Pt, radius: number): Str
  * `radius` (CSP "adjust line width"). Widths stay within 0.1×–4× of the stroke's base.
  */
 export function brushWidth(s: Stroke, path: readonly Pt[], radius: number, factor: number): Stroke | null {
+  if (!path.length) return null;
+  // Long straight segments need intermediate width samples for the brush to affect their middle.
+  let line = s;
+  const reach = Math.max(radius / 2, 0.015);
+  for (let i = s.pts.length - 2; i >= 0 && line.pts.length < 4096; i--) {
+    const a = s.pts[i]!, b = s.pts[i + 1]!;
+    const span = Math.hypot(b.x - a.x, b.y - a.y);
+    if (span <= radius || !path.some((q) => q.x >= Math.min(a.x, b.x) - radius && q.x <= Math.max(a.x, b.x) + radius && q.y >= Math.min(a.y, b.y) - radius && q.y <= Math.max(a.y, b.y) + radius)) continue;
+    const parts = Math.min(128, Math.ceil(span / reach));
+    const range = Array.from({ length: parts - 1 }, (_, j) => (j + 1) / parts);
+    const lerp = (x: number, y: number, t: number) => x + (y - x) * t;
+    const samples = range.map((t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }));
+    const expand = (values: number[]) => [...values.slice(0, i + 1), ...range.map((t) => lerp(values[i]!, values[i + 1]!, t)), ...values.slice(i + 1)];
+    line = { ...line, pts: [...line.pts.slice(0, i + 1), ...samples, ...line.pts.slice(i + 1)],
+      ...(line.pressure ? { pressure: expand(line.pressure) } : {}), ...(line.pw ? { pw: expand(line.pw) } : {}) };
+  }
   let touched = false;
-  const pw = s.pts.map((p, i) => {
-    let near = Infinity;
-    for (const q of path) near = Math.min(near, Math.hypot(p.x - q.x, p.y - q.y));
+  const pw = line.pts.map((p, i) => {
+    let near = Math.hypot(p.x - path[0]!.x, p.y - path[0]!.y);
+    for (let j = 1; j < path.length; j++) {
+      const a = path[j - 1]!, b = path[j]!;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+      near = Math.min(near, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
+    }
     const k = ease(near, radius);
-    const cur = s.pw?.[i] ?? 1;
+    const cur = line.pw?.[i] ?? 1;
     if (k <= 0) return cur;
     touched = true;
     return Math.max(0.1, Math.min(4, cur * Math.pow(factor, k)));
   });
-  return touched ? { ...s, pw } : null;
+  return touched ? { ...line, pw } : null;
+}
+
+export function removePoint(s: Stroke, index: number): Stroke {
+  if (s.pts.length <= 2 || index < 0 || index >= s.pts.length) return s;
+  return pick(s, s.pts.map((_, i) => i).filter((i) => i !== index));
 }
 
 /** Scale a whole line's width. */
@@ -178,8 +204,10 @@ export function eraseStrokes(strokes: readonly Stroke[], path: readonly Pt[], ra
     };
     if (src.pw || r.points.some((p) => p.w !== undefined && p.w !== 1)) s.pw = r.points.map((p) => p.w ?? 1);
     else delete s.pw;
-    const flatStart = r.brush.taperStart === 0 && (src.flat?.[0] || recs[Number(base)]!.brush.taperStart > 0);
-    const flatEnd = r.brush.taperEnd === 0 && (src.flat?.[1] || recs[Number(base)]!.brush.taperEnd > 0);
+    const original = recs[Number(base)]!;
+    const changed = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y) > 1e-6;
+    const flatStart = changed(r.points[0]!, original.points[0]!) || src.flat?.[0];
+    const flatEnd = changed(r.points.at(-1)!, original.points.at(-1)!) || src.flat?.[1];
     if (flatStart || flatEnd) s.flat = [!!flatStart, !!flatEnd];
     else delete s.flat;
     return s;

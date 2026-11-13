@@ -1,11 +1,13 @@
 import type { Studio } from '../app/studio';
-import { allBrushes, getUserBrushes, GROUP_LABEL, PASS_STYLE, type BrushEntry, type BrushGroup, type LinePass } from '../draw/brushes';
+import { allBrushes, getUserBrushes, GROUP_LABEL, PASS_STYLE, snapshotId, type BrushEntry, type BrushGroup, type LinePass } from '../draw/brushes';
 import { dabsForStroke } from '../engine/brush/dabs';
-import { RasterEngine } from '../engine/brush/raster';
-import { cloneBrush, dyn, type BrushSettings } from '../engine/core/brush';
+import { loadGrain, loadTip, RasterEngine } from '../engine/brush/raster';
+import { cloneBrush, type BrushSettings } from '../engine/core/brush';
 import type { StrokePoint } from '../engine/core/stroke';
-import { confirmDialog, h, toast } from './dom';
+import { importBrushFile, readBrushImage } from '../io/brushimport';
+import { confirmDialog, h, pickFile, toast } from './dom';
 import { closePopover, popover } from './popover';
+import { drawVectorStroke } from '../render/vector';
 
 /**
  * Brush picker (a popover of preview strokes, grouped) and the Brush Studio (edit a brush's
@@ -30,10 +32,6 @@ function sampleStroke(w: number, hgt: number): StrokePoint[] {
 export function paintPreview(canvas: HTMLCanvasElement, settings: BrushSettings, pass: LinePass, widthIn: number): void {
   const g = canvas.getContext('2d')!;
   g.clearRect(0, 0, canvas.width, canvas.height);
-  if (!previewEngine) previewEngine = new RasterEngine(canvas.width, canvas.height);
-  const eng = previewEngine;
-  eng.resize(canvas.width, canvas.height);
-  eng.bind(canvas);
   const brush = cloneBrush(settings);
   const full = widthIn * 300;
   const size = Math.max(2, Math.min(canvas.height * 0.4, full * 0.45));
@@ -43,7 +41,13 @@ export function paintPreview(canvas: HTMLCanvasElement, settings: BrushSettings,
   brush.taperEnd *= k * 3;
   brush.opacity *= PASS_STYLE[pass].opacity;
   const points = sampleStroke(canvas.width, canvas.height);
-  eng.begin({ id: 'preview', tool: 'brush', brush, color: PASS_STYLE[pass].color, seed: 7, points }, null);
+  const stroke = { id: 'preview', tool: 'brush' as const, brush, color: PASS_STYLE[pass].color, seed: 7, points };
+  if (brush.vectorStyle) { drawVectorStroke(g, stroke, Infinity); return; }
+  if (!previewEngine) previewEngine = new RasterEngine(canvas.width, canvas.height);
+  const eng = previewEngine;
+  eng.resize(canvas.width, canvas.height);
+  eng.bind(canvas);
+  eng.begin(stroke, null);
   let len = 0;
   for (let i = 1; i < points.length; i++) len += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y);
   eng.addDabs(dabsForStroke(brush, 7, points, len));
@@ -51,12 +55,13 @@ export function paintPreview(canvas: HTMLCanvasElement, settings: BrushSettings,
 }
 
 function previewUrl(e: BrushEntry): string {
-  const key = `${e.id}|${JSON.stringify(e.settings).length}|${e.w}`;
+  const key = `${snapshotId(e)}|${e.w}`;
   let url = previews.get(key);
   if (!url) {
     const c = h('canvas', { width: PREVIEW_W, height: PREVIEW_H });
     paintPreview(c, e.settings, e.pass, e.w);
     url = c.toDataURL();
+    if (previews.size > 250) previews.clear();
     previews.set(key, url);
   }
   return url;
@@ -66,9 +71,10 @@ function previewUrl(e: BrushEntry): string {
  * The brush picker: every brush grouped, with a preview stroke each. Brushes of the tool's own
  * pass come first; the others are still offered (an ink brush on a pencil tool is allowed).
  */
-export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass, current: string, onPick: (e: BrushEntry) => void): void {
+export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass, current: string, onPick: (e: BrushEntry) => void, vector = false): void {
   const groups = new Map<BrushGroup, BrushEntry[]>();
   for (const e of allBrushes()) {
+    if (vector ? e.settings.tipImage || e.settings.grainImage : e.settings.vectorStyle) continue;
     const list = groups.get(e.group) ?? [];
     list.push(e);
     groups.set(e.group, list);
@@ -83,13 +89,38 @@ export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass,
       list.append(h('button', {
         type: 'button', class: 'brushitem', 'aria-pressed': String(e.id === current), title: e.note,
         onclick: () => { closePopover(); onPick(e); },
-      }, h('span', { class: 'bname' }, e.name, h('small', {}, e.note)), h('img', { src: previewUrl(e), alt: '', width: PREVIEW_W / 2, height: PREVIEW_H / 2 })));
+      }, h('span', { class: 'bname' }, e.name, h('small', {}, e.note)), brushPreview(e)));
     }
   }
   const cur = allBrushes().find((e) => e.id === current);
   popover(anchor, h('div', { style: 'width:300px' }, list,
     h('div', { class: 'sep' }),
-    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); if (cur) brushStudio(studio, cur, onPick); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes');
+    vector ? null : h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); void importBrushes(studio, onPick); } }, h('span', {}, '↓'), 'Import brush…'),
+    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); if (cur) brushStudio(studio, cur, onPick, vector); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes');
+}
+
+export async function warmBrush(b: BrushSettings): Promise<void> {
+  await Promise.all([b.tipImage && loadTip(b.tipImage), b.grainImage && loadGrain(b.grainImage)]);
+}
+
+function brushPreview(e: BrushEntry): HTMLImageElement {
+  const image = h('img', { alt: '', width: PREVIEW_W / 2, height: PREVIEW_H / 2 });
+  if (e.settings.tipImage || e.settings.grainImage) void warmBrush(e.settings).then(() => { if (image.isConnected) image.src = previewUrl(e); });
+  else image.src = previewUrl(e);
+  return image;
+}
+
+async function importBrushes(studio: Studio, onPick: (e: BrushEntry) => void): Promise<void> {
+  const file = await pickFile('.abr,.sut,.png,.jpg,.jpeg,.webp');
+  if (!file) return;
+  try {
+    const { entries, skipped, note } = await importBrushFile(file);
+    if (!entries.length) throw new Error('This file contains no compatible brush tips.');
+    await warmBrush(entries[0]!.settings);
+    await studio.saveUserBrushes([...getUserBrushes(), ...entries]);
+    onPick(entries[0]!);
+    toast(`Imported ${entries.length} ${entries.length === 1 ? 'brush' : 'brushes'} into My brushes.${skipped ? ` ${skipped} skipped.` : ''}${note ? ` ${note}` : ''}`, 6000);
+  } catch (error) { toast(error instanceof Error ? error.message : 'Could not import this brush file.', 6500); }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -109,47 +140,48 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 const SECTIONS: { title: string; knobs: Knob[] }[] = [
   { title: 'Stroke', knobs: [
-    { label: 'Spacing', min: 0.02, max: 1, step: 0.01, get: (b) => b.spacing, set: (b, v) => (b.spacing = v), fmt: pct },
-    { label: 'Flow', min: 0.05, max: 1, step: 0.01, get: (b) => b.flow, set: (b, v) => (b.flow = v), fmt: pct },
-    { label: 'Opacity', min: 0.05, max: 1, step: 0.01, get: (b) => b.opacity, set: (b, v) => (b.opacity = v), fmt: pct },
-    { label: 'Scatter', min: 0, max: 1, step: 0.01, get: (b) => b.scatter, set: (b, v) => (b.scatter = v), fmt: pct },
+    { label: 'Spacing', min: 0.02, max: 5, step: 0.01, get: (b) => b.spacing, set: (b, v) => (b.spacing = v), fmt: pct },
+    { label: 'Flow', min: 0, max: 1, step: 0.01, get: (b) => b.flow, set: (b, v) => (b.flow = v), fmt: pct },
+    { label: 'Opacity', min: 0, max: 1, step: 0.01, get: (b) => b.opacity, set: (b, v) => (b.opacity = v), fmt: pct },
+    { label: 'Scatter', min: 0, max: 2, step: 0.01, get: (b) => b.scatter, set: (b, v) => (b.scatter = v), fmt: pct },
   ] },
   { title: 'Stabilize', knobs: [
     { label: 'Stabilize', min: 0, max: 1, step: 0.01, get: (b) => b.smoothing, set: (b, v) => (b.smoothing = v), fmt: pct },
+    { label: 'Motion filter', min: 0, max: 1, step: 0.01, get: (b) => b.motionFilter ?? 0, set: (b, v) => (b.motionFilter = v), fmt: pct },
+    { label: 'Expression', min: 0, max: 1, step: 0.01, get: (b) => b.expression ?? 0, set: (b, v) => (b.expression = v), fmt: pct },
   ] },
   { title: 'Taper', knobs: [
     { label: 'Start', min: 0, max: 200, step: 1, get: (b) => b.taperStart, set: (b, v) => (b.taperStart = v), fmt: (v) => `${v}px` },
     { label: 'End', min: 0, max: 200, step: 1, get: (b) => b.taperEnd, set: (b, v) => (b.taperEnd = v), fmt: (v) => `${v}px` },
     { label: 'Tip size', min: 0, max: 1, step: 0.01, get: (b) => b.taperSize ?? 1, set: (b, v) => (b.taperSize = v), fmt: pct },
     { label: 'Sharpness', min: 0, max: 1, step: 0.01, get: (b) => b.taperShape ?? 0, set: (b, v) => (b.taperShape = v), fmt: pct },
+    { label: 'Fade at ends', min: 0, max: 1, step: 0.01, get: (b) => b.taperOpacity ?? 0, set: (b, v) => (b.taperOpacity = v), fmt: pct },
   ] },
   { title: 'Shape', knobs: [
     { label: 'Hardness', min: 0, max: 1, step: 0.01, get: (b) => b.hardness, set: (b, v) => (b.hardness = v), fmt: pct },
     { label: 'Roundness', min: 0.05, max: 1, step: 0.01, get: (b) => b.roundness, set: (b, v) => (b.roundness = v), fmt: pct },
-    { label: 'Angle', min: 0, max: 180, step: 1, get: (b) => b.angle, set: (b, v) => (b.angle = v), fmt: (v) => `${v}°` },
+    { label: 'Angle', min: -180, max: 360, step: 1, get: (b) => b.angle, set: (b, v) => (b.angle = v), fmt: (v) => `${v}°` },
   ] },
   { title: 'Grain', knobs: [
     { label: 'Grain', min: 0, max: 1, step: 0.01, get: (b) => b.grain, set: (b, v) => (b.grain = v), fmt: pct },
     { label: 'Scale', min: 0.2, max: 3, step: 0.05, get: (b) => b.grainScale, set: (b, v) => (b.grainScale = v), fmt: (v) => `${v.toFixed(2)}×` },
+    { label: 'Grain angle', min: -180, max: 180, step: 1, get: (b) => b.grainRotation ?? 0, set: (b, v) => (b.grainRotation = v), fmt: (v) => `${v}°` },
+    { label: 'Lock to paper', min: 0, max: 1, step: 0.05, get: (b) => b.grainMovement ?? 1, set: (b, v) => (b.grainMovement = v), fmt: pct },
   ] },
-  { title: 'Pressure', knobs: [
-    { label: 'Size at light touch', min: 0, max: 1, step: 0.01, get: (b) => (b.sizeDyn.control === 'off' ? 1 : b.sizeDyn.min), set: (b, v) => (b.sizeDyn = v >= 1 ? dyn('off') : { ...b.sizeDyn, control: 'pressure', min: v }), fmt: pct },
-    { label: 'Size response', min: 0.3, max: 2.5, step: 0.05, get: (b) => b.sizeDyn.curve, set: (b, v) => (b.sizeDyn = { ...b.sizeDyn, curve: v }), fmt: (v) => (v < 1 ? `soft ${v.toFixed(2)}` : v > 1 ? `firm ${v.toFixed(2)}` : 'linear') },
-    { label: 'Opacity at light touch', min: 0, max: 1, step: 0.01, get: (b) => (b.opacityDyn.control === 'off' ? 1 : b.opacityDyn.min), set: (b, v) => (b.opacityDyn = v >= 1 ? dyn('off') : { ...b.opacityDyn, control: 'pressure', min: v }), fmt: pct },
-  ] },
+  { title: 'Dynamics', knobs: [] },
 ];
 
 /**
  * Edit a brush. Library brushes are never changed: saving makes a copy in "My brushes". Strokes
  * already drawn keep their own snapshot, so editing never changes finished art.
  */
-export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: BrushEntry) => void): void {
+export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: BrushEntry) => void, vector = false): void {
   const mine = start.group === 'mine';
   const draft: BrushEntry = { ...start, settings: cloneBrush(start.settings) };
   const big = h('canvas', { width: 520, height: 120, class: 'brushpad' });
   const redraw = () => paintPreview(big, draft.settings, draft.pass, draft.w);
   const name = h('input', { type: 'text', value: mine ? draft.name : `${draft.name} (mine)`, maxlength: 40, 'aria-label': 'Brush name' });
-  const width = h('input', { type: 'range', min: 0.004, max: 0.2, step: 0.002, value: draft.w, 'aria-label': 'Default width' });
+  const width = h('input', { type: 'range', min: 0.004, max: 0.5, step: 0.002, value: draft.w, 'aria-label': 'Default width' });
   const widthOut = h('b', {}, `${(draft.w * 72).toFixed(1)}pt`);
   width.addEventListener('input', () => {
     draft.w = Number(width.value);
@@ -175,9 +207,47 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
 
   const tabs = h('div', { class: 'seg', role: 'tablist', 'aria-label': 'Brush settings' });
   const panel = h('div', { class: 'knobs' });
+  const imageControls = (key: 'tipImage' | 'grainImage') => {
+    const label = key === 'tipImage' ? 'Tip' : 'Grain';
+    return h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: async () => {
+      const file = await pickFile('.png,.jpg,.jpeg,.webp');
+      if (!file) return;
+      try {
+        draft.settings[key] = await readBrushImage(file, key === 'tipImage' ? 'dark' : 'light');
+        await warmBrush(draft.settings);
+        show(key === 'tipImage' ? 3 : 4); redraw();
+      } catch (error) { toast(error instanceof Error ? error.message : 'Could not load the image.'); }
+    } }, `Load ${label.toLowerCase()} image`), draft.settings[key] ? h('button', { class: 'btn', type: 'button', onclick: () => {
+      delete draft.settings[key]; show(key === 'tipImage' ? 3 : 4); redraw();
+    } }, `Remove ${label.toLowerCase()} image`) : null);
+  };
+  const toggle = (label: string, key: 'followDirection' | 'pulledString' | 'antiAlias') => {
+    const input = h('input', { type: 'checkbox', checked: draft.settings[key] ?? key === 'antiAlias' });
+    input.addEventListener('change', () => { draft.settings[key] = input.checked; redraw(); });
+    return h('label', { class: 'mini' }, input, label);
+  };
+  const dynamicRows = (key: 'sizeDyn' | 'flowDyn' | 'opacityDyn', label: string) => {
+    const select = h('select', { 'aria-label': `${label} input` }, (['off', 'pressure', 'tilt', 'speed'] as const).map((control) =>
+      h('option', { value: control, selected: control === draft.settings[key].control }, control)));
+    select.addEventListener('change', () => {
+      const control = select.value as BrushSettings[typeof key]['control'];
+      draft.settings[key] = { ...draft.settings[key], control }; redraw();
+    });
+    const invert = h('input', { type: 'checkbox', checked: draft.settings[key].invert });
+    invert.addEventListener('change', () => { draft.settings[key].invert = invert.checked; redraw(); });
+    return h('fieldset', { class: 'brush-dynamics' }, h('legend', {}, label), h('label', { class: 'mini' }, 'Input', select),
+      knobRow({ label: `${label} minimum`, min: 0, max: 1, step: 0.01, get: (b) => b[key].min, set: (b, v) => { b[key].min = v; }, fmt: pct }),
+      knobRow({ label: `${label} response`, min: 0.3, max: 2.5, step: 0.05, get: (b) => b[key].curve, set: (b, v) => { b[key].curve = v; delete b[key].points; }, fmt: (v) => v.toFixed(2) }),
+      knobRow({ label: `${label} jitter`, min: 0, max: 1, step: 0.01, get: (b) => b[key].jitter, set: (b, v) => { b[key].jitter = v; }, fmt: pct }),
+      h('label', { class: 'mini' }, invert, 'Invert response'));
+  };
   const show = (i: number) => {
     tabs.querySelectorAll('button').forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
     panel.replaceChildren(...SECTIONS[i]!.knobs.map(knobRow));
+    if (i === 1) panel.append(toggle('Pulled string', 'pulledString'));
+    if (i === 3) panel.append(toggle('Follow stroke direction', 'followDirection'), toggle('Antialias edges', 'antiAlias'), ...(vector ? [] : [imageControls('tipImage')]));
+    if (i === 4 && !vector) panel.append(imageControls('grainImage'));
+    if (i === 5) panel.append(dynamicRows('sizeDyn', 'Size'), dynamicRows('flowDyn', 'Flow'), dynamicRows('opacityDyn', 'Opacity'));
   };
   SECTIONS.forEach((s, i) => tabs.append(h('button', { type: 'button', role: 'tab', onclick: () => show(i) }, s.title)));
 
@@ -197,7 +267,7 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
         d.close();
         toast('Brush deleted.');
       } }, 'Delete') : null,
-      h('button', { class: 'btn', type: 'button', onclick: () => { draft.settings = cloneBrush(start.settings); draft.w = start.w; width.value = String(draft.w); show(0); redraw(); } }, 'Reset'),
+      h('button', { class: 'btn', type: 'button', onclick: () => { draft.settings = cloneBrush(start.settings); draft.w = start.w; width.value = String(draft.w); widthOut.textContent = `${(draft.w * 72).toFixed(1)}pt`; show(0); redraw(); } }, 'Reset'),
       h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'),
       h('button', { class: 'btn primary', type: 'button', onclick: async () => {
         const label = name.value.trim() || draft.name;
@@ -213,5 +283,5 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
   document.body.append(d);
   d.showModal();
   show(0);
-  redraw();
+  void warmBrush(draft.settings).then(() => { if (d.open) redraw(); });
 }

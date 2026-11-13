@@ -307,7 +307,7 @@ export class Studio {
   /** True when no page has any drawn art yet (strokes, fills or stored bitmaps). */
   get blankArt(): boolean {
     const b = this.requireBook();
-    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.image && !l.strokes.length && !l.fills.length && !l.pixelTransforms?.length))) &&
+    return b.pages.every((p) => p.groups.every((g) => g.layers.every((l) => !l.image && !l.screenTone && !l.strokes.length && !l.fills.length && !l.pixelTransforms?.length))) &&
       [...this.art.values()].every((a) => Object.values(a.planes).every((c) => !c));
   }
 
@@ -370,8 +370,8 @@ export class Studio {
 
   /** Save the device's own brushes (not book data; no undo). */
   async saveUserBrushes(list: BrushEntry[]): Promise<void> {
-    setUserBrushes(list);
     await this.store.putSetting('brushes.user.v1', list);
+    setUserBrushes(list);
     this.emit();
   }
 

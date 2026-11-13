@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brushWidth, eraseStrokes, hitStroke, pointAt, reshape, scaleWidth, simplify, smooth } from './vectoredit';
+import { brushWidth, eraseStrokes, hitStroke, pointAt, removePoint, reshape, scaleWidth, simplify, smooth } from './vectoredit';
 import { toRecord } from './replay';
 import type { Stroke } from '../doc/model';
 import { newBook, newLayer, newPage } from '../doc/model';
@@ -48,6 +48,19 @@ describe('vector line editing', () => {
     expect(s.pw![20]).toBe(1);
     expect(brushWidth(line(1), [{ x: 1.5, y: 3 }], 0.2, 2)).toBeNull();
     expect(scaleWidth(line(1), 2).w).toBeCloseTo(0.06);
+  });
+
+  it('edits width in the middle of a two-point segment and keeps node data aligned', () => {
+    const source = { ...line(1, 1, 3, 2), pressure: [0.4, 1], pw: [1, 1] };
+    const thick = brushWidth(source, [{ x: 2, y: 0.8 }, { x: 2, y: 1.2 }], 0.25, 2)!;
+    const middle = thick.pts.findIndex((p) => p.x === 2);
+    expect(thick.pw![middle]).toBe(2);
+    expect(thick.pressure![middle]).toBeCloseTo(0.7);
+    const edited = removePoint(thick, middle);
+    expect(edited.pts).toHaveLength(thick.pts.length - 1);
+    expect(edited.pressure).toHaveLength(edited.pts.length);
+    expect(edited.pw).toHaveLength(edited.pts.length);
+    expect(removePoint(source, 0)).toBe(source);
   });
 
   it('simplify drops points a straight line does not need; smooth keeps the ends', () => {

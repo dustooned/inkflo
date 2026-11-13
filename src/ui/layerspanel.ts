@@ -31,6 +31,7 @@ export interface LayersPanelOptions {
   onContext(groupId: string): void;
   onView(view: LayerView): void;
   onSelect(layerId: string | null): void;
+  onEditTone?(layerId: string): void;
   refresh(): void;
 }
 
@@ -78,13 +79,14 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       return h('div', { class: 'row' }, h('label', { title: note ?? '' }, box, label));
     };
     return h('div', { class: 'layer-options' },
+      l.screenTone && o.onEditTone ? h('button', { class: 'item', type: 'button', onclick: () => o.onEditTone?.(l.id) }, h('span', {}, '▦'), 'Edit screentone') : null,
       h('div', { class: 'row' }, h('label', {}, 'Opacity', opacity)),
       check('Prints', l.prints, (x, v) => (x.prints = v), 'In print and exports'),
-      l.image ? null : check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
+      l.image || l.screenTone ? null : check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
       g.kind === 'panel' ? check('Over frame', l.overFrame, (x, v) => (x.overFrame = v), 'Draw above the borders, unmasked (pop-out)') : null,
       h('div', { class: 'sep' }),
       h('h4', {}, 'Type'),
-      LAYER_TYPES.map((t) =>
+      (l.screenTone ? ['tone' as const] : LAYER_TYPES).map((t) =>
         h('button', { class: 'item', type: 'button', 'aria-pressed': String(t === l.type), onclick: () => {
           // changing type takes that type's defaults; the user can flip them back
           edit(t === 'ink' && l.type === 'pencil' ? 'Promote pencil to ink' : `Make ${t} layer`, withLayer(l.id, (x) => {
@@ -104,7 +106,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       } }, h('span', {}, '✎'), 'Rename'),
       h('button', { class: 'item', type: 'button', onclick: async () => {
         const n = l.strokes.length + l.fills.length;
-        if ((n || l.image) && !(await confirmDialog('Delete layer?', `“${l.name}” is removed from the page. Undo brings it back.`, 'Delete'))) return;
+        if ((n || l.image || l.screenTone) && !(await confirmDialog('Delete layer?', `“${l.name}” is removed from the page. Undo brings it back.`, 'Delete'))) return;
         if (o.active === l.id) o.onSelect(null);
         edit('Delete layer', withGroup(g.id, (x) => (x.layers = x.layers.filter((y) => y.id !== l.id))));
         stack();
@@ -195,7 +197,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       const on = o.target === 'layer' && o.active === l.id;
       const more = h('button', { class: 'lt', type: 'button', 'aria-label': `${l.name} options`, title: 'Options', onclick: () => o.onView({ kind: 'layer', id: l.id }) }, '⋯');
       const type = TYPE_DEFAULTS[l.type].name;
-      const status = [l.image ? 'Placed image' : l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
+      const status = [l.image ? 'Placed image' : l.screenTone ? 'Editable screentone' : l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
       card.append(
         h('div', { class: `llayer${on ? ' on' : ''}${l.visible ? '' : ' off'}` },
           h('button', { class: 'lname layer-select', type: 'button', 'data-focus': 'layer-' + l.id, 'aria-pressed': String(on),

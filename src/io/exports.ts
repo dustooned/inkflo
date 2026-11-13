@@ -8,6 +8,7 @@ import { groupPanels } from '../geom/groups';
 import { captionWithLocalTails, paintBalloonGroup, sizePt, toPx } from '../render/caption';
 import { captionGroups, groupWords } from '../geom/captiongroup';
 import { lettersReady } from '../render/fonts';
+import { drawScreenTone } from '../render/tone';
 import { COLORS, drawGutters, drawLayerBitmap, gutterBandPath, inGutterBands, panelPath, renderPage, roundCorners } from '../render/page';
 import { assetKey } from './capture';
 import { encodePng, makeCanvas } from './canvasops';
@@ -46,9 +47,10 @@ function paintLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageAr
   for (let i = group.layers.length - 1; i >= 0; i--) {
     const l = group.layers[i]!;
     if (!l.visible || !l.prints || !pick(l)) continue;
+    g.globalAlpha = l.opacity * group.opacity;
+    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, scale);
     const c = art.planes[l.id];
     if (!c || !c.width) continue;
-    g.globalAlpha = l.opacity * group.opacity;
     drawLayerBitmap(g, c, W, H, scale, l.image);
   }
   g.globalAlpha = 1;
