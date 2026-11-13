@@ -19,6 +19,11 @@ docs/
   2DOPE-REUSE-INVENTORY.md  what came from 2Dope's engine and how
   BRUSH-AND-INK.md       brush engine + inking requirements (Procreate / CSP parity)
   REA-QUEUE.md           what to reverse-engineer and why
+  research/procreate-interface.md  the reference's chrome, panels and interface settings
+  research/procreate-drawing-features.md  every drawing tool, brush and adjustment, with decisions
+  research/procreate-ui-style.md   the control kit, metrics and surfaces, as a build spec
+  research/procreate-integration-matrix.md  feature → inkflo gap → decision → order of work
+  research/dreams-1.0.15-motion.md  what the Dreams package says about timeline and cues
 ```
 
 The prototypes are **reference implementations**: geometry, interaction and visual language are

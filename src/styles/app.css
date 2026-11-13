@@ -269,6 +269,35 @@ dialog.brushstudio { width: min(600px, calc(100vw - 32px)); }
 .brush-dynamics { display: grid; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .tone-preview { display: block; width: 100%; height: auto; border-radius: 8px; }
 .tone-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.adjust-preview { display: block; margin-inline: auto; max-width: 100%; height: auto; background: var(--paper-lift); border: 1px solid var(--line); border-radius: 8px; }
+.screen[data-desk='draw'] .tool { min-height: 44px; padding-block: 6px; }
+.screen[data-desk='draw'] .ctx { column-gap: 9px; }
+.screen[data-desk='draw'] .tool[aria-pressed='true'] { box-shadow: inset 3px 0 var(--focus); }
+.stroke-options { display: grid; gap: 12px; padding: 9px; }
+.stroke-options > label { display: grid; grid-template-columns: 66px 96px auto; }
+.stroke-options > label:last-child { display: flex; }
+.asset-dialog { width: min(720px, calc(100vw - 28px)); }
+.asset-actions { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
+.asset-actions input { max-width: 100%; }
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(126px, 1fr)); gap: 10px; }
+.asset-card { min-width: 0; display: grid; gap: 5px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.asset-card img { width: 100%; height: 88px; object-fit: contain; background: var(--field); border-radius: 6px; }
+.asset-card strong { overflow-wrap: anywhere; }
+.asset-card small { color: var(--text-soft); }
+.screen.simple .work { grid-template-columns: 56px minmax(0, 1fr); }
+.screen.simple .insp { display: none; }
+.screen.simple .ctx { flex-wrap: nowrap; overflow-x: auto; }
+.screen.simple .ctx > * { flex: none; }
+.screen.simple .ctx .hint { display: none; }
+.screen.simple .rail .tool { min-height: 44px; }
+.screen.simple .bar .icon, .screen.simple .ctx .btn { min-height: 40px; }
+.screen.simple .brush-controls { left: 50%; top: auto; bottom: 10px; transform: translateX(-50%); display: flex; max-width: calc(100% - 24px); }
+.screen.simple .brush-controls[hidden] { display: none; }
+.screen.simple .brush-control { grid-template-columns: auto minmax(65px, 106px) auto; align-items: center; }
+.screen.simple .brush-control input[type=range] { writing-mode: horizontal-tb; direction: ltr; width: 100%; height: 28px; }
+.screen.focus[data-desk='draw'] .rail { max-width: calc(100% - 24px); overflow-x: auto; }
+.screen.focus[data-desk='draw'] .rail > * { flex: none; }
+.screen.focus[data-desk='draw'] .ctx { top: 72px; max-width: calc(100% - 24px); }
 .knob { display: grid; grid-template-columns: 150px 1fr 70px; align-items: center; gap: 10px; font-size: 12.5px; }
 .knob b { text-align: right; font: 500 11.5px/1 var(--mono); }
 

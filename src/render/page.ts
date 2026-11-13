@@ -21,6 +21,8 @@ export const COLORS = {
   ink: '#191A1F',
 };
 
+const borderInset = (border: number) => Math.max(border, 0.06);
+
 export interface RenderOptions {
   /** Pixels per inch of the target. */
   scale: number;
@@ -104,7 +106,7 @@ function roundedPanelPath(panel: Panel, scale: number, radius: number): Path2D {
 }
 
 export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Panel[], s: number, paper: string | null, edges = false): boolean {
-  const { cornerRadius = 0, border, panelCorners } = layoutOf(page);
+  const { cornerRadius = 0, border, panelCorners, edgeBorder } = layoutOf(page);
   if (!cornerRadius && !panelCorners?.length) return false;
   const radii = panels.map((panel) => cornerOverrides(page, panel).at(-1)?.radius ?? cornerRadius);
   if (!radii.some(Boolean)) return false;
@@ -121,6 +123,7 @@ export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Pa
   if (edges && border) {
     g.save();
     g.clip(outside, 'evenodd');
+    clipBorder(g, page, s, edgeBorder ? 0 : borderInset(border));
     g.lineWidth = border * 2 * s;
     g.lineJoin = 'round';
     g.strokeStyle = COLORS.ink;
@@ -130,21 +133,31 @@ export function roundCorners(g: CanvasRenderingContext2D, page: Page, panels: Pa
   return true;
 }
 
+function clipBorder(g: CanvasRenderingContext2D, page: Page, s: number, inset: number): void {
+  g.beginPath();
+  g.rect(inset * s, inset * s, Math.max(0, page.widthIn - 2 * inset) * s, Math.max(0, page.heightIn - 2 * inset) * s);
+  g.clip();
+}
+
 /** Gutter bands and trim border, on top of the panel art. */
 export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, opts: { paper?: boolean; whitePaper?: boolean; panels?: Panel[] } = {}): void {
-  const { gutter, border, gutterPaper = COLORS.gutter } = layoutOf(page);
+  const { gutter, border, edgeBorder, gutterPaper = COLORS.gutter } = layoutOf(page);
+  const paper = opts.paper === false ? null : opts.whitePaper ? '#fff' : gutterPaper;
   const path = gutterBandPath(page, s);
   g.save();
   g.beginPath();
   g.rect(0, 0, page.widthIn * s, page.heightIn * s);
   g.clip();
-  const rounded = roundCorners(g, page, opts.panels ?? derivePanels(page), s, opts.paper === false ? null : opts.whitePaper ? '#fff' : gutterPaper, true);
+  const rounded = roundCorners(g, page, opts.panels ?? derivePanels(page), s, paper, true);
   g.lineCap = 'round';
   g.lineJoin = 'round';
   g.strokeStyle = COLORS.ink;
-  if (gutter || border) {
+  if (border) {
+    g.save();
+    clipBorder(g, page, s, edgeBorder ? 0 : borderInset(border));
     g.lineWidth = (gutter + border * 2) * s;
     g.stroke(path);
+    g.restore();
   }
   if (opts.paper === false || (!opts.whitePaper && gutterPaper === null)) {
     g.globalCompositeOperation = 'destination-out';
@@ -156,7 +169,7 @@ export function drawGutters(g: CanvasRenderingContext2D, page: Page, s: number, 
   }
   g.globalCompositeOperation = 'source-over';
   g.strokeStyle = COLORS.ink;
-  if (border && !rounded) {
+  if (border && edgeBorder && !rounded) {
     g.lineWidth = border * s * 2;
     g.strokeRect(0, 0, page.widthIn * s, page.heightIn * s);
   }

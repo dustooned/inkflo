@@ -464,3 +464,40 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - **Screentone (T)** applies an editable layer to a panel or a lasso region. Choose a preset or
   adjust shape, density, LPI, angle and color. Edit via the selected tone or its Layers menu.
   Tones remain editable in `.inkflo`; PSD, print and web exports render their appearance.
+
+## Off-page Knife and drawing controls
+
+- **Knife → Across page** starts and ends on the board outside the trim. **One panel** takes
+  the first complete panel crossing. Hold or use Shift for straight cuts, and **Fit page** restores
+  space to start a swipe after zooming or panning.
+- Panel borders stop short of the trim by default. Turn on **Borders reach page edge** in Layout
+  to restore edge-to-edge inking. Display settings remember **Board brightness** and **Grid strength**
+  on each device.
+- Draw puts Brush, Smudge and Eraser first, groups vector tools, and keeps stabilization,
+  correction and QuickShape in **Stroke**. **Actions** contains image placement, symmetry and
+  Adjustments. Raster symmetry supports vertical, horizontal, quadrant and radial modes around the
+  page center. Hue, saturation, brightness and Gaussian blur apply to an unlocked paint layer
+  with one undo step. Touch on the board pans, and adding a second finger there zooms around
+  the gesture.
+- **Clone** samples an area of the same paint layer. Tap **Set source**, pick the source area,
+  and brush the copy into place. The stroke can be undone and replayed.
+- **Transform**, **Select lines**, and **Screentone → Selection** share rectangle, ellipse,
+  freehand, polygon and magnetic lassos. Tap polygon corners and close at the first point or
+  press Enter. Magnetic follows nearby contrast and alpha edges while staying close to the swipe.
+  Pixel transforms offer freeform and uniform scale and an option to keep the original pixels.
+
+## Touch workspace and book assets
+
+- Draw's **Simple / Studio** switch expands the canvas, keeps primary tools in the rail, moves
+  advanced tools under **More**, and puts size and opacity below the artwork. Layers and Assets
+  remain accessible above the canvas.
+- Draw, Layout and Caption share pinch zoom and two-/three-finger undo/redo taps. A second
+  finger during pen drawing can still constrain QuickShape. **Draw with finger** in Display
+  switches finger input to navigation on the Draw desk.
+- **Assets** holds a book-wide library of PNG, JPEG and WebP imports. Place an image on any page
+  as artwork or reference, copy the library from another local book, or transfer it in an
+  `.inkassets` pack. Individual images can be downloaded as PNG. The `.inkflo` backup includes
+  library images, including assets that have yet to be placed.
+- Interface references: the local Procreate and 2Dope interface archives, and the official
+  [Clip Studio tablet interface](https://help.clip-studio.com/en-us/manual_en/090_tablet/Tablet_interface.htm)
+  and [Simple Mode workflow](https://help.clip-studio.com/en-us/manual_en/090_tablet/Using_Simple_Mode.htm).

@@ -7,6 +7,7 @@ import { displayButton } from './popover';
 import { spreadButton } from './spread';
 import { applyPageTemplate } from '../geom/pagetemplates';
 import { openPageTemplates } from './pagetemplates';
+import { openBookAssets } from './bookassets';
 
 const STAGE_LABEL: Record<string, string> = { script: 'Script', layout: 'Layout', draw: 'Draw', caption: 'Caption', print: 'Print' };
 
@@ -69,6 +70,7 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
         h('span', { class: 'spacer' }),
         save,
         displayButton(),
+        h('button', { class: 'btn', type: 'button', onclick: () => openBookAssets(studio) }, 'Assets'),
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Undo', title: 'Undo (Ctrl+Z)', onclick: () => studio.undo() }, '↶'),
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => studio.redo() }, '↷'),
         h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio) }, 'Export'),

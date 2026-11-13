@@ -1,9 +1,9 @@
 import { findLayer, newLayer, TONE_SHAPES, type Pt, type ScreenTone } from '../doc/model';
-import { resample, pathLength } from '../engine/core/quickshape';
 import { groupAt, groupLabel, insertIndex } from '../geom/groups';
 import { drawScreenTone } from '../render/tone';
 import type { DeskCtx } from './desk';
 import { h, seg, slider, toast } from './dom';
+import { createMarquee, MARQUEE_SHAPES, marqueeShape, type MarqueeShape } from './marquee';
 
 const PRESETS = [
   { name: 'Light dots', shape: 'dot', frequency: 60, density: 0.1, angle: 45 },
@@ -18,7 +18,9 @@ const SHAPE_NAMES: Record<ScreenTone['shape'], string> = { dot: 'Dots', square: 
 export function screentoneTool(ctx: DeskCtx, select: (id: string) => void) {
   const { studio, page } = ctx;
   let placement: 'panel' | 'lasso' = 'panel';
-  let path: Pt[] | null = null;
+  let start: Pt | null = null;
+  let shape: MarqueeShape = 'freehand';
+  const marquee = createMarquee(ctx, (region, at) => add(at, region));
   let draft: ScreenTone = { shape: 'dot', frequency: 60, density: 0.25, angle: 45, color: '#191a1f' };
   const active = (id: string) => findLayer(page, id);
 
@@ -88,38 +90,32 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void) {
     edit: settings,
     controls(id?: string) {
       return [
-        seg<'panel' | 'lasso'>([{ id: 'panel', label: 'Panel' }, { id: 'lasso', label: 'Lasso' }], placement, (v) => { placement = v; ctx.chrome(); }, 'Tone area'),
+        seg<'panel' | 'lasso'>([{ id: 'panel', label: 'Panel' }, { id: 'lasso', label: 'Selection' }], placement, (v) => { placement = v; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone area'),
+        placement === 'lasso' ? seg([...MARQUEE_SHAPES], shape, (v) => { shape = marqueeShape(v); marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone selection shape') : null,
+        ...marquee.controls(),
         h('button', { type: 'button', class: 'btn', onclick: () => settings() }, `${SHAPE_NAMES[draft.shape]} · ${Math.round(draft.density * 100)}% ▾`),
         id && active(id)?.layer.screenTone ? h('button', { type: 'button', class: 'btn', onclick: () => settings(id) }, 'Edit selected tone') : null,
         h('span', { class: 'hint' }, placement === 'panel' ? 'Tap inside a panel to add a tone layer.' : 'Draw around the area to shade.'),
       ];
     },
-    down(p: Pt) { path = [p]; },
-    move(p: Pt) {
-      if (!path || placement === 'panel') return;
-      const last = path.at(-1)!;
-      if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() >= 2) path.push(p);
-      ctx.request();
-    },
+    clear: marquee.clear,
+    hover: marquee.hover,
+    closePolygon: marquee.closePolygon,
+    isMarquee: marquee.active,
+    down(p: Pt) { if (placement === 'lasso') marquee.down(p, shape); else start = p; },
+    move(p: Pt) { marquee.move(p); },
     up(p: Pt, cancelled: boolean) {
-      const points = path;
-      path = null;
-      if (!points || cancelled) { ctx.request(); return; }
-      if (placement === 'panel') {
-        if (Math.hypot(p.x - points[0]!.x, p.y - points[0]!.y) * ctx.scale() < 12) add(p);
-      } else if (points.length >= 3 && pathLength(points) * ctx.scale() >= 12) {
-        points.push(p);
-        add(points[0]!, points.length > 768 ? resample(points, 768) : points);
-      }
+      if (placement === 'lasso') marquee.up(p, cancelled);
+      else if (start && !cancelled && Math.hypot(p.x - start.x, p.y - start.y) * ctx.scale() < 12) add(p);
+      start = null;
       ctx.request();
     },
     overlay(g: CanvasRenderingContext2D, scale: number) {
-      if (placement !== 'lasso' || !path?.length) return;
+      if (placement !== 'lasso' || !marquee.active()) return;
       g.save();
       g.strokeStyle = '#5eafc1'; g.lineWidth = 2; g.setLineDash([5, 4]);
-      g.beginPath();
-      path.forEach((p, i) => i ? g.lineTo(p.x * scale, p.y * scale) : g.moveTo(p.x * scale, p.y * scale));
-      g.closePath(); g.stroke(); g.restore();
+      marquee.overlay(g, scale);
+      g.restore();
     },
   };
 }

@@ -5,6 +5,8 @@ import type { RasterEngine } from '../engine/brush/raster';
 import type { StrokePoint, StrokeRecord } from '../engine/core/stroke';
 import { polygonMask } from '../engine/fill/fill';
 import { renderVectorLayer } from '../render/vector';
+import { adjustPixels } from './adjustment';
+import { cloneSegment } from './clone';
 import { gutterMask } from '../geom/gutters';
 import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
@@ -63,7 +65,8 @@ export function toRecord(stroke: Stroke, pass: LinePass, dpi: number, id = 'repl
   const style = strokeStyle(stroke.brushId, stroke.w, stroke.pass ?? pass, dpi, stroke.erase, stroke.opacity, stroke.color);
   if (stroke.flat?.[0]) style.brush.taperStart = 0;
   if (stroke.flat?.[1]) style.brush.taperEnd = 0;
-  return { id, ...style, seed: stroke.seed, points };
+  const symmetry = stroke.symmetry;
+  return { id, ...style, seed: stroke.seed, points, ...(symmetry ? { sym: { mode: symmetry.mode, cx: symmetry.cx * dpi, cy: symmetry.cy * dpi } } : {}) };
 }
 
 /** The pixel mask (1 = inside) of a panel at `dpi`, for clipping strokes and fills. */
@@ -193,11 +196,18 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
     for (const edit of layer.pixelTransforms ?? []) {
       replayTo(edit.strokes, edit.fills);
       const g = canvas.getContext('2d')!;
-      if ('kind' in edit) {
+      if ('kind' in edit && edit.kind === 'adjustment') {
+        const before = g.getImageData(0, 0, canvas.width, canvas.height);
+        g.putImageData(adjustPixels(g, before, edit, dpi), 0, 0);
+      } else if ('kind' in edit && edit.kind === 'clone') {
+        const snapshot = ops.newCanvas(canvas.width, canvas.height).getContext('2d')!;
+        snapshot.drawImage(canvas, 0, 0);
+        for (let i = 1; i < edit.points.length; i++) cloneSegment(g, snapshot, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
+      } else if ('kind' in edit) {
         for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else {
         const lifted = liftPixels(canvas, edit.polygon, dpi);
-        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi);
+        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy);
       }
     }
     replayTo(layer.strokes.length, layer.fills.length);

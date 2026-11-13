@@ -68,6 +68,16 @@ Rules taken from 2Dope's accepted direction:
   and is never document history.
 - Deep settings (the Brush Studio) open from the bar; they never live permanently on it.
 
+**Observed against the reference (2026-11-12).** Procreate's own canvas chrome was decoded from its
+shipped package: five clusters — document actions, edit actions, paint tools, layers, colour — 44 pt
+targets with 8 pt gaps, a second 44 pt row that appears only for the active tool's options, a
+translucent system-colour bar over the canvas, a left size–opacity sidebar that is what handedness
+moves, an 18 pt notification line under the bar, and auto-hide with a delay. Focus should follow
+that grouping and those proportions, not merely "fewer buttons". Details, frames and the delta
+table: [research/procreate-interface.md](research/procreate-interface.md). The full component,
+metric and surface spec is [research/procreate-ui-style.md](research/procreate-ui-style.md), and the
+ordered build list is [research/procreate-integration-matrix.md](research/procreate-integration-matrix.md).
+
 ### Tools per desk ("everything that step needs")
 
 | Desk | Tools (rail) | Top bar while in hand |

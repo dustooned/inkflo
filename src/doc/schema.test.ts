@@ -24,6 +24,25 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('retains unused book assets as storage references and rejects invalid keys', () => {
+    const f = file();
+    const key = 'assets/8ppw6wtu-mz.png';
+    f.book.assets = [{ key, name: 'Reference', width: 320, height: 160 }];
+    const restored = parseBookFile(stringifyBookFile(f));
+    expect(restored.book.assets).toEqual(f.book.assets);
+    expect(assetsOf(restored)).toContain(key);
+    f.book.assets[0]!.key = '../reference.png';
+    expect(() => stringifyBookFile(f)).toThrow(/book.assets/);
+  });
+  it('keeps trim borders, actual knife gestures, raster symmetry and adjustments on reopen', () => {
+    const f = file();
+    const p = f.book.pages[0]!;
+    p.layout = { gutter: 0.2, border: 0.05, curve: 2, edgeBorder: true };
+    p.cuts[0]!.bounded = true;
+    ink(f).strokes[0]!.symmetry = { mode: 'quadrant', cx: 3, cy: 5 };
+    ink(f).pixelTransforms = [{ kind: 'adjustment', hue: 25, sat: -20, bright: 5, blur: 0.03, strokes: 1, fills: 0 }];
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+  });
   it('round-trips a procedural screentone and its lasso mask', () => {
     const f = file();
     const layer = newLayer('tone');

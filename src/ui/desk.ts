@@ -178,6 +178,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   // theme colours for the canvas, re-read when the theme changes
   let colors = readColors();
+  // A separate plane lets transparent gutters reveal the board.
+  const paper = document.createElement('canvas');
   function readColors() {
     return { board: cssVar('--board'), grid: cssVar('--board-grid'), vignetteColor: cssVar('--board-vignette'), shadow: cssVar('--page-shadow') };
   }
@@ -197,10 +199,21 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const g = canvas.getContext('2d')!;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const p = prefs();
-    drawBackdrop(g, { width: r.width, height: r.height, ox, oy, s, pageW: page.widthIn, pageH: page.heightIn }, { ...colors, kind: p.backdrop, strength: p.gridOpacity, vignette: p.vignette });
-    g.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
     const layout = mode.layoutPreview?.();
-    renderPage(g, layout?.page ?? page, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    const shownPage = layout?.page ?? page;
+    const transparent = shownPage.layout?.gutterPaper === null;
+    drawBackdrop(g, { width: r.width, height: r.height, ox, oy, s, pageW: page.widthIn, pageH: page.heightIn, transparent }, { ...colors, kind: p.backdrop, strength: p.gridOpacity, brightness: p.boardBrightness, vignette: p.vignette });
+    const pageG = transparent ? paper.getContext('2d')! : g;
+    if (transparent) {
+      if (paper.width !== w || paper.height !== hgt) { paper.width = w; paper.height = hgt; }
+      pageG.resetTransform(); pageG.clearRect(0, 0, w, hgt);
+    }
+    pageG.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
+    renderPage(pageG, shownPage, art, { scale: s, types: mode.types?.(), live: mode.live?.(), placement: mode.placement?.(), panels: layout?.panels ?? ctx.panels(), skipBalloon: mode.skipBalloon?.(), sheet: sheetOf(book) });
+    if (transparent) {
+      g.resetTransform(); g.drawImage(paper, 0, 0);
+      g.setTransform(dpr, 0, 0, dpr, ox * dpr, oy * dpr);
+    }
     if (composition) drawComposition(g, p.guide, page.widthIn, page.heightIn, s);
     mode.overlay?.(g, s);
     stageEl.dataset.cursor = mode.cursor?.() ?? '';
@@ -211,6 +224,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   let spaceDown = false;
   let primaryPointer: number | null = null;
   let modifierPointer: number | null = null;
+  let boardTouch: { x: number; y: number; px: number; py: number } | null = null;
+  let finger: { first: PointerEvent; last: PointerEvent; started: boolean } | null = null;
+  let pinch: { id: number; a: Pt; b: Pt; distance: number; zoom: number; anchor: Pt; at: number; moved: boolean; third?: number } | null = null;
   // capture can fail for a pointer the browser no longer tracks; drawing still works without it
   const capture = (id: number) => {
     try {
@@ -222,6 +238,19 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   stageEl.addEventListener('pointerdown', (e) => {
     if (mode.pane) return;
     if (primaryPointer !== null) {
+      if (pinch && e.pointerType === 'touch') {
+        if (pinch.third === undefined) { pinch.third = e.pointerId; capture(e.pointerId); }
+        e.preventDefault(); return;
+      }
+      if ((boardTouch || finger) && !pinch && e.pointerType === 'touch') {
+        const a = finger ? { x: finger.last.clientX, y: finger.last.clientY } : { x: boardTouch!.x + view.panX - boardTouch!.px, y: boardTouch!.y + view.panY - boardTouch!.py };
+        if (finger?.started) mode.up?.(ctx.toPage(finger.last), new PointerEvent('pointercancel', { pointerType: 'touch' }));
+        finger = null;
+        const b = { x: e.clientX, y: e.clientY };
+        const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 };
+        pinch = { id: e.pointerId, a, b, distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: view.zoom, anchor: ctx.toPage(mid), at: performance.now(), moved: false };
+        e.preventDefault(); capture(e.pointerId); return;
+      }
       if (mode.modifierTouch && !panning && e.pointerType === 'touch' && modifierPointer === null) {
         e.preventDefault();
         modifierPointer = e.pointerId;
@@ -241,19 +270,48 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     primaryPointer = e.pointerId;
     e.preventDefault();
     capture(e.pointerId);
-    mode.down?.(ctx.toPage(e), e);
+    const p = ctx.toPage(e);
+    const offPage = p.x < 0 || p.y < 0 || p.x > page.widthIn || p.y > page.heightIn;
+    if (e.pointerType === 'touch' && ((stage === 'draw' && !prefs().fingerDrawing) || (offPage && !(stage === 'layout' && mode.tool === 'knife')))) {
+      boardTouch = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
+    } else if (e.pointerType === 'touch') finger = { first: e, last: e, started: false };
+    else mode.down?.(p, e);
     ctx.request();
   });
   stageEl.addEventListener('pointermove', (e) => {
+    if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
+      const which = e.pointerId === primaryPointer ? 'a' : 'b';
+      if (Math.hypot(pinch[which].x - e.clientX, pinch[which].y - e.clientY) > 1) pinch.moved = true;
+      pinch[which] = { x: e.clientX, y: e.clientY };
+      const { a, b, distance, zoom, anchor } = pinch;
+      view.zoom = Math.max(0.4, Math.min(8, zoom * Math.hypot(a.x - b.x, a.y - b.y) / distance));
+      const { r, s, ox, oy } = geom();
+      view.panX += (a.x + b.x) / 2 - r.left - (ox + anchor.x * s);
+      view.panY += (a.y + b.y) / 2 - r.top - (oy + anchor.y * s);
+      ctx.request(); return;
+    }
     if (primaryPointer !== null && e.pointerId !== primaryPointer) return;
+    if (finger && e.pointerId === primaryPointer) {
+      finger.last = e;
+      if (!finger.started) {
+        if (Math.hypot(e.clientX - finger.first.clientX, e.clientY - finger.first.clientY) < 3) return;
+        finger.started = true;
+        mode.down?.(ctx.toPage(finger.first), finger.first);
+      }
+    }
     if (panning) {
       view.panX = panning.px + e.clientX - panning.x;
       view.panY = panning.py + e.clientY - panning.y;
       ctx.request();
       return;
     }
+    if (boardTouch && e.pointerId === primaryPointer) {
+      view.panX = boardTouch.px + e.clientX - boardTouch.x;
+      view.panY = boardTouch.py + e.clientY - boardTouch.y;
+      ctx.request(); return;
+    }
     const p = ctx.toPage(e);
-    if (e.pointerId === primaryPointer && (e.buttons & 1)) {
+    if (e.pointerId === primaryPointer && ((e.buttons & 1) || e.pointerType === 'touch')) {
       // coalesced events give the pen's full rate
       const events = e.getCoalescedEvents?.() ?? [e];
       for (const ev of events.length ? events : [e]) mode.move?.(ctx.toPage(ev), ev);
@@ -261,6 +319,17 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ctx.request();
   });
   const end = (e: PointerEvent) => {
+    if (pinch && e.pointerId === pinch.third) return;
+    if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
+      if (!pinch.moved && e.type === 'pointerup' && performance.now() - pinch.at < 300) {
+        if (pinch.third === undefined) studio.undo(); else studio.redo();
+      }
+      const remaining = e.pointerId === primaryPointer ? pinch.b : pinch.a;
+      if (e.pointerId === primaryPointer) primaryPointer = pinch.id;
+      boardTouch = { x: remaining.x, y: remaining.y, px: view.panX, py: view.panY };
+      pinch = null;
+      return;
+    }
     if (e.pointerId === modifierPointer) {
       modifierPointer = null;
       mode.modifierTouch?.(false);
@@ -268,11 +337,15 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     }
     if (e.pointerId !== primaryPointer) return;
     primaryPointer = null;
+    const touch = finger;
+    finger = null;
+    if (boardTouch) { boardTouch = null; return; }
     if (panning) {
       panning = null;
       return;
     }
-    mode.up?.(ctx.toPage(e), e);
+    if (touch && !touch.started && e.type === 'pointerup') mode.down?.(ctx.toPage(touch.first), touch.first);
+    if (!touch || touch.started || e.type === 'pointerup') mode.up?.(ctx.toPage(e), e);
     if (modifierPointer !== null) {
       modifierPointer = null;
       mode.modifierTouch?.(false);
@@ -281,6 +354,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   };
   stageEl.addEventListener('pointerup', end);
   stageEl.addEventListener('pointercancel', end);
+  stageEl.addEventListener('lostpointercapture', (e) => {
+    if (e.pointerId === primaryPointer || e.pointerId === modifierPointer || e.pointerId === pinch?.id) end(new PointerEvent('pointercancel', { pointerId: e.pointerId, pointerType: e.pointerType, clientX: e.clientX, clientY: e.clientY }));
+  });
   stageEl.addEventListener('pointerleave', () => {
     mode.hover?.(null);
     ctx.request();
@@ -380,9 +456,14 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   }
 
   function renderRail(): void {
+    const { scrollLeft, scrollTop } = toolRail;
     const items: HTMLElement[] = [];
     let group: string | undefined;
-    for (const t of railTools()) {
+    const available = railTools();
+    const simple = prefs().layout === 'simple' && stage === 'draw';
+    const essentials = new Set(['ink', 'pencil', 'smudge', 'eraser', 'fill', 'pixels', 'tone']);
+    const visible = simple ? available.filter((t) => essentials.has(t.id) || t.id === mode.tool) : available;
+    for (const t of visible) {
       if (items.length && t.group !== group) items.push(h('hr', { 'aria-hidden': 'true' }));
       group = t.group;
       const v = t.variants?.find((x) => x.id === t.variant);
@@ -411,7 +492,15 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     }
     const opt = h('button', { class: 'railopt', type: 'button', 'aria-label': 'Customize tools', title: 'Customize tools' }, '⋯');
     opt.addEventListener('click', () => customize(opt));
+    if (simple) {
+      const more = h('button', { class: 'tool', type: 'button', 'aria-label': 'More tools', 'aria-haspopup': 'dialog' }, h('span', {}, '⋯'), h('em', {}, 'More'));
+      more.addEventListener('click', () => popover(more, h('div', {}, available.filter((t) => !essentials.has(t.id)).map((t) =>
+        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); selectTool(t.id); } }, h('span', {}, t.glyph), t.label))), 'right', 'More tools'));
+      items.push(more);
+    }
     toolRail.replaceChildren(...items, opt);
+    toolRail.scrollLeft = scrollLeft;
+    toolRail.scrollTop = scrollTop;
   }
 
   function chrome(): void {
@@ -477,6 +566,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   } }, page.state[stage] === 2 ? 'Done ✓' : 'Mark done');
 
   const layoutBtn = (glyph: string, label: string) => h('button', { class: 'icon', type: 'button', 'aria-label': label, title: `${label} (Tab)`, onclick: () => toggleLayout() }, glyph);
+  const fitBtn = () => h('button', { class: 'icon', type: 'button', 'aria-label': 'Fit page', title: 'Fit page', onclick: () => {
+    Object.assign(view, { zoom: 1, panX: 0, panY: 0 }); ctx.request();
+  } }, '⊡');
   const inspBtn = h('button', { class: 'icon', type: 'button', 'aria-label': 'Show inspector', 'aria-pressed': 'false', title: 'Inspector' }, '☰');
   const narrowInspector = h('button', { class: 'btn studio-inspector-toggle', type: 'button', 'aria-label': 'Show inspector', 'aria-pressed': 'false' }, 'Inspector');
   const deskSelect = h('select', { 'aria-label': 'Desk' }, STAGES.map((s) => h('option', { value: s, selected: s === stage }, DESK_META[s].label)));
@@ -490,7 +582,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         h('button', { type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
         h('button', { type: 'button', class: 'page-jump-trigger', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, `${idx + 1} / ${book.pages.length} ▾`),
         h('button', { type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›')),
-      save, undoBtn(), redoBtn(), narrowInspector, spreadButton(studio, page, stage, go), displayButton(true, composition), layoutBtn('⤢', 'Focus layout'), doneBtn,
+      save, undoBtn(), redoBtn(), narrowInspector, stage === 'layout' || stage === 'draw' ? fitBtn() : null, spreadButton(studio, page, stage, go), displayButton(true, composition),
+      stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null,
+      layoutBtn('⤢', 'Focus layout'), doneBtn,
       h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio, stage === 'print' ? 'print' : 'files') }, 'Export')),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),
@@ -501,7 +595,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, String(idx + 1)),
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›'),
-      undoBtn(), redoBtn(), inspBtn, spreadButton(studio, page, stage, go, true), displayButton(true, composition), layoutBtn('⤡', 'Studio layout')),
+      undoBtn(), redoBtn(), inspBtn, stage === 'layout' || stage === 'draw' ? fitBtn() : null, spreadButton(studio, page, stage, go, true), displayButton(true, composition), layoutBtn('⤡', 'Studio layout')),
   );
   const toggleInspector = () => {
     const on = !screen.classList.contains('insp-open');
@@ -518,6 +612,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   function applyLayout(): void {
     screen.classList.toggle('focus', prefs().layout === 'focus');
+    screen.classList.toggle('simple', prefs().layout === 'simple' && stage === 'draw');
   }
   function toggleLayout(): void {
     const next = prefs().layout === 'focus' ? 'studio' : 'focus';

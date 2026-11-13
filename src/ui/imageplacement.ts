@@ -1,8 +1,9 @@
-import { findLayer, newLayer, type LayerGroup, type PlacedImage, type Pt } from '../doc/model';
+import { findLayer, newLayer, type BookAsset, type LayerGroup, type PlacedImage, type Pt } from '../doc/model';
 import { panelAt } from '../geom/carve';
 import { groupLabel, insertIndex } from '../geom/groups';
 import { fitImage, hitsImage, imageDpi, imagePoint, type PlacementBox } from '../geom/placement';
-import { makeCanvas } from '../io/canvasops';
+import { decodePngInto, makeCanvas } from '../io/canvasops';
+import { IMAGE_ACCEPT, readAssetImage } from '../io/bookassets';
 import { touchLayer } from '../draw/residency';
 import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
@@ -32,11 +33,11 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     ctx.request();
   };
 
-  function open(): void {
+  function open(asset?: BookAsset): void {
     const panels = ctx.panels();
     const groups = page.groups.filter((g) => (g.kind === 'background' || g.kind === 'panel') && g.visible && !g.locked);
     if (!groups.length) { toast('Unlock or show a page or panel group to import an image.'); return; }
-    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp', required: true, 'aria-label': 'Image file' });
+    const file = h('input', { type: 'file', accept: IMAGE_ACCEPT, required: !asset, 'aria-label': 'Image file' });
     const role = h('select', { 'aria-label': 'Use image as' }, h('option', { value: 'art' }, 'Artwork'), h('option', { value: 'reference' }, 'Reference'));
     const dest = h('select', { 'aria-label': 'Place image in' },
       groups.filter((g) => g.kind === 'background').concat(groups.filter((g) => g.kind === 'panel')).map((g) =>
@@ -45,7 +46,7 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     const submit = h('button', { class: 'btn primary', type: 'submit' }, 'Place image');
     const form = h('form', {}, h('header', {}, h('h2', {}, 'Place an image')),
       h('div', { class: 'content' },
-        h('label', { class: 'field' }, 'PNG, JPEG or WebP', file),
+        asset ? h('p', {}, asset.name) : h('label', { class: 'field' }, 'PNG, JPEG or WebP', file),
         h('label', { class: 'field' }, 'Use as', role),
         h('label', { class: 'field' }, 'Place in', dest),
         h('p', { class: 'note' }, 'Artwork sits under lettering. Reference images stay on screen during drawing.'),
@@ -56,35 +57,26 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = file.files?.[0];
-      if (!f || submit.disabled) return;
-      if (!/\.(png|jpe?g|webp)$/i.test(f.name) || f.size > 96 * 1024 * 1024) {
-        status.textContent = 'Choose a PNG, JPEG or WebP smaller than 96 MB.';
-        return;
-      }
+      if ((!f && !asset) || submit.disabled) return;
       const groupId = dest.value;
       const reference = role.value === 'reference';
       submit.disabled = true;
       status.textContent = 'Reading image…';
       try {
-        const image = await createImageBitmap(f);
         let canvas: HTMLCanvasElement;
-        let reduced: boolean;
-        try {
-          const ratio = Math.min(1, 8192 / Math.max(image.width, image.height), Math.sqrt(16_000_000 / (image.width * image.height)));
-          reduced = ratio < 1;
-          canvas = makeCanvas(Math.max(1, Math.floor(image.width * ratio)), Math.max(1, Math.floor(image.height * ratio)));
-          const g = canvas.getContext('2d')!;
-          g.imageSmoothingQuality = 'high';
-          g.drawImage(image, 0, 0, canvas.width, canvas.height);
-        } finally {
-          image.close();
-        }
+        let reduced = false;
+        if (asset) {
+          const bytes = await studio.store.getAsset(asset.key);
+          if (!bytes) throw new Error('This asset’s image is missing.');
+          canvas = makeCanvas(asset.width, asset.height);
+          await decodePngInto(canvas, bytes);
+        } else ({ canvas, reduced } = await readAssetImage(f!));
         if (!d.open) return;
         if (!ctx.stage.isConnected || studio.book !== ctx.book || !ctx.book.pages.includes(page)) { d.close(); return; }
         const group = page.groups.find((g) => g.id === groupId && g.visible && !g.locked);
         if (!group) throw new Error('That group is unavailable. Choose another destination.');
         const layer = newLayer(reference ? 'reference' : 'colour');
-        layer.name = f.name.replace(/\.[^.]+$/, '');
+        layer.name = asset?.name ?? f!.name.replace(/\.[^.]+$/, '');
         layer.fillRef = false;
         layer.image = fitImage({ x: 0, y: 0, width: 1, height: 1, rotation: 0, pixelWidth: canvas.width, pixelHeight: canvas.height }, box(group));
         art.planes[layer.id] = canvas;
@@ -111,7 +103,7 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     const item = get();
     if (!item) return h('div', { class: 'sec' }, h('h4', {}, 'Image placement'),
       h('p', { class: 'note' }, 'Select an imported image on the page or in Layers.'),
-      h('button', { class: 'btn', type: 'button', onclick: open }, 'Place an image'));
+      h('button', { class: 'btn', type: 'button', onclick: () => open() }, 'Place an image'));
     const { layer, group, image } = item;
     const locked = layer.locked || group.locked;
     const field = (label: string, value: number, min: number, max: number, update: (value: number) => Partial<PlacedImage>) => {

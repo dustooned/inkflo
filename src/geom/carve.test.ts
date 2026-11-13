@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, presetCuts, shiftCut } from './carve';
+import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, makeCut, nearestCut, panelAt, planKnifeCut, presetCuts, shiftCut } from './carve';
 import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
 
@@ -34,6 +34,25 @@ function cut(p: Page, pts: Pt[], mode: 'across' | 'panel' = 'across', straight =
 }
 
 describe('carving', () => {
+  it('requires both ends of a page swipe to be beyond the trim and uses the actual gesture', () => {
+    const p = page();
+    expect(planKnifeCut(p, [{ x: 1, y: 4 }, { x: W + 1, y: 4 }], 'across')).toBeNull();
+    expect(planKnifeCut(p, [{ x: -1, y: 4 }, { x: W - 1, y: 4 }], 'across')).toBeNull();
+    const plan = planKnifeCut(p, [{ x: -0.25, y: 4 }, { x: W + 0.25, y: 4 }], 'across');
+    expect(plan?.cut.bounded).toBe(true);
+    p.cuts.push({ id: 'swipe', ...plan!.cut });
+    expect(derivePanels(p)).toHaveLength(2);
+    expect(gutterPaths(p)[0]!.points.at(-1)!.x).toBeCloseTo(W);
+  });
+
+  it('one panel freezes only the first complete span entered from outside', () => {
+    const p = page();
+    p.cuts = presetCuts(p, 'rows2');
+    const plan = planKnifeCut(p, [{ x: 3, y: -1 }, { x: 3, y: H + 1 }], 'panel');
+    expect(plan?.paths[0]?.at(-1)?.y).toBeCloseTo(H / 2);
+    p.cuts.push({ id: 'one', ...plan!.cut });
+    expect(derivePanels(p)).toHaveLength(3);
+  });
   it('stacks every webtoon beat in one column', () => {
     const p = { ...newPage(), widthIn: 8, heightIn: 32 };
     p.cuts = cutsForCount(p, 4, true);

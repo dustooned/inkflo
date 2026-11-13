@@ -4,8 +4,9 @@ import { touchLayer } from '../draw/residency';
 import { applyPoint, IDENTITY, invert, matrixFor, unionRect, type Mat, type Rect, type XParams } from '../engine/core/selxform';
 import type { Bounds } from '../geom/resizebox';
 import type { DeskCtx } from './desk';
-import { h, toast } from './dom';
-import { drawSelectionFrame, drawSelectionPath, grabSelection, selectionCenter, selectionCorners, selectionTransform, type SelectionGrab } from './selectiongesture';
+import { h, seg, toast } from './dom';
+import { drawSelectionFrame, grabSelection, selectionCenter, selectionCorners, selectionTransform, type SelectionGrab } from './selectiongesture';
+import { createMarquee, type MarqueeShape } from './marquee';
 
 interface Selection {
   id: string;
@@ -20,12 +21,25 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
   const { page, art, studio, book } = ctx;
   const dpi = book.dpi;
   let selected: Selection | null = null;
-  let marquee: { path: Pt[]; freehand: boolean } | null = null;
+  const marquee = createMarquee(ctx, (polygon, from) => {
+    for (const layer of layersAt(from)) {
+      const source = art.planes[layer.id];
+      if (!source) continue;
+      const lifted = liftPixels(source, polygon, dpi);
+      if (!lifted) continue;
+      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon, lifted };
+      break;
+    }
+      if (!selected) toast('No painted pixels in this selection.');
+  });
   let drag: { grab: SelectionGrab; from: Pt; bounds: Bounds; base: Mat; moved: boolean } | null = null;
   let matrix = IDENTITY_MATRIX;
   let preview: CanvasRenderingContext2D | null = null;
   let rendered: Mat | null = null;
+  let renderedCopy = false;
+  let copy = false;
   let dirty: Rect | null = null;
+  let resizeMode: 'uniform' | 'freeform' = 'freeform';
 
   function current(): Selection | null {
     if (!selected) return null;
@@ -36,8 +50,8 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
   }
 
   function stopGesture(): void {
-    if (marquee || drag) studio.drawing = false;
-    marquee = null;
+    if (drag) studio.drawing = false;
+    marquee.clear();
     drag = null;
   }
 
@@ -45,6 +59,7 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
     stopGesture();
     selected = null;
     matrix = IDENTITY_MATRIX;
+    copy = false;
     preview = null;
     rendered = null;
     dirty = null;
@@ -76,11 +91,11 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
     const before = g.getImageData(x, y, w, h);
     const layer = findLayer(page, id)!.layer;
     const previous = layer.pixelTransforms;
-    const edit: PixelTransform = { polygon: s.polygon, matrix: [...matrix], strokes: layer.strokes.length, fills: layer.fills.length };
+    const edit: PixelTransform = { polygon: s.polygon, matrix: [...matrix], strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}) };
     const next = [...previous ?? [], edit];
     let after: ImageData;
     try {
-      paintPixelTransform(g, lifted, matrix, dpi);
+      paintPixelTransform(g, lifted, matrix, dpi, copy);
       after = g.getImageData(x, y, w, h);
     } catch (error) {
       g.putImageData(before, x, y);
@@ -112,7 +127,8 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
   }
 
   return {
-    down(p: Pt, e: PointerEvent, freehand: boolean) {
+    down(p: Pt, e: PointerEvent, shape: MarqueeShape) {
+      if (marquee.active()) { marquee.down(p, shape); return; }
       const s = current();
       if (s) {
         const b = bounds(s);
@@ -125,29 +141,22 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
         if (!isUnmoved(matrix)) { toast('Apply or cancel the transform before making a new selection.'); return; }
       }
       clear();
-      marquee = { path: [p], freehand };
-      studio.drawing = true;
+      marquee.down(p, shape);
       ctx.chrome();
     },
     move(p: Pt, e: PointerEvent) {
-      if (marquee) {
-        const path = marquee.path;
-        if (!marquee.freehand) path[1] = p;
-        else if (Math.hypot(p.x - path.at(-1)!.x, p.y - path.at(-1)!.y) * ctx.scale() > 2) {
-          if (path.length >= 4096) marquee.path = path.filter((_, i) => i % 2 === 0);
-          marquee.path.push(p);
-        }
-        return;
-      }
+      if (marquee.active()) { marquee.move(p); return; }
       if (!drag || !current()) return;
       if (!drag.moved && Math.hypot(p.x - drag.from.x, p.y - drag.from.y) * ctx.scale() < 2) return;
       drag.moved = true;
-      adjust(selectionTransform(drag.grab, drag.bounds, drag.from, p, e, 1 / dpi), drag.bounds, drag.base);
+      const modifiers = { shiftKey: e.shiftKey || (drag.grab.kind === 'resize' && resizeMode === 'uniform'), altKey: e.altKey };
+      adjust(selectionTransform(drag.grab, drag.bounds, drag.from, p, modifiers, 1 / dpi), drag.bounds, drag.base);
     },
     up(p: Pt, e: PointerEvent) {
       if (e.type === 'pointercancel') {
         if (drag) matrix = drag.base;
         stopGesture();
+        ctx.chrome();
         ctx.request();
         return;
       }
@@ -157,23 +166,12 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
         ctx.chrome();
         return;
       }
-      if (!marquee) return;
-      const { path, freehand } = marquee;
-      const from = path[0]!;
-      const polygon = freehand ? [...path, p] : selectionCorners(from, p);
-      stopGesture();
-      if (polygon.length < 3) return;
-      for (const layer of layersAt(from)) {
-        const source = art.planes[layer.id];
-        if (!source) continue;
-        const lifted = liftPixels(source, polygon, dpi);
-        if (!lifted) continue;
-        selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon, lifted };
-        break;
-      }
-      if (!selected) toast('No painted pixels in this selection.');
-      ctx.chrome();
+      marquee.up(p, false);
     },
+    hover: marquee.hover,
+    closePolygon: marquee.closePolygon,
+    resetMarquee: marquee.clear,
+    isMarquee: marquee.active,
     clear,
     apply,
     live(): Record<string, HTMLCanvasElement> {
@@ -186,14 +184,15 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
         preview = canvas.getContext('2d')!;
         preview.drawImage(s.source, 0, 0);
       }
-      if (rendered !== matrix) {
+      if (rendered !== matrix || renderedCopy !== copy) {
         if (dirty) {
           const { x, y, w, h } = dirty;
           preview.clearRect(x, y, w, h);
           preview.drawImage(s.source, x, y, w, h, x, y, w, h);
         }
-        dirty = paintPixelTransform(preview, s.lifted, matrix, dpi);
+        dirty = paintPixelTransform(preview, s.lifted, matrix, dpi, copy);
         rendered = matrix;
+        renderedCopy = copy;
       }
       return { [s.id]: preview.canvas };
     },
@@ -206,8 +205,10 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
         ctx.chrome();
         ctx.request();
       } }, label);
-      return [h('button', { class: 'btn primary', type: 'button', disabled: !s || isUnmoved(matrix), onclick: apply }, 'Apply'),
-        h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => { clear(); ctx.chrome(); ctx.request(); } }, 'Cancel'),
+      return [...marquee.controls(), h('button', { class: 'btn primary', type: 'button', disabled: !s || isUnmoved(matrix), onclick: apply }, 'Apply'),
+        h('button', { class: 'btn', type: 'button', disabled: !s && !marquee.active(), onclick: () => { clear(); ctx.chrome(); ctx.request(); } }, 'Cancel'),
+        seg<'uniform' | 'freeform'>([{ id: 'freeform', label: 'Freeform' }, { id: 'uniform', label: 'Uniform' }], resizeMode, (value) => { resizeMode = value; ctx.chrome(); }, 'Transform scale'),
+        h('button', { class: 'btn', type: 'button', disabled: !s, 'aria-pressed': String(copy), onclick: () => { copy = !copy; ctx.chrome(); ctx.request(); } }, 'Keep original'),
         action('Flip horizontal', { flipH: true }), action('Flip vertical', { flipV: true }), action('Rotate 45°', { rotate: 45 }),
         h('span', { class: 'hint' }, s ? `${s.name} · Drag inside to move or use the handles` : 'Draw around pixels on a paint layer')];
     },
@@ -216,10 +217,7 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       g.strokeStyle = '#2F7FD8';
       g.lineWidth = 1.5;
       g.setLineDash([5, 4]);
-      if (marquee && marquee.path.length >= 2) {
-        const path = marquee.freehand ? marquee.path : selectionCorners(marquee.path[0]!, marquee.path[1]!);
-        drawSelectionPath(g, path, scale);
-      }
+      marquee.overlay(g, scale);
       const s = current();
       if (s) drawSelectionFrame(g, frame(bounds(s), scale), scale);
       g.restore();

@@ -1,5 +1,5 @@
-import { newBook, newPage, pagePixels, sheetOf, type Book, type Page, type PrintSpec, type Stage } from '../doc/model';
-import { parseBookFile, stringifyBookFile } from '../doc/schema';
+import { newBook, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
+import { assetsOf, parseBookFile, readBookAssets, stringifyBookFile } from '../doc/schema';
 import { newPageArt, referencedKeys, Residency, type PageArt } from '../draw/residency';
 import { History, type Command } from '../engine/core/history';
 import { readZip, writeZip } from '../engine/io/zip';
@@ -32,6 +32,7 @@ export class Studio {
   drawing = false;
   private listeners = new Set<Listener>();
   private warnings: string[] = [];
+  private assetHistory = new Set<string>();
 
   private constructor(readonly store: Store) {
     this.residency = new Residency(browserPlaneOps, (k) => this.store.getAsset(k));
@@ -40,7 +41,7 @@ export class Studio {
     this.saver = new Autosaver(store, () => captureBook(this.book!, this.art, browserPlaneOps), {
       busy: () => this.drawing,
       cover: () => this.cover(),
-      keep: () => referencedKeys(this.art.values()),
+      keep: () => new Set([...referencedKeys(this.art.values()), ...this.assetHistory, ...this.book?.assets?.map(({ key }) => key) ?? []]),
     });
     this.saver.onStatus = () => this.emit();
     this.history.onChange = () => this.emit();
@@ -143,6 +144,7 @@ export class Studio {
   }
 
   private attach(book: Book, art: Map<string, PageArt>): void {
+    this.assetHistory.clear();
     this.book = book;
     setBookBrushes(book.brushes);
     this.art = art;
@@ -413,6 +415,30 @@ export class Studio {
 
   // ---- files
 
+  async addAssets(items: BookAsset[], bytes = new Map<string, Uint8Array>()): Promise<number> {
+    const book = this.requireBook();
+    const files = readBookAssets(items);
+    for (const { key } of files) this.assetHistory.add(key);
+    await this.store.putAssets(bytes);
+    if (this.book !== book) throw new Error('The open book changed.');
+    const before = book.assets;
+    const existing = new Set(before?.map(({ key }) => key));
+    const added = files.filter(({ key }) => !existing.has(key));
+    if (!added.length) return 0;
+    const after = readBookAssets([...(before ?? []), ...added]);
+    this.run({ label: 'Add book assets', do: () => { book.assets = after; }, undo: () => { book.assets = before; } });
+    return added.length;
+  }
+
+  removeAsset(key: string): void {
+    const book = this.requireBook();
+    const before = book.assets;
+    if (!before?.some((asset) => asset.key === key)) return;
+    this.assetHistory.add(key);
+    const after = before.filter((asset) => asset.key !== key);
+    this.run({ label: 'Remove book asset', do: () => { book.assets = after; }, undo: () => { book.assets = before; } });
+  }
+
   /** A self-contained `.inkflo` (zip of book.json + assets). */
   async exportInkflo(): Promise<Blob> {
     const b = this.requireBook();
@@ -420,13 +446,11 @@ export class Studio {
     const files: { name: string; data: Uint8Array }[] = [{ name: "book.json", data: new TextEncoder().encode(stringifyBookFile(settled.file)) }];
     for (const [name, data] of settled.assets) files.push({ name, data });
     // archive mode only carries newly encoded bytes; add stored assets the file points at
-    for (const keys of Object.values(settled.file.art)) {
-      for (const k of Object.values(keys)) {
-        if (k && !settled.assets.has(k)) {
-          const bytes = await this.store.getAsset(k);
-          if (bytes) files.push({ name: k, data: bytes });
-        }
-      }
+    for (const k of assetsOf(settled.file)) {
+      if (settled.assets.has(k)) continue;
+      const bytes = await this.store.getAsset(k);
+      if (!bytes) throw new Error(`The book is missing ${k}.`);
+      files.push({ name: k, data: bytes });
     }
     return new Blob([writeZip(files) as BlobPart], { type: 'application/zip' });
   }
@@ -442,13 +466,10 @@ export class Studio {
       file.book.title = `${file.book.title} (copy)`;
     }
     const assets = new Map<string, Uint8Array>();
-    for (const keys of Object.values(file.art)) {
-      for (const k of Object.values(keys)) {
-        if (!k) continue;
-        const data = entries.get(k);
-        if (!data) throw new Error(`The file is missing ${k}.`);
-        assets.set(k, data);
-      }
+    for (const k of assetsOf(file)) {
+      const data = entries.get(k);
+      if (!data) throw new Error(`The file is missing ${k}.`);
+      assets.set(k, data);
     }
     const meta = metaFromFile(file, { modified: Date.now() });
     await this.store.saveHead(meta, { id: file.book.id, json: stringifyBookFile(file), savedAt: Date.now() }, assets, [...assets.keys()]);

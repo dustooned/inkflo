@@ -13,7 +13,11 @@ import { rasterSelection } from '../rasterselection';
 import { quickShapeEditor } from '../quickshapeedit';
 import { smudgeTool } from '../smudgetool';
 import { screentoneTool } from '../screentone';
-import { popover } from '../popover';
+import { openAdjustments } from '../adjustments';
+import { openBookAssets } from '../bookassets';
+import { MARQUEE_SHAPES, marqueeShape } from '../marquee';
+import { closePopover, popover } from '../popover';
+import type { SymmetryMode } from '../../engine/core/adjust';
 import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, type FillPaint, type LinePass } from '../../draw/replay';
 import { FILL_THRESHOLD, FillKit, flatColours, openEnds } from '../../draw/fillkit';
 import type { Panel } from '../../geom/carve';
@@ -44,6 +48,7 @@ interface InkPrefs {
   brush: Record<LinePass, string>;
   vectorBrush?: string;
   vectorStabilize?: number;
+  symmetry?: SymmetryMode;
   sizes: Record<string, number>;
   opacity: Record<string, number>;
   color: string;
@@ -77,6 +82,7 @@ function readInk(): InkPrefs {
       ...v,
       brush: { ...INK_DEFAULTS.brush, ...v.brush },
       sizes: v.sizes && typeof v.sizes === 'object' ? v.sizes : {},
+      symmetry: ['vertical', 'horizontal', 'quadrant', 'radial'].some((mode) => mode === v.symmetry) ? v.symmetry : 'off',
       opacity: v.opacity && typeof v.opacity === 'object' ? v.opacity : {},
       color: typeof v.color === 'string' && /^#[0-9a-f]{6}$/i.test(v.color) ? v.color : INK_DEFAULTS.color,
       ruler: { ...structuredClone(DEFAULT_RULER), ...v.ruler },
@@ -259,6 +265,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const id = activeLayer.get(page.id);
     return id ? findLayer(page, id) : null;
   };
+  function adjustLayer(): void {
+    const group = contextGroup();
+    const paint = group?.layers.find((l) => l.visible && !l.locked && !l.vector && !l.image && !l.screenTone && art.planes[l.id]);
+    openAdjustments(ctx, target === 'layer' ? active()?.layer.id ?? null : paint?.id ?? null, keepResident);
+  }
   const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); });
   const selectImage = (id: string) => {
     activeLayer.set(page.id, id);
@@ -452,6 +463,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const color = !erase && pass === 'ink' && ink.color !== PASS_STYLE.ink.color ? ink.color : undefined;
     const seed = (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100);
     const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase, opacity, color), seed, points: [] };
+    const sym = ink.symmetry;
+    const symmetry = !vector && sym && sym !== 'off' ? { mode: sym, cx: page.widthIn / 2, cy: page.heightIn / 2 } : undefined;
+    if (symmetry) record.sym = { mode: symmetry.mode, cx: symmetry.cx * dpi, cy: symmetry.cy * dpi };
     if (!vector) {
       const canvas = planeCanvas(art, layer.id, browserPlaneOps);
       engine.resize(art.width, art.height);
@@ -459,6 +473,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       engine.begin(record, null);
     }
     const stroke: Stroke = { pts: [], pressure: [], w, brushId, seed, ...(color ? { color } : {}), ...(opacity < 1 ? { opacity } : {}), ...(erase ? { erase: true } : {}), ...(!erase && pass !== passForType(layer.type) ? { pass } : {}) };
+    if (symmetry) stroke.symmetry = symmetry;
     t0 = e.timeStamp;
     const b = record.brush;
     live = {
@@ -556,6 +571,14 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (!live) return;
     const l = live;
     clearTimeout(holdTimer);
+    if (!allowShapeEdit) {
+      live = null;
+      studio.drawing = false;
+      if (!l.vector) engine.cancel();
+      if (createdForStroke && ctx.stage.isConnected) studio.undo();
+      ctx.request();
+      return;
+    }
     if (!l.shape) {
       for (const a of l.assist.flush()) {
         l.last = a;
@@ -741,10 +764,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function fillDown(p: Pt, e: PointerEvent): void {
     const v = fillVariant();
-    if (v === 'flats') {
-      autoFlats(p);
-      return;
-    }
+    if (v === 'flats') { sweep = [p]; return; }
     if (v === 'bucket') {
       const t = fillTarget(p);
       if (!t) return;
@@ -790,6 +810,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const path = sweep;
     sweep = null;
     const v = fillVariant();
+    if (v === 'flats') { autoFlats(path[0]!); return; }
     const t = fillTarget(path[0]!);
     if (!t) return;
     if (v === 'drag') {
@@ -1155,6 +1176,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const smudge = smudgeTool(ctx, rasterLayersAt, keepResident);
   let smudgeSize = 18;
   let smudgeStrength = 0.55;
+  let cloneFrom: Pt | undefined;
+  let pickingClone = false;
+  const pixelBrush = () => mode.tool === 'smudge' || mode.tool === 'clone';
   const smudgePoint = (p: Pt, e: PointerEvent) => ({ ...p, pressure: e.pointerType === 'pen' ? e.pressure : 1 });
 
   function hitVector(p: Pt): { layer: Layer; index: number; at: number } | null {
@@ -1384,23 +1408,24 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const mode: DeskMode = {
     id: 'draw',
     tools: [
-      { id: 'pencil', label: 'Pencil', glyph: '✏', key: 'p', group: 'paint' },
-      { id: 'ink', label: 'Ink', glyph: '✒', key: 'i', group: 'paint' },
+      { id: 'ink', label: 'Brush', glyph: '✒', key: 'i', group: 'paint' },
       { id: 'smudge', label: 'Smudge', glyph: '≈', key: 's', group: 'paint' },
-      { id: 'vpen', label: 'Vector pen', glyph: '✑', key: 'v', group: 'paint' },
       { id: 'eraser', label: 'Eraser', glyph: '⌫', key: 'e', group: 'paint', variants: [
         { id: 'ink', label: 'Erase ink', glyph: '⌫' },
         { id: 'pencil', label: 'Erase pencil', glyph: '⌦' },
         { id: 'vector', label: 'Erase vector lines', glyph: '⌧' },
       ] },
-      { id: 'vedit', label: 'Edit lines', glyph: '⌇', key: 'a', group: 'paint', variants: [
+      { id: 'pencil', label: 'Pencil', glyph: '✏', key: 'p', group: 'paint' },
+      { id: 'clone', label: 'Clone', glyph: '⧉', group: 'paint' },
+      { id: 'vpen', label: 'Vector pen', glyph: '✑', key: 'v', group: 'vector' },
+      { id: 'vedit', label: 'Edit lines', glyph: '⌇', key: 'a', group: 'vector', variants: [
         { id: 'pull', label: 'Pull and select', glyph: '⌇' },
         { id: 'nodes', label: 'Edit points', glyph: '◇' },
         { id: 'move', label: 'Move line', glyph: '✥' },
         { id: 'wider', label: 'Thicken', glyph: '⬤' },
         { id: 'thinner', label: 'Thin', glyph: '•' },
       ] },
-      { id: 'lines', label: 'Comic lines', glyph: '✺', key: 'l', group: 'paint', variants: [
+      { id: 'lines', label: 'Comic lines', glyph: '✺', key: 'l', group: 'colour', variants: [
         { id: 'focus', label: 'Focus lines', glyph: '✺' },
         { id: 'speed', label: 'Speed lines', glyph: '≡' },
       ] },
@@ -1412,21 +1437,17 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         { id: 'flats', label: 'Auto flats', glyph: '▦' },
       ] },
       { id: 'tone', label: 'Screentone', glyph: '▦', key: 't', group: 'colour' },
-      { id: 'selection', label: 'Select lines', glyph: '⬚', key: 'm', group: 'edit', variants: [
-        { id: 'rectangle', label: 'Rectangle', glyph: '⬚' },
-        { id: 'freehand', label: 'Freehand', glyph: '◌' },
-      ] },
-      { id: 'pixels', label: 'Select pixels', glyph: '▧', key: 'r', group: 'edit', variants: [
-        { id: 'rectangle', label: 'Rectangle', glyph: '⬚' },
-        { id: 'freehand', label: 'Freehand', glyph: '◌' },
-      ] },
+      { id: 'selection', label: 'Select lines', glyph: '⬚', key: 'm', group: 'edit', variants: [...MARQUEE_SHAPES] },
+      { id: 'pixels', label: 'Transform', glyph: '↗', key: 'r', group: 'edit', variants: [...MARQUEE_SHAPES] },
       { id: 'image', label: 'Position image', glyph: '▧', group: 'image' },
     ],
     tool: 'ink',
     cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' || shapeEditor.active() ? 'move' : ['fill', 'tone', 'lines', 'vedit', 'selection', 'pixels'].includes(mode.tool) ? 'cross' : 'brush'),
     ctx(bar) {
       if (mode.tool !== 'pixels') pixels.clear();
-      if (mode.tool !== 'smudge') smudge.clear();
+      if (mode.tool !== 'selection') selection.resetMarquee();
+      if (mode.tool !== 'tone') tone.clear();
+      if (!pixelBrush()) smudge.clear();
       refreshShapeActions();
       const bt = brushTool();
       const hasInkColor = bt !== null && currentBrush(bt).pass === 'ink';
@@ -1440,20 +1461,26 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         if (hasInkColor) bar.append(...colourControls(false));
       }
       showBrushControls(sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null));
-      if (mode.tool === 'smudge') bar.append(
+      if (pixelBrush()) bar.append(
+        ...(mode.tool === 'clone' ? [h('button', { class: 'btn', type: 'button', 'aria-pressed': String(pickingClone), onclick: () => { pickingClone = !pickingClone; ctx.chrome(); } }, pickingClone ? 'Tap the source' : 'Set source')] : []),
         brushControl('Size', 'pt', smudgeSize, 1, 72, 0.5, (v) => { smudgeSize = v; ctx.request(); }, () => {}),
         brushControl('Strength', '%', smudgeStrength * 100, 1, 100, 1, (v) => { smudgeStrength = v / 100; }, () => {}),
-        h('span', { class: 'hint' }, 'Drag through paint to blend it'),
+        h('span', { class: 'hint' }, mode.tool === 'clone' ? 'Alt-click or tap Set source, then paint on the same layer.' : 'Drag through paint to blend it'),
       );
       if (bt) {
-        bar.append(slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { if (mode.tool === 'vpen') ink.vectorStabilize = v; else ink.stabilize[bt] = v; }, () => saveInk()));
-        bar.append(slider('Correct', 0, 1, 0.05, ink.correct, (v) => (v ? `${Math.round(v * 100)}%` : 'off'), (v) => { ink.correct = v; }, () => saveInk()));
-        const qs = h('input', { type: 'checkbox', checked: ink.quickShape });
-        qs.addEventListener('change', () => { ink.quickShape = qs.checked; saveInk(); });
-        bar.append(h('label', { class: 'mini', title: 'Hold the pen still at the end of a stroke to snap it to a line, arc, ellipse, rectangle or polygon' }, qs, 'QuickShape'));
-        const rb = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', title: 'Rulers: straight, parallel, radial, perspective' }, `📐 ${RULERS.find((x) => x.id === ink.ruler.kind)!.label}`);
+        const stroke = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog' }, 'Stroke ▾');
+        stroke.addEventListener('click', () => {
+          const qs = h('input', { type: 'checkbox', checked: ink.quickShape });
+          qs.addEventListener('change', () => { ink.quickShape = qs.checked; saveInk(); });
+          popover(stroke, h('div', { class: 'stroke-options' },
+            slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { if (mode.tool === 'vpen') ink.vectorStabilize = v; else ink.stabilize[bt] = v; }, saveInk),
+            slider('Correct', 0, 1, 0.05, ink.correct, (v) => (v ? `${Math.round(v * 100)}%` : 'off'), (v) => { ink.correct = v; }, saveInk),
+            h('label', { class: 'mini', title: 'Hold at the end of a stroke to snap it to a clean shape' }, qs, 'QuickShape')), 'below', 'Stroke settings');
+        });
+        const ruler = RULERS.find((x) => x.id === ink.ruler.kind)!;
+        const rb = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', title: 'Rulers: straight, parallel, radial, perspective' }, ruler.id === 'off' ? 'Rulers ▾' : `Ruler · ${ruler.label} ▾`);
         rb.addEventListener('click', () => rulerMenu(rb));
-        bar.append(rb);
+        bar.append(stroke, rb);
       }
       if (mode.tool === 'lines') {
         const v = variantOf(mode, 'lines');
@@ -1526,14 +1553,23 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         bar.append(h('span', { class: 'hint' }, FILL_HINT[fv]));
       }
       updateLayerButton(contextLayers);
-      bar.prepend(contextLayers, h('button', { class: 'btn', type: 'button', onclick: images.open }, 'Place image'));
+      const actions = h('button', { class: 'btn draw-actions', type: 'button', 'aria-haspopup': 'dialog' }, 'Actions ▾');
+      actions.addEventListener('click', () => popover(actions, h('div', {},
+        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); images.open(); } }, h('span', {}, '▧'), 'Place image'),
+        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); adjustLayer(); } }, h('span', {}, '◒'), 'Adjustments'),
+        h('h4', {}, 'Drawing assist'),
+        h('div', { class: 'row' }, h('label', {}, 'Symmetry', h('select', { 'aria-label': 'Symmetry', onchange: (e) => {
+          ink.symmetry = (e.target as HTMLSelectElement).value as SymmetryMode; saveInk(); ctx.request();
+        } }, (['off', 'vertical', 'horizontal', 'quadrant', 'radial'] as const).map((value) => h('option', { value, selected: (ink.symmetry ?? 'off') === value }, value[0]!.toUpperCase() + value.slice(1)))))),
+        h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); void rebuild(); } }, h('span', {}, '↻'), 'Rebuild from strokes')), 'below', 'Draw actions'));
+      bar.prepend(actions, contextLayers, h('button', { class: 'btn', type: 'button', onclick: () => openBookAssets(studio, images.open) }, 'Assets'));
       if (mode.tool === 'image') bar.append(h('span', { class: 'hint' }, 'Drag the image to move it. Drag its corner to resize.'));
       if (mode.tool === 'selection') bar.append(
-        seg([{ id: 'rectangle', label: 'Rectangle' }, { id: 'freehand', label: 'Freehand' }], variantOf(mode, 'selection'), (x) => ctx.setVariant('selection', x), 'Selection shape'),
+        seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'selection')), (x) => { selection.resetMarquee(); ctx.setVariant('selection', x); }, 'Selection shape'),
         ...selection.controls(),
       );
       if (mode.tool === 'pixels') bar.append(
-        seg([{ id: 'rectangle', label: 'Rectangle' }, { id: 'freehand', label: 'Freehand' }], variantOf(mode, 'pixels'), (x) => ctx.setVariant('pixels', x), 'Pixel selection shape'),
+        seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'pixels')), (x) => { pixels.resetMarquee(); ctx.setVariant('pixels', x); }, 'Pixel selection shape'),
         ...pixels.controls(),
       );
       refreshPicker();
@@ -1548,10 +1584,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       el.append(
-        h('div', { class: 'sec' }, inspectorLayers),
-        h('div', { class: 'sec' }, h('h4', {}, 'Strokes are data'),
-          h('p', { class: 'note' }, 'Strokes, fills and pixel transforms are stored on their layer so the page can be redrawn.'),
-          h('button', { class: 'btn', type: 'button', style: 'margin-top:8px', onclick: rebuild }, 'Rebuild from strokes')),
+        h('div', { class: 'insp-head' }, h('div', { class: 'ins-title' }, 'Draw')),
+        h('div', { class: 'sec stack' }, inspectorLayers,
+          h('button', { class: 'btn', type: 'button', onclick: adjustLayer }, 'Adjustments'),
+          h('button', { class: 'btn', type: 'button', onclick: () => images.open() }, 'Place image')),
       );
     },
     down(p, e) {
@@ -1567,22 +1603,28 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (mode.tool === 'image') { images.start(p); return; }
-      if (mode.tool === 'selection') { selection.down(p, e, variantOf(mode, 'selection') === 'freehand'); return; }
+      if (mode.tool === 'selection') { selection.down(p, e, marqueeShape(variantOf(mode, 'selection'))); return; }
       if (target === 'auto') {
         lastCanvasGroupId = groupAt(page, ctx.panels(), p).id;
         contextGroupId = null;
       }
-      if (mode.tool === 'pixels') { pixels.down(p, e, variantOf(mode, 'pixels') === 'freehand'); return; }
+      if (mode.tool === 'pixels') {
+        pixels.down(p, e, marqueeShape(variantOf(mode, 'pixels'))); return;
+      }
       if (mode.tool === 'tone') { tone.down(p); return; }
       if (mode.tool === 'smudge') { smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength); return; }
+      if (mode.tool === 'clone') {
+        if (!cloneFrom || pickingClone || e.altKey) { cloneFrom = p; pickingClone = false; ctx.chrome(); ctx.request(); }
+        else smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength, cloneFrom);
+        return;
+      }
       if (mode.tool === 'fill') {
         preview = null;
         fillDown(p, e);
         return;
       }
       if (mode.tool === 'lines') {
-        if (variantOf(mode, 'lines') === 'speed') lineDrag = { from: p, to: p };
-        else generate(p, null);
+        lineDrag = { from: p, to: p };
         return;
       }
       if (mode.tool === 'vedit' || vectorErase()) {
@@ -1606,7 +1648,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'selection') { selection.move(p, e); return; }
       if (mode.tool === 'pixels') { pixels.move(p, e); return; }
       if (mode.tool === 'tone') { tone.move(p); return; }
-      if (mode.tool === 'smudge') { smudge.move(smudgePoint(p, e)); return; }
+      if (pixelBrush()) { smudge.move(smudgePoint(p, e)); return; }
       if (pour || sweep) {
         fillMove(p, e);
         return;
@@ -1635,13 +1677,17 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'selection') { selection.up(p, e); return; }
       if (mode.tool === 'pixels') { pixels.up(p, e); return; }
       if (mode.tool === 'tone') { tone.up(p, e.type === 'pointercancel'); return; }
-      if (mode.tool === 'smudge') {
+      if (pixelBrush()) {
         if (e.type !== 'pointercancel' && e.pointerType !== 'pen') smudge.move(smudgePoint(p, e));
         smudge.up(e.type === 'pointercancel');
         return;
       }
       if (pour || sweep) {
-        fillUp();
+        if (e.type === 'pointercancel') {
+          const created = pour?.created;
+          pour = null; sweep = null; preview = null;
+          if (created) studio.undo();
+        } else fillUp();
         return;
       }
       if (dragHandle) {
@@ -1652,7 +1698,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (lineDrag) {
         const d = lineDrag;
         lineDrag = null;
-        generate(d.from, d.to);
+        if (e.type !== 'pointercancel') generate(d.from, variantOf(mode, 'lines') === 'speed' ? d.to : null);
         return;
       }
       if (vdrag || vbrush || verase) {
@@ -1664,13 +1710,16 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     hover(p) {
       hover = p;
+      if (p && mode.tool === 'selection') selection.hover(p);
+      if (p && mode.tool === 'pixels') pixels.hover(p);
+      if (p && mode.tool === 'tone') tone.hover(p);
       if (mode.tool === 'fill' && p) checkHover(p);
     },
     modifierTouch(active) {
       constrainTouch = active;
       if (live?.shape) adjustShape(live.shape.at, live.shape.shift);
     },
-    live: () => shapeEditor.active() ? shapeEditor.live() : mode.tool === 'smudge' ? smudge.live() : mode.tool === 'pixels' ? pixels.live() : mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
+    live: () => shapeEditor.active() ? shapeEditor.live() : pixelBrush() ? smudge.live() : mode.tool === 'pixels' ? pixels.live() : mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
     placement: () => mode.tool === 'image' ? images.preview() : undefined,
     types: () => ({ pencil: state.showPencil }),
     overlay(g, s) {
@@ -1680,9 +1729,21 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'pixels') { pixels.overlay(g, s); return; }
       if (mode.tool === 'tone') { tone.overlay(g, s); return; }
       drawRuler(g, s);
+      const sym = ink.symmetry;
+      if (sym && sym !== 'off' && mode.tool !== 'vpen' && sizeTool()) {
+        const w = page.widthIn * s, h = page.heightIn * s;
+        g.save(); g.strokeStyle = 'rgba(47,127,216,.6)'; g.lineWidth = 1; g.setLineDash([5, 5]); g.beginPath();
+        if (sym !== 'horizontal') { g.moveTo(w / 2, 0); g.lineTo(w / 2, h); }
+        if (sym !== 'vertical') { g.moveTo(0, h / 2); g.lineTo(w, h / 2); }
+        if (sym === 'radial') {
+          const d = Math.min(w, h) / 2;
+          for (const sign of [-1, 1]) { g.moveTo(w / 2 - d, h / 2 - d * sign); g.lineTo(w / 2 + d, h / 2 + d * sign); }
+        }
+        g.stroke(); g.restore();
+      }
       fillOverlay(g, s);
       vectorOverlay(g, s);
-      if (lineDrag) {
+      if (lineDrag && variantOf(mode, 'lines') === 'speed') {
         g.save();
         g.strokeStyle = '#C8553D';
         g.lineWidth = 2;
@@ -1694,7 +1755,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         g.restore();
       }
       const t = sizeTool();
-      if (!hover || (!t && mode.tool !== 'smudge') || pickingColor) return;
+      if (mode.tool === 'clone' && cloneFrom) {
+        g.save(); g.strokeStyle = '#2F7FD8'; g.lineWidth = 2; g.beginPath();
+        g.arc(cloneFrom.x * s, cloneFrom.y * s, 7, 0, Math.PI * 2); g.stroke(); g.restore();
+      }
+      if (!hover || (!t && !pixelBrush()) || pickingColor) return;
       const r = Math.max(2, ((t ? sizeIn(t) : smudgeSize / PT) * s) / 2);
       g.save();
       g.lineWidth = 1;
@@ -1710,7 +1775,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
-      if (mode.tool === 'smudge' && e.key === 'Escape') { smudge.clear(); ctx.request(); return true; }
+      if (e.key === 'Enter' && mode.tool === 'selection' && selection.isMarquee()) { selection.closePolygon(); return true; }
+      if (e.key === 'Enter' && mode.tool === 'pixels' && pixels.isMarquee()) { pixels.closePolygon(); return true; }
+      if (mode.tool === 'tone' && tone.isMarquee()) {
+        if (e.key === 'Enter') { tone.closePolygon(); return true; }
+        if (e.key === 'Escape') { tone.clear(); ctx.chrome(); ctx.request(); return true; }
+      }
+      if (pixelBrush() && e.key === 'Escape') { smudge.clear(); pickingClone = false; ctx.chrome(); ctx.request(); return true; }
       if (shapeEditor.available() && e.key === 'Escape') { shapeEditor.cancel(); return true; }
       if (shapeEditor.available() && e.key === 'Enter' && !(e.target instanceof Element && e.target.closest('button, a, [role="button"]'))) {
         if (shapeEditor.active()) shapeEditor.apply();
@@ -1753,6 +1824,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     dispose() {
       clearTimeout(holdTimer);
       selection.dispose();
+      tone.clear();
       pixels.clear();
       smudge.clear();
       shapeEditor.clear();

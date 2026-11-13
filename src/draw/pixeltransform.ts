@@ -73,12 +73,14 @@ export function transformDestination(lifted: LiftedPixels, m: Mat, dpi: number, 
   return transformedRect(pixelMatrix(m, dpi), { x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1 }, w, h);
 }
 
-export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number): Rect | null {
+export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number, copy = false): Rect | null {
   if (isUnmoved(m)) return null;
   const { x, y } = lifted.rect;
   g.save();
-  g.globalCompositeOperation = 'destination-out';
-  g.drawImage(lifted.mask, x, y);
+  if (!copy) {
+    g.globalCompositeOperation = 'destination-out';
+    g.drawImage(lifted.mask, x, y);
+  }
   g.globalCompositeOperation = 'source-over';
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = 'low';

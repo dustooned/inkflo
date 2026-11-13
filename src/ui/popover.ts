@@ -1,5 +1,5 @@
-import { h, seg } from './dom';
-import { prefs, setPrefs, type Backdrop, type Theme } from './prefs';
+import { h, seg, slider } from './dom';
+import { prefs, setPrefs, type Backdrop, type Layout, type Theme } from './prefs';
 
 let open: { el: HTMLElement; close: () => void } | null = null;
 
@@ -55,9 +55,9 @@ export function closePopover(): void {
 export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; composition?: boolean } = {}): void {
   const build = () => {
     const p = prefs();
-    const opacity = h('input', { type: 'range', min: 0.2, max: 1, step: 0.05, value: p.gridOpacity, 'aria-label': 'Grid strength' });
-    opacity.addEventListener('input', () => setPrefs({ gridOpacity: Number(opacity.value) }));
     const vignette = h('input', { type: 'checkbox', checked: p.vignette });
+    const finger = h('input', { type: 'checkbox', checked: p.fingerDrawing });
+    finger.addEventListener('change', () => setPrefs({ fingerDrawing: finger.checked }));
     vignette.addEventListener('change', () => setPrefs({ vignette: vignette.checked }));
     const guide = h('select', { 'aria-label': 'Composition guides' }, GUIDES.map((g) => h('option', { value: g.id, selected: g.id === p.guide }, g.label)));
     guide.addEventListener('change', () => setPrefs({ guide: guide.value as Guide }));
@@ -68,7 +68,8 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
       seg<Theme>([{ id: 'system', label: 'System' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }], p.theme, (v) => { setPrefs({ theme: v }); rebuild(); }, 'Theme'),
       h('h4', {}, 'Canvas backdrop'),
       seg<Backdrop>([{ id: 'grid', label: 'Grid' }, { id: 'dots', label: 'Dots' }, { id: 'plain', label: 'Plain' }], p.backdrop, (v) => { setPrefs({ backdrop: v }); rebuild(); }, 'Backdrop'),
-      h('div', { class: 'row' }, h('label', {}, 'Strength', opacity)),
+      h('div', { class: 'row' }, slider('Grid strength', 0, 100, 1, p.gridOpacity * 100, (v) => `${v}%`, (v) => setPrefs({ gridOpacity: v / 100 }))),
+      h('div', { class: 'row' }, slider('Board brightness', -100, 100, 1, p.boardBrightness * 100, (v) => v ? `${v > 0 ? '+' : ''}${v}%` : 'Theme', (v) => setPrefs({ boardBrightness: v / 100 }))),
       h('div', { class: 'row' }, h('label', {}, vignette, 'Vignette')),
       opts.composition ? [
         h('h4', {}, 'Composition guides'),
@@ -77,7 +78,8 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
       ] : null,
       opts.layout
         ? [h('div', { class: 'sep' }), h('h4', {}, 'Layout'),
-          seg([{ id: 'studio', label: 'Studio' }, { id: 'focus', label: 'Focus' }], p.layout, (v) => { setPrefs({ layout: v as 'studio' | 'focus' }); rebuild(); }, 'Layout'),
+          seg<Layout>([{ id: 'studio', label: 'Studio' }, { id: 'simple', label: 'Simple' }, { id: 'focus', label: 'Focus' }], p.layout, (v) => { setPrefs({ layout: v }); rebuild(); }, 'Layout'),
+          h('div', { class: 'row' }, h('label', {}, finger, 'Draw with finger')),
           h('p', { class: 'note', style: 'margin:0 8px 6px' }, 'Tab switches between Studio and Focus.')]
         : null,
     );

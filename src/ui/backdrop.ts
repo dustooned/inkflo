@@ -13,6 +13,7 @@ export interface BackdropView {
   s: number;
   pageW: number;
   pageH: number;
+  transparent?: boolean;
 }
 
 export interface BackdropStyle {
@@ -23,6 +24,7 @@ export interface BackdropStyle {
   kind: 'grid' | 'dots' | 'plain';
   /** 0–1 */
   strength: number;
+  brightness: number;
   vignette: boolean;
 }
 
@@ -39,8 +41,15 @@ export function gridStep(s: number): number {
 
 export function drawBackdrop(g: CanvasRenderingContext2D, v: BackdropView, st: BackdropStyle): void {
   g.save();
+  const mix = Math.abs(st.brightness);
   g.fillStyle = st.board;
   g.fillRect(0, 0, v.width, v.height);
+  if (mix) {
+    g.fillStyle = st.brightness > 0 ? '#fff' : '#000';
+    g.globalAlpha = mix;
+    g.fillRect(0, 0, v.width, v.height);
+    g.globalAlpha = 1;
+  }
 
   if (st.kind !== 'plain') {
     const step = gridStep(v.s);
@@ -48,11 +57,12 @@ export function drawBackdrop(g: CanvasRenderingContext2D, v: BackdropView, st: B
     const x0 = (((v.ox % step) + step) % step) - step;
     const y0 = (((v.oy % step) + step) % step) - step;
     const isMajor = (pos: number, origin: number) => Math.abs(((pos - origin) / major) - Math.round((pos - origin) / major)) < 1e-3;
+    const gridColor = mix > 0.3 ? (st.brightness > 0 ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.12)') : st.grid;
     g.globalAlpha = st.strength;
     if (st.kind === 'grid') {
       g.lineWidth = 1;
       for (const pass of [false, true]) {
-        g.strokeStyle = st.grid;
+        g.strokeStyle = gridColor;
         g.globalAlpha = st.strength * (pass ? 1 : 0.55);
         g.beginPath();
         for (let x = x0; x <= v.width + step; x += step) {
@@ -70,7 +80,7 @@ export function drawBackdrop(g: CanvasRenderingContext2D, v: BackdropView, st: B
         g.stroke();
       }
     } else {
-      g.fillStyle = st.grid;
+      g.fillStyle = gridColor;
       for (let x = x0; x <= v.width + step; x += step) {
         for (let y = y0; y <= v.height + step; y += step) {
           const r = isMajor(x, v.ox) && isMajor(y, v.oy) ? 1.8 : 1.1;
@@ -95,10 +105,12 @@ export function drawBackdrop(g: CanvasRenderingContext2D, v: BackdropView, st: B
   }
 
   // the page's own shadow (the page paints over the rectangle itself)
-  g.shadowColor = st.shadow;
-  g.shadowBlur = 28;
-  g.shadowOffsetY = 12;
-  g.fillStyle = '#fff';
-  g.fillRect(v.ox, v.oy, v.pageW * v.s, v.pageH * v.s);
+  if (!v.transparent) {
+    g.shadowColor = st.shadow;
+    g.shadowBlur = 28;
+    g.shadowOffsetY = 12;
+    g.fillStyle = '#fff';
+    g.fillRect(v.ox, v.oy, v.pageW * v.s, v.pageH * v.s);
+  }
   g.restore();
 }

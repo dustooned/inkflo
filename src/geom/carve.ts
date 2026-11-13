@@ -243,7 +243,7 @@ function splitOnce(poly: Pt[], path: readonly Pt[], after = 0, at?: number) {
       return clean;
     });
     if (pieces.some((p) => p.length < 3 || area(p) * Math.sign(area(poly)) <= 2)) continue;
-    return { pieces, chain, end: b.s };
+    return { pieces, chain, start: a.s, end: b.s };
   }
   return null;
 }
@@ -294,10 +294,11 @@ function cutPathProto(c: Cut, curve: number): Pt[] {
       return { x: u ** 3 * a!.x + 3 * u * u * t * b!.x + 3 * u * t * t * d!.x + t ** 3 * e!.x,
         y: u ** 3 * a!.y + 3 * u * u * t * b!.y + 3 * u * t * t * d!.y + t ** 3 * e!.y };
     });
-    return c.mode === 'panel' ? path : extendEnds(path);
+    return c.mode === 'panel' || c.bounded ? path : extendEnds(path);
   }
   if (c.mode === 'panel' && c.extended && c.extended.length >= 2) return toProto(c.extended);
-  return extendEnds(simplify(chaikin(toProto(c.pts), curve), 0.65));
+  const path = simplify(chaikin(toProto(c.pts), curve), 0.65);
+  return c.bounded ? path : extendEnds(path);
 }
 
 /** The stored cut's construction path, including extensions, in inches. */
@@ -409,6 +410,27 @@ export function planCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
 export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): Cut | null {
   const plan = planCut(page, stroke, mode, straight);
   return plan ? { id: newCutId(), ...plan.cut } : null;
+}
+
+/** Interactive knife: use the span actually drawn, with both ends beyond its boundary. */
+export function planKnifeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false): ReturnType<typeof planCut> {
+  if (stroke.length < 2) return null;
+  const raw = straight ? toProto([stroke[0]!, stroke.at(-1)!]) : simplify(toProto(stroke), 2);
+  const path = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
+  if (path.length < 2 || dist(path[0]!, path.at(-1)!) < 12) return null;
+  const outside = (poly: Pt[]) => [path[0]!, path.at(-1)!].every((p) => !pointInPoly(p, poly) && !onBoundary(p, poly));
+  const { polys } = carvePage(page);
+  const cut: Omit<Cut, 'id'> = { mode, pts: toInches(raw), bounded: true };
+  if (mode === 'panel') {
+    const spans = polys.filter(outside).flatMap((poly) => splitOnce(poly, path) ?? []).sort((a, b) => a.start - b.start);
+    if (!spans.length) return null;
+    cut.extended = toInches(spans[0]!.chain);
+    return { cut, paths: [cut.extended] };
+  }
+  if (!outside(trimProto(page))) return null;
+  const paths: Pt[][] = [];
+  for (const poly of polys) divide(poly, path, paths);
+  return paths.length ? { cut, paths: paths.map(toInches) } : null;
 }
 
 /** Move a cut along one axis (inches). Panel-mode cuts move their frozen path with it. */

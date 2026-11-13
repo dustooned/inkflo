@@ -6,6 +6,7 @@ import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
 import type { DialogueLine, ModularGrid, PixelEdit, PixelTransform, PlacedImage, ScreenTone } from './model';
 import { TONE_SHAPES } from './model';
+import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
 /**
@@ -100,6 +101,7 @@ function relativePoint(v: unknown, path: string): Pt {
 function cut(v: unknown, path: string): Cut {
   const o = obj(v, path);
   const c: Cut = { id: str(o.id, `${path}.id`), mode: oneOf(o.mode, ['across', 'panel'] as const, `${path}.mode`), pts: pts(o.pts, `${path}.pts`) };
+  if (o.bounded === true) c.bounded = true;
   if (c.pts.length < 2) fail(`${path}.pts`, 'needs at least two points');
   if (o.extended !== undefined && o.extended !== null) c.extended = pts(o.extended, `${path}.extended`);
   if (o.handles !== undefined) {
@@ -167,6 +169,11 @@ function stroke(v: unknown, path: string): Stroke {
   if (!s.pts.length) fail(`${path}.pts`, 'needs at least one point');
   if (o.erase === true) s.erase = true;
   if (o.styledVector === true) s.styledVector = true;
+  if (o.symmetry !== undefined) {
+    const sym = obj(o.symmetry, `${path}.symmetry`);
+    s.symmetry = { mode: oneOf(sym.mode, ['vertical', 'horizontal', 'quadrant', 'radial'] as const, `${path}.symmetry.mode`),
+      cx: num(sym.cx, `${path}.symmetry.cx`), cy: num(sym.cy, `${path}.symmetry.cy`) };
+  }
   if (o.color !== undefined) {
     const color = str(o.color, `${path}.color`);
     if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
@@ -264,7 +271,12 @@ function layer(v: unknown, path: string): Layer {
       if (!Number.isInteger(fills) || fills < lastFill || fills > l.fills.length) fail(`${p}.fills`, 'has an invalid fill index');
       lastStroke = strokes;
       lastFill = fills;
-      if (op.kind === 'smudge') {
+      if (op.kind === 'adjustment') {
+        const hue = num(op.hue, `${p}.hue`), sat = num(op.sat, `${p}.sat`), bright = num(op.bright, `${p}.bright`), blur = num(op.blur, `${p}.blur`);
+        if (Math.abs(hue) > 180 || Math.abs(sat) > 100 || Math.abs(bright) > 100 || blur < 0 || blur > 0.15) fail(p, 'has an adjustment out of range');
+        return { kind: 'adjustment', hue, sat, bright, blur, strokes, fills };
+      }
+      if (op.kind === 'smudge' || op.kind === 'clone') {
         const raw = arr(op.points, `${p}.points`);
         if (raw.length < 2 || raw.length > 8192) fail(`${p}.points`, 'needs 2 to 8192 points');
         const points = raw.map((v, j) => {
@@ -273,7 +285,8 @@ function layer(v: unknown, path: string): Layer {
         });
         const size = pos(op.size, `${p}.size`);
         if (size > 1) fail(`${p}.size`, 'should be no more than one inch');
-        return { kind: 'smudge', points, size, strength: unit(op.strength, `${p}.strength`, 0.5), strokes, fills };
+        const edit = { points, size, strength: unit(op.strength, `${p}.strength`, 0.5), strokes, fills };
+        return op.kind === 'clone' ? { kind: 'clone', ...edit, offset: pt(op.offset, `${p}.offset`) } : { kind: 'smudge', ...edit };
       }
       const polygon = pts(op.polygon, `${p}.polygon`);
       if (polygon.length < 3 || polygon.length > 8192) fail(`${p}.polygon`, 'needs 3 to 8192 points');
@@ -281,7 +294,7 @@ function layer(v: unknown, path: string): Layer {
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      return { polygon, matrix, strokes, fills };
+      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}) };
     });
   }
   return l;
@@ -405,7 +418,8 @@ function layout(v: unknown, path: string): PageLayout | undefined {
     if (radius < 0 || radius > 0.5) fail(`${entry}.radius`, 'should be from 0 to 0.5 inches');
     return { at: relativePoint(item.at, `${entry}.at`), radius };
   });
-  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}) };
+  const edgeBorder = o.edgeBorder === undefined ? undefined : bool(o.edgeBorder, `${path}.edgeBorder`, false);
+  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}) };
 }
 
 function source(o: Obj, path: string): Letter['src'] | undefined {
@@ -585,6 +599,7 @@ function book(v: unknown, v1Art?: Obj): Book {
     };
   }
   const lettering = sheet(o.lettering, 'book.lettering');
+  if (o.assets !== undefined) b.assets = readBookAssets(o.assets);
   if (o.fixedGrid !== undefined) b.fixedGrid = modularGrid(o.fixedGrid, 'book.fixedGrid');
   if (lettering) b.lettering = lettering;
   if (o.brushes !== undefined) {
@@ -603,6 +618,22 @@ function book(v: unknown, v1Art?: Obj): Book {
   const last = optStr(o.lastPageId, 'book.lastPageId');
   if (last !== undefined && ids.has(last)) b.lastPageId = last; // a stale pointer is dropped, not fatal
   return b;
+}
+
+export function readBookAssets(value: unknown): BookAsset[] {
+  const list = arr(value, 'book.assets');
+  if (list.length > 500) fail('book.assets', 'has more than 500 images');
+  const keys = new Set<string>();
+  return list.map((value, i) => {
+    const path = `book.assets[${i}]`;
+    const item = obj(value, path);
+    const key = str(item.key, `${path}.key`), name = str(item.name, `${path}.name`);
+    const width = pos(item.width, `${path}.width`), height = pos(item.height, `${path}.height`);
+    if (!/^assets\/[a-z0-9]+-[a-z0-9]+\.png$/.test(key) || keys.has(key)) fail(`${path}.key`, 'has an invalid or duplicate image key');
+    if (!name.trim() || name.length > 120 || !Number.isInteger(width) || !Number.isInteger(height) || width * height > 16_000_000 || Math.max(width, height) > 8192) fail(path, 'has an invalid name or image dimensions');
+    keys.add(key);
+    return { key, name, width, height };
+  });
 }
 
 function artKeys(v: unknown, path: string, layerIds: Set<string>): PageArtKeys {
@@ -657,7 +688,7 @@ export function stringifyBookFile(file: BookFile): string {
 
 /** Every asset key a book file uses. */
 export function assetsOf(file: BookFile): Set<string> {
-  const s = new Set<string>();
+  const s = new Set<string>(file.book.assets?.map(({ key }) => key));
   for (const keys of Object.values(file.art)) for (const k of Object.values(keys)) if (k) s.add(k);
   return s;
 }

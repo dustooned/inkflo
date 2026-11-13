@@ -5,7 +5,8 @@ import type { Bounds } from '../geom/resizebox';
 import { renderVectorLayer } from '../render/vector';
 import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
-import { drawSelectionFrame, drawSelectionPath, grabSelection, selectionCenter, selectionCorners, selectionTransform, type SelectionGrab } from './selectiongesture';
+import { drawSelectionFrame, grabSelection, selectionCenter, selectionTransform, type SelectionGrab } from './selectiongesture';
+import { createMarquee, type MarqueeShape } from './marquee';
 
 function crosses(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
   const cross = (u: Pt, v: Pt, w: Pt) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
@@ -36,7 +37,16 @@ type Selection = { id: string; source: Stroke[]; indices: Set<number> };
 export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
-  let marquee: { path: Pt[]; freehand: boolean } | null = null;
+  const marquee = createMarquee(ctx, (poly, from) => {
+    for (const l of layersAt(from)) {
+      const indices = new Set<number>();
+      l.strokes.forEach((stroke, i) => { if (touches(stroke, poly)) indices.add(i); });
+      if (!indices.size) continue;
+      selected = { id: l.id, source: l.strokes, indices };
+      break;
+    }
+    if (!selected) toast('No vector lines in this selection.');
+  });
   let drag: { grab: SelectionGrab; from: Pt; bounds: Bounds; next: Stroke[] | null; angle: number } | null = null;
   let preview: HTMLCanvasElement | null = null;
   let rendered: Stroke[] | null = null;
@@ -49,7 +59,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
   }
 
   function stop(): void {
-    marquee = null;
+    marquee.clear();
     drag = null;
     preview = null;
     rendered = null;
@@ -74,7 +84,8 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
   }
 
   return {
-    down(p: Pt, e: PointerEvent, freehand: boolean) {
+    down(p: Pt, e: PointerEvent, shape: MarqueeShape) {
+      if (marquee.active()) { marquee.down(p, shape); return; }
       const s = current();
       if (s) {
         const bounds = boundsOf(s.source, s.indices);
@@ -86,17 +97,11 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
         }
       }
       selected = null;
-      marquee = { path: [p, p], freehand };
-      studio.drawing = true;
+      marquee.down(p, shape);
       ctx.chrome();
     },
     move(p: Pt, e: PointerEvent) {
-      if (marquee) {
-        const path = marquee.path;
-        if (!marquee.freehand) path[1] = p;
-        else if (Math.hypot(p.x - path.at(-1)!.x, p.y - path.at(-1)!.y) * ctx.scale() > 2) path.push(p);
-        return;
-      }
+      if (marquee.active()) { marquee.move(p); return; }
       const s = current();
       if (!s || !drag) return;
       const d = drag;
@@ -108,7 +113,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       d.next = transform(s, xform, selectionCenter(d.bounds));
     },
     up(p: Pt, e: PointerEvent) {
-      if (e.type === 'pointercancel') { stop(); ctx.request(); return; }
+      if (e.type === 'pointercancel') { stop(); ctx.chrome(); ctx.request(); return; }
       if (drag) {
         const next = drag.next;
         const label = drag.grab.kind === 'move' ? 'Move selected lines' : drag.grab.kind === 'rotate' ? 'Rotate selected lines' : 'Resize selected lines';
@@ -116,28 +121,20 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
         if (next) apply(label, next);
         return;
       }
-      if (!marquee) return;
-      const { path, freehand } = marquee;
-      const poly = freehand ? [...path, p] : selectionCorners(path[0]!, p);
-      stop();
-      for (const l of layersAt(path[0]!)) {
-        const indices = new Set<number>();
-        l.strokes.forEach((stroke, i) => { if (touches(stroke, poly)) indices.add(i); });
-        if (!indices.size) continue;
-        selected = { id: l.id, source: l.strokes, indices };
-        break;
-      }
-      if (!selected) toast('No vector lines in this selection.');
-      ctx.chrome();
+      marquee.up(p, false);
     },
+    hover: marquee.hover,
+    closePolygon: marquee.closePolygon,
+    resetMarquee: marquee.clear,
+    isMarquee: marquee.active,
     cancel(clear = false) {
-      const active = !!(marquee || drag);
+      const active = marquee.active() || !!drag;
       if (active) stop();
       if (clear && !active) selected = null;
       ctx.chrome();
       ctx.request();
     },
-    dispose() { if (marquee || drag) stop(); },
+    dispose() { if (marquee.active() || drag) stop(); },
     live(): Record<string, HTMLCanvasElement> {
       const s = current();
       const next = drag?.next;
@@ -158,7 +155,16 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const action = (label: string, patch: Partial<XParams>) => h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => {
         if (s && current() === s) apply(label, transform(s, { ...IDENTITY, ...patch }, selectionCenter(boundsOf(s.source, s.indices))));
       } }, label);
-      return [action('Flip horizontal', { flipH: true }), action('Flip vertical', { flipV: true }), action('Rotate 45°', { rotate: 45 }),
+      return [...marquee.controls(), action('Flip horizontal', { flipH: true }), action('Flip vertical', { flipV: true }), action('Rotate 45°', { rotate: 45 }),
+        h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => {
+          if (!s || current() !== s) return;
+          const shift = Math.min(0.2, 14 / ctx.scale());
+          const shifted = transform(s, { ...IDENTITY, dx: shift, dy: shift }, selectionCenter(boundsOf(s.source, s.indices)));
+          const copies = shifted.filter((_, i) => s.indices.has(i));
+          apply('Duplicate selected lines', [...s.source, ...copies]);
+          if (selected) selected.indices = new Set(copies.map((_, i) => s.source.length + i));
+          ctx.request();
+        } }, 'Duplicate'),
         h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => { selected = null; ctx.chrome(); ctx.request(); } }, 'Deselect'),
         h('span', { class: 'hint' }, s ? `${s.indices.size} selected · Shift for precision · Alt to resize from center` : 'Draw around lines on a vector layer')];
     },
@@ -167,10 +173,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       g.strokeStyle = '#2F7FD8';
       g.lineWidth = 1.5;
       g.setLineDash([5, 4]);
-      if (marquee) {
-        const path = marquee.freehand ? marquee.path : selectionCorners(marquee.path[0]!, marquee.path[1]!);
-        drawSelectionPath(g, path, scale);
-      }
+      marquee.overlay(g, scale);
       const s = current();
       if (s) {
         const b = boundsOf(drag?.next ?? s.source, s.indices);

@@ -30,6 +30,8 @@ export interface Pt {
 export interface Cut {
   id: string;
   mode: CutMode;
+  /** Use the actual swipe between its off-page endpoints. */
+  bounded?: boolean;
   /** Raw stroke, page units (inches from the trim's top-left). */
   pts: Pt[];
   /** Frozen path for mode "panel"; absent for "across". */
@@ -140,6 +142,8 @@ export interface Stroke {
   flat?: [boolean, boolean];
   /** Vector lines drawn with the procedural appearance of their brush preset. */
   styledVector?: boolean;
+  /** Raster drawing assist, captured in page inches when the stroke was made. */
+  symmetry?: { mode: 'vertical' | 'horizontal' | 'quadrant' | 'radial'; cx: number; cy: number };
 }
 
 /**
@@ -186,6 +190,8 @@ export interface PlacedImage {
 
 export interface PixelTransform {
   polygon: Pt[];
+  /** Keep the original pixels when the lifted selection is placed. */
+  copy?: boolean;
   /** Canvas affine matrix in page inches. */
   matrix: [number, number, number, number, number, number];
   /** Replay this move after these many strokes and fills on the layer. */
@@ -202,7 +208,23 @@ export interface SmudgeStroke {
   fills: number;
 }
 
-export type PixelEdit = PixelTransform | SmudgeStroke;
+export interface CloneStroke extends Omit<SmudgeStroke, 'kind'> {
+  kind: 'clone';
+  offset: Pt;
+}
+
+export interface PixelAdjustment {
+  kind: 'adjustment';
+  hue: number;
+  sat: number;
+  bright: number;
+  /** Gaussian blur radius in inches. */
+  blur: number;
+  strokes: number;
+  fills: number;
+}
+
+export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | PixelAdjustment;
 
 export const TONE_SHAPES = ['dot', 'square', 'diamond', 'line', 'cross'] as const;
 export interface ScreenTone {
@@ -296,6 +318,8 @@ export interface PageLayout {
   curve: number;
   /** White by default. Null means transparent. */
   gutterPaper?: string | null;
+  /** Ink the trim and carry gutter borders all the way to it. */
+  edgeBorder?: boolean;
   cornerRadius?: number;
   panelCorners?: { at: Pt; radius: number }[];
 }
@@ -342,6 +366,13 @@ export interface PrintSpec {
   blanks: BlankPlace;
 }
 
+export interface BookAsset {
+  key: string;
+  name: string;
+  width: number;
+  height: number;
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -359,6 +390,7 @@ export interface Book {
   fixedGrid?: ModularGrid;
   /** Exact settings of every brush strokes in this book use, by `<brush id>~<hash>` (draw/brushes.ts). */
   brushes?: Record<string, BrushSettings>;
+  assets?: BookAsset[];
   pages: Page[];
   lastPageId?: string;
   lastStage: Stage;

@@ -69,8 +69,17 @@ those:
 | Which stabilization family is it (pulled string, exponential smoothing, other), and what is the response curve? | Observe stroke output at settings 0/25/50/75/100. | Stabilizer |
 | QuickShape: what are the snap thresholds for line, arc and ellipse, and what cancels it? | Hands-on with the package installed; record angles and tolerances. | QuickShape |
 | How do selection and transform interact with layers and clipping masks? | Hands-on; note the minimum viable subset for comic panels. | Selection |
+| What is the interface made of — screens, bars, clusters, popovers, and their proportions? | Static read of the 18 storyboards and 113 nibs (88 decoded) plus `en.lproj/Localizable.strings`; frames decoded from `UIBounds`. Done 2026-11-12. | Focus/Studio chrome, layer and brush panels |
 
 **Deliverable:** `docs/research/procreate-brush-studio.md` — a parameter table, not prose.
+**Also written:** [research/procreate-interface.md](research/procreate-interface.md) — the interface
+pass (chrome anatomy, panel structure, interface preferences, and what inkflo should and should not
+take).
+
+**Deep dive, 2026-11-12** — `Procreate-v5-4-4.ipa` and `Procreate-Dreams-v1-0-15.ipa` from
+`D:\Downloads\Programs`, same method, full surface: [drawing features](research/procreate-drawing-features.md),
+[UI style](research/procreate-ui-style.md), [Dreams motion](research/dreams-1.0.15-motion.md), and
+the [integration matrix](research/procreate-integration-matrix.md) that orders the work.
 
 ### 4. Clip Studio inking tools — `C:\Program Files\CELSYS\CLIP STUDIO 1.5`
 
