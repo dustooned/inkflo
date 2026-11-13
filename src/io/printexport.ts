@@ -288,7 +288,7 @@ async function encode(c: HTMLCanvasElement, f: ImageFormat): Promise<Uint8Array>
 }
 
 /** Grey: luminance, alpha kept. Hard black: lines become pure black or white (no grey). */
-function tone(c: HTMLCanvasElement, mode: 'colour' | 'grey' | 'hard'): void {
+export function tone(c: HTMLCanvasElement, mode: 'colour' | 'grey' | 'hard'): void {
   if (mode === 'colour') return;
   const g = c.getContext('2d', { willReadFrequently: true })!;
   const img = g.getImageData(0, 0, c.width, c.height);

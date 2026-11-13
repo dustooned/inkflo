@@ -1,7 +1,11 @@
 import type { Studio } from '../app/studio';
-import { DEFAULT_SHEET, sheetOf, type LetterSheet } from '../doc/model';
+import { DEFAULT_SHEET, PT, sheetOf, type Letter, type LetterSheet, type Page } from '../doc/model';
+import { applyStyle } from '../engine/lettering/styles';
+import { defaultCaption } from '../engine/lettering/spec';
+import { drawBalloons } from '../render/page';
+import { lettersReady } from '../render/fonts';
 import { BUNDLED_FONTS } from '../engine/lettering/fonts';
-import { renameSpeaker, speakers } from '../geom/lettering';
+import { characterStyle, renameSpeaker, speakers } from '../geom/lettering';
 import { TARGETS } from '../geom/readability';
 import { askText, h } from './dom';
 
@@ -21,6 +25,46 @@ export function openStyleSheet(studio: Studio, onChange: () => void): void {
     render();
   };
 
+  /**
+   * The sheet as lettering will look: Small, Body and Big in the house font, and a balloon for
+   * each character style, drawn by the page renderer at the book's page size.
+   */
+  let previewRevision = 0;
+  function preview(sheet: LetterSheet): HTMLElement {
+    const page = book!.pages[0];
+    const pageW = page?.widthIn ?? 6.625, pageH = page?.heightIn ?? 10.187;
+    const samples: Letter[] = (['small', 'body', 'big'] as const).map((size, i) => {
+      const cap = defaultCaption((0.2 + 0.3 * i) * pageW * PT, 0.6 * PT, 'speech');
+      cap.text = size === 'small' ? 'Small words' : size === 'body' ? 'Body text' : 'BIG!';
+      cap.size = size;
+      cap.font = sheet.font;
+      cap.tails = [];
+      return { id: 'sample-' + size, cap };
+    });
+    const chars = Object.keys(sheet.characters).slice(0, 3);
+    chars.forEach((who, i) => {
+      const st = characterStyle(sheet, who);
+      let cap = defaultCaption((0.2 + 0.3 * i) * pageW * PT, 1.75 * PT, 'speech');
+      cap.text = who + '!';
+      cap.font = sheet.font;
+      cap.tails = [];
+      if (st) cap = applyStyle(cap, st);
+      samples.push({ id: 'char-' + i, cap });
+    });
+    const rows = chars.length ? 2 : 1;
+    const width = 520, scale = width / pageW;
+    const canvas = h('canvas', { class: 'sheet-preview', width, height: Math.round(rows * 1.15 * scale), role: 'img', 'aria-label': 'Preview of the lettering sizes' + (chars.length ? ' and character styles' : '') });
+    const id = ++previewRevision;
+    void lettersReady(samples.map((l) => l.cap)).then(() => {
+      if (id !== previewRevision) return;
+      const g = canvas.getContext('2d')!;
+      g.fillStyle = '#fbf8f1';
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      drawBalloons(g, { widthIn: pageW, heightIn: pageH, balloons: samples } as unknown as Page, scale, sheet);
+    });
+    return h('figure', { class: 'sheet-preview-box' }, canvas, h('figcaption', { class: 'note' }, 'Shown at print size relative to your page. Character styles below the sizes.'));
+  }
+
   const body = h('div', { class: 'content' });
   function render(): void {
     const s = sheetOf(book!);
@@ -37,6 +81,7 @@ export function openStyleSheet(studio: Studio, onChange: () => void): void {
     const chars = Object.entries(s.characters);
     const named = speakers(book!);
     body.replaceChildren(
+      preview(s),
       h('p', { class: 'note', style: 'margin:0' }, 'Sizes are the printed type size. Balloons follow these unless they have their own scale.'),
       h('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:10px' },
         ptField('Small', s.sizes.small, (v) => ({ ...s, sizes: { ...s.sizes, small: v } })),

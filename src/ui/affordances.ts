@@ -68,6 +68,7 @@ function schedule(el: Element, delay: number): void {
 
 export function decorate(root: ParentNode = document): void {
   for (const el of root.querySelectorAll<HTMLElement>(DECORATE)) {
+    if (el.closest('[data-noicons]')) continue;
     const own = [...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join('').trim();
     const aria = el.getAttribute('aria-label') || '';
     // an .icon button's text is a glyph ("←"); its name is the aria-label

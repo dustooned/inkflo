@@ -4,7 +4,7 @@ import { derivePanels } from '../geom/carve';
 import { preflightPage } from '../geom/preflight';
 import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
-import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, SEPARATION_LABEL, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, renderSeparation, SEPARATION_LABEL, tone, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
 import { DEFAULT_SCROLL_GAP, exportScroll, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
@@ -72,6 +72,19 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     c.addEventListener('change', () => set(c.checked));
     return h('label', { class: 'mini' }, c, label);
   };
+
+  /** A small render of a page as an export will draw it (the same renderer, at preview size). */
+  async function thumb(pageIndex: number, sep: Separation, opts: { background?: 'white' | 'transparent'; colour?: 'colour' | 'grey' | 'hard'; borders?: boolean; art?: boolean } = {}): Promise<HTMLCanvasElement> {
+    const page = book!.pages[pageIndex]!;
+    const art = opts.art === false ? null : studio.ensureArt(page);
+    try {
+      if (art) await studio.residency.pin(art);
+      const c = await renderSeparation(page, art, 140 / page.widthIn, book!, sep, opts.background ?? 'white', opts.borders ?? true);
+      if (opts.colour && sep !== 'all' || opts.colour === 'grey') tone(c, opts.colour ?? 'colour');
+      c.classList.add('export-thumb');
+      return c;
+    } finally { if (art) studio.residency.unpin(art); }
+  }
 
   // ---- Print it
 
@@ -222,7 +235,15 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         h('h4', { class: 'label' }, psd.mode === 'template' ? 'Drawing template contains' : 'Keep artwork contains'),
         h('ul', {}, p.contents.map((c) => h('li', {}, c))));
       if (p.tooLarge) summary.append(h('p', { class: 'warnline' }, 'Too large for browser export at ' + psd.dpi + ' dpi. Choose a lower resolution.'));
+      // what the first page will look like in the other app: artwork, or the empty template
+      const id = ++psdRevision;
+      const first = (p.pages[0] ?? 1) - 1;
+      void thumb(first, 'all', { art: psd.mode === 'art' }).then((c) => {
+        if (id !== psdRevision || !summary.isConnected) return;
+        summary.prepend(h('figure', { class: 'psd-thumb' }, c, h('figcaption', {}, psd.mode === 'template' ? 'Template: layout and lettering' : 'Page ' + (first + 1))));
+      });
     };
+    let psdRevision = 0;
     const pageInput = (label: string, key: 'from' | 'to') => {
       const input = h('input', { type: 'number', 'aria-label': label, min: 1, max: book!.pages.length, step: 1, value: psd[key] });
       input.addEventListener('change', () => {
@@ -311,9 +332,23 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.to, 'aria-label': 'To page', style: 'width:60px' });
     from.addEventListener('change', () => (fo.range = { from: Number(from.value) || 1, to: fo.range!.to }));
     to.addEventListener('change', () => (fo.range = { from: fo.range!.from, to: Number(to.value) || book!.pages.length }));
-    const range = h('label', { class: 'field' }, 'Pages', h('span', {}, from, ' to ', to));
-    return h('div', { class: 'stack' },
-      h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+    const range = h('label', { class: 'field' }, 'Pages', h('span', { class: 'page-range' }, from, h('span', {}, 'to'), to));
+    // preview: the first page of the range as each ticked kind of image
+    const filesPreview = h('div', { class: 'export-previews', 'aria-live': 'polite' });
+    let filesRevision = 0;
+    const refreshFiles = () => {
+      const id = ++filesRevision;
+      const first = Math.max(0, Math.min(book!.pages.length - 1, Math.min(fo.range!.from, fo.range!.to) - 1));
+      void Promise.all(fo.seps.slice(0, 5).map(async (sep) => {
+        const c = await thumb(first, sep, { background: fo.background, colour: fo.colour, borders: fo.borders });
+        return h('figure', {}, c, h('figcaption', {}, SEPARATION_LABEL[sep]));
+      })).then((figs) => {
+        if (id !== filesRevision) return;
+        filesPreview.replaceChildren(...(figs.length ? figs : [h('p', { class: 'note' }, 'Tick at least one kind of page to preview it.')]));
+      });
+    };
+    queueMicrotask(refreshFiles);
+    const pageImages = h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
         h('b', {}, 'Page images'),
         h('p', {}, 'Finished pages, or separations for colourists, inkers and letterers: inks only, colours only, pencils only, lettering only. Each kind goes in its own folder.'),
         sepBoxes,
@@ -332,7 +367,12 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
               return;
             }
             void run('Page images', () => exportPageFiles(studio, { ...fo, dpi }, (m) => (progress.textContent = m)), `${name}-pages.zip`);
-          }, true))),
+          }, true)),
+        filesPreview);
+    // any option change refreshes the preview
+    pageImages.addEventListener('change', () => queueMicrotask(refreshFiles));
+    return h('div', { class: 'stack' },
+      pageImages,
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),
         btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),

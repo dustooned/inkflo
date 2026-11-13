@@ -16,6 +16,7 @@ import { askText, h, seg, toast } from '../dom';
 import { openDialogue } from '../dialogue';
 import { closePopover, popover } from '../popover';
 import { openStyleSheet } from '../stylesheet';
+import { balloonSwatch } from '../balloonswatch';
 
 type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
 
@@ -880,8 +881,32 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     const ink = h('input', { type: 'color', value: c.ink, 'aria-label': 'Balloon ink' });
     ink.addEventListener('change', () => editCap('Balloon ink', (x) => ({ ...x, ink: ink.value })));
     const look = c.look ?? {};
+    // Kind as pictures: each balloon kind drawn in this balloon's colours and font
+    // previews keep a short tail so the balloon itself fills the swatch
+    const shortTail = (x: CaptionSpec): CaptionSpec['tails'] => x.style === 'sfx' || x.style === 'box' ? [] : [{ x: x.x - 10, y: x.y + 30, join: (x.style === 'thought' ? 'bubbles' : x.style === 'whisper' ? 'seam' : 'merged') as TailJoin, width: 1.2 }];
+    const swatchText = (x: CaptionSpec): CaptionSpec => ({ ...x, text: x.style === 'sfx' ? 'POW' : 'Hi!', links: undefined, scale: 1, minSize: undefined, curve: undefined, tails: shortTail(x) });
+    const kinds = h('div', { class: 'shape-picker', role: 'radiogroup', 'aria-label': 'Balloon kind', 'data-noicons': '' }, KINDS.map((k) => {
+      const tails = k.id === 'sfx' || k.id === 'box' ? [] : [{ x: c.x - 18, y: c.y + 60, join: (k.id === 'thought' ? 'bubbles' : k.id === 'whisper' ? 'seam' : 'merged') as TailJoin, width: 1.2 }];
+      const preview = swatchText({ ...c, style: k.id, tails, look: k.id === c.style ? c.look : undefined, ...(k.id === 'sfx' ? { font: 'bangers', textColor: '#f2c230', textOutline: '#111111', textOutlineWidth: 0.12 } : {}) });
+      return h('button', { type: 'button', class: 'shape-option', role: 'radio', 'aria-checked': String(k.id === c.style), 'aria-label': k.label, title: k.label,
+        onclick: () => { kind.value = k.id; kind.dispatchEvent(new Event('change')); } },
+        balloonSwatch(preview, sheet(), page.widthIn, page.heightIn, 76, 50), h('span', {}, k.label.replace(' balloon', '')));
+    }));
+    // Looks for this kind: one click instead of three sliders
+    const LOOKS: Partial<Record<BalloonStyle, { label: string; look: NonNullable<CaptionSpec['look']> }[]>> = {
+      speech: [{ label: 'Round', look: { round: 2.7, wobble: 0 } }, { label: 'Squarish', look: { round: 7, wobble: 0 } }, { label: 'Hand-drawn', look: { round: 3, wobble: 0.6 } }],
+      whisper: [{ label: 'Round', look: { round: 2.7, wobble: 0 } }, { label: 'Wavy', look: { round: 3, wobble: 0.5 } }],
+      shout: [{ label: 'Burst', look: { spikes: 14 } }, { label: 'Sharp', look: { spikes: 24, spikeDepth: 0.6 } }, { label: 'Soft', look: { spikes: 9, spikeDepth: 0.25 } }],
+      thought: [{ label: 'Fluffy', look: { bumps: 10 } }, { label: 'Cloud', look: { bumps: 16, bumpDepth: 0.15 } }, { label: 'Puffy', look: { bumps: 6, bumpDepth: 0.3 } }],
+    };
+    const looks = LOOKS[c.style];
+    const lookPicker = looks ? h('div', { class: 'shape-picker looks', role: 'group', 'aria-label': 'Balloon look presets', 'data-noicons': '' }, looks.map((o) =>
+      h('button', { type: 'button', class: 'shape-option', 'aria-label': o.label + ' look', title: o.label,
+        onclick: () => editCap('Balloon look: ' + o.label, (x) => ({ ...x, look: { ...x.look, ...o.look } })) },
+        balloonSwatch(swatchText({ ...c, look: { ...c.look, ...o.look } }), sheet(), page.widthIn, page.heightIn, 70, 46), h('span', {}, o.label)))) : null;
     el.append(sec('Balloon',
-      row('Kind', kind),
+      kinds,
+      lookPicker,
       c.style !== 'sfx' ? h('div', { style: 'display:flex;gap:10px' }, h('label', { class: 'mini' }, 'Fill', fill), h('label', { class: 'mini' }, 'Ink', ink)) : null,
       c.style !== 'sfx' ? slider('Border', 0, 0.4, 0.01, c.inkWidth, (x, v) => ({ ...x, inkWidth: v })) : slider('Outline', 0, 0.5, 0.01, c.textOutlineWidth, (x, v) => ({ ...x, textOutlineWidth: v, textOutline: x.textOutline ?? '#111111' })),
       slider('Width', 0.5, 2.5, 0.05, c.shape ?? 1, (x, v) => ({ ...x, shape: v })),

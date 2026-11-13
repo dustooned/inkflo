@@ -711,3 +711,25 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .collage-range { display: grid; grid-template-columns: 72px minmax(0, 1fr) 5ch; }
 .collage-range input[type=range] { width: 100%; }
 .collage-edge { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+
+/* Style sheet preview */
+.sheet-preview-box { margin: 0; }
+.sheet-preview { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+
+/* Caption: balloon kinds and looks as drawn previews */
+.shape-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.shape-picker.looks { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.shape-option { display: grid; justify-items: center; gap: 2px; padding: 5px 2px 4px; border: 1px solid var(--line-2); border-radius: 8px; background: #fbf8f1; color: #4a4c55; font-size: 10.5px; min-width: 0; }
+.shape-option:hover { border-color: var(--btn-hover); }
+.shape-option[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.shape-option span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Export previews */
+.export-previews { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.export-previews figure, .psd-thumb { margin: 0; text-align: center; font-size: 11px; color: var(--text-soft); }
+.export-thumb { display: block; width: 96px; height: auto; border: 1px solid var(--line); border-radius: 4px; background: repeating-conic-gradient(#e7e3da 0 25%, #f8f6f1 0 50%) 0 0 / 12px 12px; box-shadow: var(--shadow); }
+.psd-summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; }
+.psd-summary > :not(.psd-thumb) { grid-column: 2; }
+.psd-thumb { grid-row: 1 / span 4; }
+.page-range { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.page-range input { min-width: 0; flex: 1 1 52px; }

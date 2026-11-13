@@ -800,3 +800,20 @@ an iPad pays for on every frame:
   the cut collage piece crossed books with its cut, 60% tear and paper edge.
 - **Not checked:** Safari's system clipboard, which needs the write inside the key gesture. The
   in-app copy covers same-tab use.
+
+## Previews before you commit, 2026-11-13
+
+- **Caption → Balloon:** the Kind dropdown is now a picker of drawn previews. Each kind is
+  rendered by the page renderer in this balloon's font and colours. A row of **look presets**
+  for the current kind (speech: Round, Squarish, Hand-drawn; shout: Burst, Sharp, Soft;
+  thought: Fluffy, Cloud, Puffy; whisper: Round, Wavy) applies the settings in one click. The
+  sliders stay for fine tuning (`ui/balloonswatch.ts`).
+- **Lettering style sheet:** a live strip of Small, Body and Big in the house font at print size
+  relative to the page, plus a balloon for each character style.
+- **Export files → Page images:** thumbnails of the first page in the range for each ticked kind
+  (finished, inks, colours, pencils, lettering), with the colour mode, background and borders
+  applied. They refresh on every change.
+- **Export for drawing:** a thumbnail of the first page, with the artwork, or the empty template
+  of layout and lettering.
+- The page-range fields in Export files stay on one line.
+- Checks in Chrome: every preview rendered. Swatches are exempt from the icon decorator.
