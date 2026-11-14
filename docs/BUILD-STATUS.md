@@ -365,9 +365,6 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 
 ## Known issues
 
-- Pages that have been drawn on stay in memory for the session (pixel undo needs their canvases).
-  The memory budget does not apply to them.
-- Autosave flushes on tab hide, but a hard reload within 400 ms of an edit can lose that edit.
 - Lettering uses system comic fonts (Comic Neue / Comic Sans MS fallbacks); no font ships yet.
 - Not tested on an iPad or with a real pen. Desktop Chromium only.
 
@@ -1261,3 +1258,47 @@ The audit is in `docs/UI-AUDIT.md`. These are its four P0 items:
 - Checks: `autosave.test.ts` (9, including the quiet save: no dirty or saving state, nothing
   pending, still written). In the built-in pane: Home's new rows; Draw → Layout → Draw shows
   "Saved" throughout with nothing pending; Layout numbers on pills; Book thumbnails 182 × 281.
+
+## Art-readiness pass, 2026-11-14
+
+A fresh 12-page book at 300 dpi (6.625 × 10.187 in, 1988 × 3056 px layers) was taken through
+Script → Layout → Draw → Print → every export, in the built-in pane.
+
+**Fixed**
+- **Script Code view: Send to Layout was disabled on a new page.** Its enabled state was decided
+  when the editor opened (no beats yet), so a first script typed in Code couldn't be sent. The
+  button is now always enabled; it applies the typed script and then sends. An empty page gets a
+  plain-word hint.
+- **Pixel brushes stalled every frame.** The live preview of an aliased brush (`antiAlias:
+  false`, such as Tone brush) ran `hardenAlpha` over the whole stroke box on every frame. The GPU
+  readback cost a fixed ~30–45 ms per frame on a full page. The preview (`displaySource`) now
+  skips hardening, and the stroke is hardened once when it lands.
+  - Same-seed A/B: 354,470 inked pixels with an identical hash.
+  - Live frame went from 45 ms (p95 60) to under 0.1 ms; pen-up from 61 to 55 ms.
+  - Only visible change: a pixel brush's edge is soft mid-stroke.
+- **Memory on long sessions.** Every page drawn on stayed pinned for the whole session, about
+  23 MB per inked layer, with no limit (12 pages = 301 MB; iPad's budget is 300 MB).
+  - `Studio.run` now tags each step with its page (`drawings: [{ id: lastPageId }]`).
+  - Draw pins through `Studio.pinDrawn` (least recently drawn first).
+  - When a desk opens, `trimDrawn` lets go of the oldest drawn pages (never the current one)
+    until pinned pages fit in 70% of the budget. Each one gives up its undo steps, and older ones
+    (`forgetStepsFor`; redo is cleared if it touches the page), is unpinned, and can then park.
+  - A toast names the pages whose undo was freed.
+  - With the budget set to 120 MB, 8 inked pages held at 93–116 MB; before, memory grew by
+    23 MB per page. Undo and redo on the current page still worked, and a freed page reloaded
+    with all 8 strokes and 365,021 inked pixels.
+- The two old "Known issues" (drawn pages never released; hard reload losing an edit) are
+  removed. The reload guard came with the P0 fixes.
+
+**Measured, no change needed**
+- Pen moves: 0.1 ms each (p95 0.2). Rebuilding the chrome after a stroke: ~5 ms.
+- Exports of this book:
+  - Page PNGs at 1988 × 3056: 2 pages in 2.4 s.
+  - Layered PSD: 0.4 s, 3.8 MB, with Paper, a folder per inked panel with Ink, and borders.
+  - Print-shop PDF: 12 pages, TrimBox and BleedBox, 2.3 s.
+  - `.inkflo` round trip: same pages, strokes per page, beats, cuts and ink pixel hash; 1.9 MB.
+
+- Checks: `memory.test.ts` (3: drop a page's steps and older ones, clear redo that would replay it,
+  no-op for an untouched page). All tests pass.
+- **Not checked:** a real iPad and Pencil. Frame timing came from calling the preview directly,
+  because the pane was hidden; on screen, pixel brushes should now draw at the display's rate.

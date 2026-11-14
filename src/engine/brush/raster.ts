@@ -623,10 +623,15 @@ export class RasterEngine {
     return { x, y, w: x1 - x, h: y1 - y };
   }
 
-  /** Combine the textured normal/shading buffers, hardening only for explicit pixel brushes. */
-  private strokeImage(r: Rect): HTMLCanvasElement {
+  /**
+   * Combine the textured normal/shading buffers, hardening only for explicit pixel brushes.
+   * `live` (the preview while the pen is down) skips hardening: it reads pixels back from the GPU,
+   * a fixed ~30 ms stall per frame on a full-size page. The stroke is hardened once when it lands,
+   * so the result is the same; only the edge of the preview is softer mid-stroke.
+   */
+  private strokeImage(r: Rect, live = false): HTMLCanvasElement {
     const img = this.softImage(r);
-    if (this.record?.brush.antiAlias !== false) return img;
+    if (this.record?.brush.antiAlias !== false || live) return img;
     const g = ctx2d(this.grained);
     if (img !== this.grained) {
       g.clearRect(r.x, r.y, r.w, r.h);
@@ -647,10 +652,10 @@ export class RasterEngine {
     return this.grained;
   }
 
-  private apply(target: CanvasRenderingContext2D, r: Rect): void {
+  private apply(target: CanvasRenderingContext2D, r: Rect, live = false): void {
     const rec = this.record;
     if (!rec) return;
-    let img = this.strokeImage(r);
+    let img = this.strokeImage(r, live);
     if (this.clipMask) {
       if (!anySelected(this.clipMask, this.width, r)) return;
       const st = ctx2d(this.stencil);
@@ -684,7 +689,7 @@ export class RasterEngine {
       w.clearRect(r.x, r.y, r.w, r.h);
       w.drawImage(this.target, r.x, r.y, r.w, r.h, r.x, r.y, r.w, r.h);
     }
-    this.apply(w, r);
+    this.apply(w, r, true);
     return this.work;
   }
 

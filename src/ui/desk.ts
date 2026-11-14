@@ -141,6 +141,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const composition = stage === 'layout' || stage === 'draw' || stage === 'caption';
   await studio.residency.pin(art);
   studio.setLast(page, stage);
+  // long sessions: pages drawn on earlier give up their undo so their memory can be freed
+  const freed = studio.trimDrawn(page.id);
+  if (freed.length) toast(`Freed memory: undo for ${freed.map((a) => a.label).join(', ')} is no longer available. Your art is saved.`, 4000);
   if (page.state[stage] === 0) studio.markStage(page, stage, 1);
 
   // ---- view state

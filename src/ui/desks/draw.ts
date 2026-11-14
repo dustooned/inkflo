@@ -236,7 +236,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const keepResident = () => {
     if (pinned) return;
     pinned = true;
-    void studio.residency.pin(art);
+    studio.pinDrawn(art);
   };
 
   const eraseType = (): LayerType => (variantOf(mode, 'eraser') === 'pencil' ? 'pencil' : 'ink');

@@ -164,7 +164,8 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       jsonButtons(book.title, () => bookData(book), 'Whole book (JSON)'));
     el.replaceChildren(h('div', { class: 'script-code' }, h('div', { class: 'script-code-main' }, editor, problems,
       h('div', { class: 'beat-actions' }, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('span', { class: 'spacer' }),
-        h('button', { class: 'btn primary', type: 'button', disabled: !page.beats.length, onclick: () => { applyCode(); commit('Edit script'); sendToLayout(); } }, 'Send to Layout →')))), legend));
+        // enabled from the start: the click applies what was typed, so a new page's first script can go straight to Layout
+        h('button', { class: 'btn primary', type: 'button', onclick: () => { applyCode(); commit('Edit script'); sendToLayout(); } }, 'Send to Layout →')))), legend));
   }
 
   const mode: DeskMode = {
@@ -248,6 +249,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
   };
 
   function sendToLayout(): void {
+    if (!page.beats.length) { toast('Write at least one panel first, like “PANEL 1: Wide shot”.'); return; }
     if (page.cuts.length) {
       toast(`This page is already carved (${ctx.panels().length} panels). Edit it in Layout.`);
       location.hash = `#desk/${ctx.book.id}/${page.id}/layout`;

@@ -2,7 +2,7 @@ import { loadMarks, markKeys } from '../render/marks';
 import { scalePanelTransforms } from '../geom/pagetemplates';
 import { newBook, newId, newPage, pagePixels, sheetOf, type Book, type BookAsset, type Page, type PrintSpec, type Stage } from '../doc/model';
 import { assetsOf, parseBookFile, readBookAssets, stringifyBookFile } from '../doc/schema';
-import { newPageArt, referencedKeys, Residency, type PageArt } from '../draw/residency';
+import { newPageArt, referencedKeys, Residency, residentBytes, type PageArt } from '../draw/residency';
 import { History, type Command } from '../engine/core/history';
 import { readZip, writeZip } from '../engine/io/zip';
 import { Autosaver, type SaveState } from '../io/autosave';
@@ -201,8 +201,11 @@ export class Studio {
     const touch = () => {
       if (this.book) this.book.updatedAt = Date.now();
     };
+    // every step remembers the page it was made on, so memory trimming can drop just that page's steps
+    const page = this.book?.lastPageId;
     return {
       label: cmd.label,
+      drawings: cmd.drawings ?? (page ? [{ id: page }] : undefined),
       do: () => {
         cmd.do();
         touch();
@@ -257,6 +260,40 @@ export class Studio {
     if (page.state[stage] >= state) return;
     page.state[stage] = state;
     this.saver.markDirty();
+  }
+
+  // ---- memory on long sessions
+  /** Pages drawn on this session, kept live for pixel undo; least recently drawn first. */
+  private drawnPins: PageArt[] = [];
+  /** Share of the canvas budget that drawn pages may hold before the oldest is let go. */
+  static readonly DRAWN_SHARE = 0.7;
+
+  /** Keep a page's canvases live while its pixel undo steps are in the history. */
+  pinDrawn(art: PageArt): void {
+    const at = this.drawnPins.indexOf(art);
+    if (at >= 0) { this.drawnPins.splice(at, 1); this.drawnPins.push(art); return; }
+    this.drawnPins.push(art);
+    void this.residency.pin(art);
+  }
+
+  /**
+   * Over budget: let go of the least recently drawn pages (never `current`). Each one gives up its
+   * undo steps (and anything older), then the residency can compress and park it like any page.
+   * Returns the pages let go, for a message.
+   */
+  trimDrawn(current: string | undefined): PageArt[] {
+    const freed: PageArt[] = [];
+    const limit = this.residency.budget * Studio.DRAWN_SHARE;
+    const held = () => this.drawnPins.reduce((n, a) => n + residentBytes(a), 0);
+    while (held() > limit) {
+      const victim = this.drawnPins.find((a) => a.id !== current);
+      if (!victim) break;
+      forgetStepsFor(this.history, victim.id);
+      this.drawnPins.splice(this.drawnPins.indexOf(victim), 1);
+      this.residency.unpin(victim);
+      freed.push(victim);
+    }
+    return freed;
   }
 
   setLast(page: Page, stage: Stage): void {
@@ -498,4 +535,21 @@ export class Studio {
     await this.store.saveHead(meta, { id: file.book.id, json: stringifyBookFile(file), savedAt: Date.now() }, assets, [...assets.keys()]);
     return meta;
   }
+}
+
+/**
+ * Drop the undo steps made on one page, and every step older than its last one (history is a
+ * single line, so later steps may build on them), plus the redo list if it touches that page.
+ * History is vendored from 2Dope and has no such call, so this works on its two lists directly.
+ */
+export function forgetStepsFor(history: History, pageId: string): number {
+  const h = history as unknown as { done: Command[]; undone: Command[]; onChange: () => void };
+  const touches = (c: Command) => !!c.drawings?.some((d) => d.id === pageId);
+  let last = -1;
+  h.done.forEach((c, i) => { if (touches(c)) last = i; });
+  const dropped = last + 1;
+  if (dropped) h.done.splice(0, dropped);
+  if (h.undone.some(touches)) h.undone = [];
+  if (dropped) h.onChange();
+  return dropped;
 }
