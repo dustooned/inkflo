@@ -984,3 +984,28 @@ an iPad pays for on every frame:
     and nothing for a too-short cut.
 - **Not seen on screen:** the hidden pane doesn't run animation frames and Chrome was
   disconnected, so the live readout over the canvas wasn't screenshotted.
+
+## Layout as numbers and code, and JSON for game makers, 2026-11-13
+
+- **Panel numbers:** the selected panel (Resize gutters) shows position and size and has number
+  fields for Move right, Move down, Turn and Scale, plus **Put back in place**. These are written
+  as a panel transform about the panel's centre (`transformMatrix` / `describeTransform`).
+- **Layout → Code** (tool bar): the sidebar, widened to 380 px, holds the layout as text: `gutter`,
+  `border` (pt or in), `curve`, `round`, `cut x,y -> x,y [-> …] [bend a b]`, `keep <id>` for drawn
+  one-panel cuts, and `panel N move x,y turn d scale k round r`.
+  - It applies live once every line reads; a half-typed line leaves the page alone and shows a
+    plain-word error.
+  - Each pause is one undo step. Canvas edits rewrite the code, and comments survive while the
+    page is unchanged elsewhere.
+  - A live panel list shows size and position. `geom/layoutcode.ts` is pure and round-trips cut
+    ids and transforms.
+- **JSON** (`geom/pagedata.ts`): panels in reading order with polygons in inches and 0–1 page units,
+  boxes, moves, descriptions and parsed lines (speaker, kind, text). Copy or Download from
+  Script's and Layout's code views; Script also exports the whole book. The shared editor and JSON
+  buttons are in `ui/codeeditor.ts`.
+- Checks: `layoutcode.test.ts` (7). In the built-in pane:
+  - Layout code on a 13 × 4″ strip: two cuts and a turned panel 3 gave 4 panels with gutter 0.3
+    and border 3 pt. A half-typed `cut 1,1` was flagged and left the page alone. Undo and redo
+    worked.
+  - Panel 1's Turn field set exactly 10°, the cuts didn't change, and Put back in place removed only
+    that panel's move.

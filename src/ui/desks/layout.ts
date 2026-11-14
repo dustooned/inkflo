@@ -17,6 +17,9 @@ import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../g
 import { snapCutEnd } from '../../geom/cutangle';
 import { drawCutAngle } from '../cutangleoverlay';
 import { panelPlacement } from '../panelplacement';
+import { describeTransform, formatLayoutCode, LAYOUT_LEGEND, parseLayoutCode, transformMatrix } from '../../geom/layoutcode';
+import { pageData } from '../../geom/pagedata';
+import { codeEditor, jsonButtons } from '../codeeditor';
 
 type Side = 'n' | 's' | 'e' | 'w';
 interface Handle {
@@ -165,6 +168,103 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     preview = undefined;
   }
 
+  // ---- Layout as code (in the sidebar, applied live to the canvas)
+  let codeOpen = (() => { try { return localStorage.getItem('inkflo:layout-code') === '1'; } catch { return false; } })();
+  let codeBefore: { cuts: Cut[]; layout: PageLayout | undefined } | null = null;
+  let lastWritten = '';
+  const livePanels = h('ol', { class: 'script-code-live', 'aria-label': 'Panels as read so far' });
+  const layoutCode = codeEditor({
+    label: 'Layout as code',
+    minHeight: 260,
+    parse: (text) => parseLayoutCode(text, page),
+    onLive: (text) => {
+      const parsed = parseLayoutCode(text, page);
+      // keep the page as it was while a line is half typed; apply once everything reads
+      if (parsed.errors.length) return;
+      const next = { cuts: parsed.cuts, layout: parsed.layout };
+      if (JSON.stringify(next) === JSON.stringify({ cuts: page.cuts, layout: layoutOf(page) })) return;
+      codeBefore ??= { cuts: structuredClone(page.cuts), layout: structuredClone(page.layout) };
+      page.cuts = next.cuts;
+      page.layout = next.layout;
+      lastWritten = formatLayoutCode(page);
+      paintLive();
+      ctx.request();
+    },
+    onSettle: () => {
+      const was = codeBefore;
+      codeBefore = null;
+      if (!was) return;
+      const now = { cuts: structuredClone(page.cuts), layout: structuredClone(page.layout) };
+      const apply = (s: typeof now) => { page.cuts = structuredClone(s.cuts); page.layout = structuredClone(s.layout); };
+      studio.run({ label: 'Edit layout code', do: () => apply(now), undo: () => apply(was) }, true);
+      studio.markStage(page, 'layout', 1);
+      ctx.chrome();
+    },
+  });
+  function paintLive(): void {
+    livePanels.replaceChildren(...derivePanels(page).map((q) => h('li', {}, h('b', {}, 'Panel ' + (q.index + 1)),
+      h('span', {}, `${(q.bbox.x1 - q.bbox.x0).toFixed(2)} × ${(q.bbox.y1 - q.bbox.y0).toFixed(2)} in at ${q.bbox.x0.toFixed(2)},${q.bbox.y0.toFixed(2)}`),
+      q.transform ? h('small', {}, 'moved') : null)));
+  }
+  function codePanel(): HTMLElement {
+    // rewrite the text only when the page changed somewhere else (keeps comments while typing)
+    const current = formatLayoutCode(page);
+    if (!layoutCode.focused() && current !== lastWritten) { layoutCode.setText(current); lastWritten = current; }
+    layoutCode.paint();
+    paintLive();
+    return h('div', { class: 'layout-code' },
+      h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, 'Layout as code')),
+      h('div', { class: 'sec stack' }, layoutCode.editor, layoutCode.problems,
+        h('p', { class: 'note', style: 'margin:0' }, 'Inches from the top-left of the page. The page updates when every line reads, and each pause is one undo step. Draw on the canvas any time and the code follows.')),
+      h('div', { class: 'sec' }, h('h4', {}, 'Panels'), livePanels),
+      h('details', { class: 'sec' }, h('summary', {}, 'Legend'),
+        h('dl', { class: 'code-legend' }, LAYOUT_LEGEND.flatMap((l) => [h('dt', {}, h('code', {}, l.code)), h('dd', {}, l.means)]))),
+      h('div', { class: 'sec' }, jsonButtons(`${book.title} page ${book.pages.indexOf(page) + 1}`, () => pageData(book, page))));
+  }
+  function setCodeOpen(on: boolean): void {
+    codeOpen = on;
+    try { localStorage.setItem('inkflo:layout-code', on ? '1' : '0'); } catch { /* private mode */ }
+    ctx.stage.closest('.screen')?.classList.toggle('layout-code-open', on);
+    ctx.chrome();
+  }
+  queueMicrotask(() => ctx.stage.closest('.screen')?.classList.toggle('layout-code-open', codeOpen));
+
+  /** Set the selected panel's move, turn and scale (one undo step). */
+  function setPanelNumbers(p: Panel, numbers: { move: Pt; turn: number; scale: number }): void {
+    const src = p.source ?? p;
+    const anchor = anchorFor(src);
+    const at = { x: anchor.x / page.widthIn, y: anchor.y / page.heightIn };
+    studio.editPage(page, 'Panel numbers', ['layout'], (pg) => {
+      const L = layoutOf(pg);
+      const others = (L.panelTransforms ?? []).filter((t) => !pointInPoly({ x: t.at.x * pg.widthIn, y: t.at.y * pg.heightIn }, src.pts));
+      const still = numbers.move.x === 0 && numbers.move.y === 0 && numbers.turn === 0 && numbers.scale === 1;
+      const order = Math.max(0, ...others.map((t) => t.order)) + 1;
+      const transforms = still ? others : [...others, { at, matrix: transformMatrix(src.centroid, numbers.move, numbers.turn, numbers.scale), order: p.transform?.order ?? order }];
+      pg.layout = { ...L, panelTransforms: transforms };
+      if (!transforms.length) delete pg.layout.panelTransforms;
+    });
+    ctx.chrome();
+    ctx.request();
+  }
+  function panelNumbers(p: Panel): HTMLElement {
+    const now = p.transform && p.source ? describeTransform(p.transform, p.source.centroid) : { move: { x: 0, y: 0 }, turn: 0, scale: 1 };
+    const field = (label: string, value: number, step: number, min: number, max: number, set: (v: number) => void) => {
+      const input = h('input', { type: 'number', step, min, max, value: Number(value.toFixed(3)), 'aria-label': `Panel ${p.index + 1} ${label}` });
+      input.addEventListener('change', () => { const v = input.valueAsNumber; if (Number.isFinite(v) && v >= min && v <= max) set(v); else input.value = String(Number(value.toFixed(3))); });
+      return h('label', { class: 'field' }, label, input);
+    };
+    const b = p.bbox;
+    return h('div', { class: 'panel-numbers' },
+      h('div', { class: 'rows' }, 'Position', h('b', {}, `${b.x0.toFixed(2)}, ${b.y0.toFixed(2)} in`)),
+      h('div', { class: 'rows' }, 'Size', h('b', {}, `${(b.x1 - b.x0).toFixed(2)} × ${(b.y1 - b.y0).toFixed(2)} in`)),
+      h('div', { class: 'type-grid' },
+        field('Move right (in)', now.move.x, 0.05, -50, 50, (v) => setPanelNumbers(p, { ...now, move: { x: v, y: now.move.y } })),
+        field('Move down (in)', now.move.y, 0.05, -50, 50, (v) => setPanelNumbers(p, { ...now, move: { x: now.move.x, y: v } })),
+        field('Turn (°)', now.turn, 1, -360, 360, (v) => setPanelNumbers(p, { ...now, turn: v })),
+        field('Scale', now.scale, 0.05, 0.1, 5, (v) => setPanelNumbers(p, { ...now, scale: v }))),
+      p.transform ? h('button', { class: 'btn', type: 'button', onclick: () => setPanelNumbers(p, { move: { x: 0, y: 0 }, turn: 0, scale: 1 }) }, 'Put back in place') : null);
+  }
+
   function setLayout(patch: Partial<PageLayout>, commit: boolean): void {
     const before = layoutOf(page);
     const layout = { ...before, ...patch };
@@ -263,6 +363,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       return !edge || drag?.whole ? 'move' : edge.axis === 'x' ? 'ew-resize' : 'ns-resize';
     },
     ctx(bar) {
+      bar.append(h('button', { class: 'btn document-option', type: 'button', 'aria-pressed': String(codeOpen), title: 'Edit the layout as numbers and code in the sidebar', onclick: () => setCodeOpen(!codeOpen) }, codeOpen ? 'Close code' : 'Code'));
       const L = layoutOf(page);
       if (mode.tool === 'place') {
         bar.append(...placement.controls());
@@ -284,6 +385,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       );
     },
     inspector(el) {
+      if (codeOpen) { el.append(codePanel()); return; }
       const ps = displayPanels();
       const p = selected();
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, `${ps.length} panel${ps.length === 1 ? '' : 's'}`)));
@@ -335,7 +437,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         const setRadius = (v: number, commit: boolean) => setLayout({ panelCorners: [...otherCorners, { at, radius: v }] }, commit);
         el.append(
           h('div', { class: 'sec' }, h('h4', {}, `Panel ${p.index + 1}`),
-            h('div', { class: 'rows' }, 'Size', h('b', {}, `${(p.bbox.x1 - p.bbox.x0).toFixed(2)} × ${(p.bbox.y1 - p.bbox.y0).toFixed(2)} in`)),
+            panelNumbers(p),
             h('div', { class: 'rows' }, 'Reading order', h('b', {}, String(p.index + 1))),
             slider('Panel corner radius', 0, 0.5, 0.01, overrides.at(-1)?.radius ?? radius, (v) => `${v.toFixed(2)}″`, (v) => setRadius(v, false), (v) => { setRadius(v, true); ctx.chrome(); }),
             overrides.length ? h('button', { class: 'btn', type: 'button', onclick: () => { setLayout({ panelCorners: otherCorners }, true); ctx.chrome(); } }, 'Use page radius') : null,

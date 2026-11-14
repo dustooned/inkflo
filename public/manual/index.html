@@ -194,6 +194,18 @@ section[hidden] { display: none; }
 <div class="history">The <strong>splash page</strong>, a single huge panel, has opened stories since the early superhero comics. The <strong>nine-panel grid</strong> is famous from <em>Watchmen</em> (Alan Moore and Dave Gibbons, 1986–87), where an unchanging grid acts like a metronome, so breaking it hits hard. Many cartoonists teach the grid as a rhythm: panel after panel like beats in a bar, with the last panel on the page (the <em>downbeat</em>) saved for the punchline or the turn.</div>
 <p>Use <strong>Mark last panel as downbeat</strong> to flag the panel that carries the page's hit. Use <strong>Spread</strong> in the header to see facing pages together. Readers take in a whole spread at once, so a big reveal is best placed after a page turn, on a left-hand page, rather than where the reader's eye can catch it early.</p>
 
+<h3 id="layout-code">Layout as numbers and code</h3>
+<p>Select a panel (with <strong>Resize gutters</strong>) to see its <strong>position and size</strong> in inches and type exact <strong>Move right</strong>, <strong>Move down</strong>, <strong>Turn</strong> and <strong>Scale</strong> values; <strong>Put back in place</strong> undoes a move. For the whole page, press <strong>Code</strong> in the tool bar: the sidebar shows the layout as short lines you can edit, and the page follows as soon as every line reads.</p>
+<table>
+<tr><th>Type</th><th>Does</th></tr>
+<tr><td><code>gutter 0.2</code> · <code>border 2.5pt</code> · <code>curve 2</code> · <code>round 0.1</code></td><td>Gutter width, border width, rounding of drawn cuts, corner radius</td></tr>
+<tr><td><code>cut 3.3,0 -&gt; 3.3,10</code></td><td>A cut through these points (inches from the top-left); it runs on to the page edges</td></tr>
+<tr><td><code>cut … bend 2,1 4,3</code></td><td>Curves the cut with two handles</td></tr>
+<tr><td><code>keep c1a2b</code></td><td>A one-panel cut you drew; delete the line to remove it</td></tr>
+<tr><td><code>panel 2 move 0.4,0 turn 8 scale 1.1</code> · <code>panel 2 round 0.3</code></td><td>Move, turn and resize a panel · round one panel's corners</td></tr>
+</table>
+<p>Draw with the Knife and the code updates; edit the code and the page updates. Each pause in typing is one undo step.</p>
+<p><strong>For game makers:</strong> both Script's and Layout's code views have <strong>Copy JSON</strong> and <strong>Download</strong>: every panel's shape (in inches and as 0–1 page fractions), its position, any move or turn, its description and its lines with speaker and kind. Script also exports the whole book. Use it for cutscenes, visual novels, motion comics or your own reader.</p>
 <h3 id="panel-tools">Moving and shaping panels</h3>
 <ul>
 <li><strong>Resize gutters</strong> (<kbd>R</kbd>): drag a gutter or a panel's handle to move the cut under it.</li>

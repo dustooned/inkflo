@@ -9,6 +9,8 @@ import { h, toast } from '../dom';
 import { openDialogue } from '../dialogue';
 import { formatScriptCode, parseScriptCode, SCRIPT_LEGEND } from '../../geom/scriptcode';
 import { seg } from '../dom';
+import { jsonButtons } from '../codeeditor';
+import { bookData, pageData } from '../../geom/pagedata';
 /** Script: the page as a list of beats. Each beat becomes a panel; its lines become balloons. */
 export function scriptDesk(ctx: DeskCtx): DeskMode {
   const { studio, book, page } = ctx;
@@ -157,7 +159,9 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       h('h4', {}, 'Legend'),
       h('dl', {}, SCRIPT_LEGEND.flatMap((l) => [h('dt', {}, h('code', {}, l.code)), h('dd', {}, l.means)])),
       h('h4', {}, 'Live'), live,
-      h('p', { class: 'note' }, 'Changes apply as you type. Each pause in typing is one undo step.'));
+      h('p', { class: 'note' }, 'Changes apply as you type. Each pause in typing is one undo step.'),
+      jsonButtons(`${book.title} page ${book.pages.indexOf(page) + 1}`, () => pageData(book, page)),
+      jsonButtons(book.title, () => bookData(book), 'Whole book (JSON)'));
     el.replaceChildren(h('div', { class: 'script-code' }, h('div', { class: 'script-code-main' }, editor, problems,
       h('div', { class: 'beat-actions' }, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('span', { class: 'spacer' }),
         h('button', { class: 'btn primary', type: 'button', disabled: !page.beats.length, onclick: () => { applyCode(); commit('Edit script'); sendToLayout(); } }, 'Send to Layout →')))), legend));
