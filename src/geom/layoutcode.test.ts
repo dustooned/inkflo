@@ -61,6 +61,24 @@ describe('layout code', () => {
     expect(parseLayoutCode(code, p).cuts[0]).toBe(p.cuts[0]);
   });
 
+  it('sets black gutters and an inked page edge, and writes them back', () => {
+    const p = page();
+    const r = parseLayoutCode('gutters black\nedge on\ncut 0,5 -> 6.625,5', p);
+    expect(r.errors).toEqual([]);
+    expect(r.layout.gutterPaper).toBe('#000000');
+    expect(r.layout.edgeBorder).toBe(true);
+    const code = formatLayoutCode({ ...p, cuts: r.cuts, layout: r.layout });
+    expect(code).toMatch(/^gutters black$/m);
+    expect(code).toMatch(/^edge on$/m);
+    expect(parseLayoutCode('gutters none', p).layout.gutterPaper).toBeNull();
+    expect(parseLayoutCode('gutters #1A2B3C', p).layout.gutterPaper).toBe('#1a2b3c');
+    // deleting the lines goes back to white gutters and no edge
+    const plain = parseLayoutCode('gutter 0.2', { ...p, layout: r.layout });
+    expect(plain.layout.gutterPaper).toBeUndefined();
+    expect(plain.layout.edgeBorder).toBeUndefined();
+    expect(parseLayoutCode('edge maybe', p).errors[0]!.message).toMatch(/on or off/);
+  });
+
   it('keeps every character for highlighting', () => {
     const src = '  cut 1,0 -> 1,9   # left strip';
     const r = parseLayoutCode(src, page());

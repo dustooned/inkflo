@@ -9,6 +9,8 @@ import { anchorFor } from './groups';
  *   border 2.5pt
  *   curve 2
  *   round 0.1
+ *   gutters black                    gutter colour: white, black, none (see-through) or #hex
+ *   edge on                          ink the page edge, so outer panels are framed too
  *   cut 4.33,0 -> 4.33,4            a straight cut; it runs on to the page edges
  *   cut 0,2 -> 6,2.4 -> 13,2         a path through these points
  *   cut 3,0 -> 3,4 bend 2.5,1 3.5,3  a curved cut (two Bézier handles)
@@ -57,6 +59,8 @@ export function formatLayoutCode(page: Page): string {
     `gutter ${r3(L.gutter)}`,
     `border ${r3(L.border * 72)}pt`,
     `curve ${L.curve}`,
+    `gutters ${gutterWord(L.gutterPaper)}`,
+    `edge ${L.edgeBorder ? 'on' : 'off'}`,
   ];
   if (L.cornerRadius) out.push(`round ${r3(L.cornerRadius)}`);
   for (const c of page.cuts) {
@@ -77,6 +81,13 @@ export function formatLayoutCode(page: Page): string {
   return out.join('\n');
 }
 
+const NAMED: Record<string, string> = { white: '#ffffff', black: '#000000' };
+function gutterWord(paper: string | null | undefined): string {
+  if (paper === null) return 'none';
+  const hex = (paper ?? '#ffffff').toLowerCase();
+  return Object.entries(NAMED).find(([, v]) => v === hex)?.[0] ?? hex;
+}
+
 function pointIn(p: Pt, poly: readonly Pt[]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -94,6 +105,9 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
   const base = layoutOf(page);
   const layout: PageLayout = { ...DEFAULT_LAYOUT, ...base, panelTransforms: [], panelCorners: [] };
   delete layout.cornerRadius;
+  // colour and edge come from the code too: a deleted line means the default (white, no edge)
+  delete layout.gutterPaper;
+  delete layout.edgeBorder;
   const cuts: Cut[] = [];
   const lines: ParsedLayout['lines'] = [];
   const errors: ParsedLayout['errors'] = [];
@@ -101,7 +115,9 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
   const oldAcross = page.cuts.filter((c) => c.mode !== 'panel');
   let acrossIndex = 0;
   src.replace(/\r/g, '').split('\n').forEach((row, i) => {
-    const hash = row.indexOf('#');
+    // a comment starts at #, except a colour like #1a1a1a
+    const m = /(^|\s)#(?![0-9a-f]{6}(?![0-9a-z]))/i.exec(row);
+    const hash = m ? m.index + m[1]!.length : -1;
     const body = hash >= 0 ? row.slice(0, hash) : row;
     const comment = hash >= 0 ? row.slice(hash) : '';
     const words = body.trim().split(/\s+/).filter(Boolean);
@@ -111,7 +127,7 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
     for (const w of words) {
       const at = rest.indexOf(w);
       if (at > 0) tokens.push({ kind: 'text', text: rest.slice(0, at) });
-      tokens.push({ kind: w === '->' ? 'arrow' : POINT.test(w) || NUM.test(w.replace(/(pt|in)$/, '')) ? 'num' : /^c[a-z0-9]{1,5}$/i.test(w) && words[0] === 'keep' ? 'id' : 'key', text: w });
+      tokens.push({ kind: w === '->' ? 'arrow' : POINT.test(w) || NUM.test(w.replace(/(pt|in)$/, '')) || /^#[0-9a-f]{6}$/i.test(w) ? 'num' : /^c[a-z0-9]{1,5}$/i.test(w) && words[0] === 'keep' ? 'id' : 'key', text: w });
       rest = rest.slice(at + w.length);
     }
     if (rest) tokens.push({ kind: 'text', text: rest });
@@ -135,6 +151,16 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       const n = num(w.replace(/(pt|in)$/, ''), 0, inches ? 0.5 : 36);
       if (n === null) return fail('border needs a width, like “border 2.5pt” or “border 0.03in”.');
       layout.border = inches ? n : n / 72;
+    } else if (k === 'gutters' || k === 'gutter-colour' || k === 'gutter-color') {
+      const w = (args[0] ?? '').toLowerCase();
+      if (w === 'none' || w === 'clear' || w === 'transparent') layout.gutterPaper = null;
+      else if (NAMED[w]) { if (w !== 'white') layout.gutterPaper = NAMED[w]; }
+      else if (/^#[0-9a-f]{6}$/.test(w)) { if (w !== '#ffffff') layout.gutterPaper = w; }
+      else return fail('gutters needs a colour: white, black, none, or a hex like #1a1a1a.');
+    } else if (k === 'edge') {
+      const w = (args[0] ?? '').toLowerCase();
+      if (w === 'on' || w === 'yes') layout.edgeBorder = true;
+      else if (w !== 'off' && w !== 'no') return fail('edge needs on or off, like “edge on”.');
     } else if (k === 'curve') {
       const n = num(args[0], 0, 5);
       if (n === null || !Number.isInteger(n)) return fail('curve needs a whole number from 0 (sharp) to 5 (round).');
@@ -163,7 +189,7 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       if (n === null || !Number.isInteger(n)) return fail('panel needs its number, like “panel 2 turn 5”.');
       panelLines.push({ line: i + 1, n, words: args.slice(1).map((w) => w.toLowerCase()) });
     } else {
-      return fail(`“${key}” isn't a layout word. Use gutter, border, curve, round, cut, keep or panel.`);
+      return fail(`“${key}” isn't a layout word. Use gutter, gutters, border, edge, curve, round, cut, keep or panel.`);
     }
     lines.push({ tokens });
   });
@@ -198,6 +224,8 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
 export const LAYOUT_LEGEND: { code: string; means: string }[] = [
   { code: 'gutter 0.2', means: 'Space between panels, inches' },
   { code: 'border 2.5pt', means: 'Panel border width (pt or in)' },
+  { code: 'gutters black', means: 'Gutter colour: white, black, none or #hex' },
+  { code: 'edge on', means: 'Ink the page edge (frames the outer panels)' },
   { code: 'curve 2', means: 'Rounding of drawn cuts, 0–5' },
   { code: 'round 0.1', means: 'Corner radius of every panel' },
   { code: 'cut 3.3,0 -> 3.3,10', means: 'A cut through these points; runs on to the edges' },

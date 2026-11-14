@@ -1108,3 +1108,15 @@ an iPad pays for on every frame:
 - **Not checked:** real touch on iPad; dropping onto a laid-out canvas in a visible pane. The
   test points were computed from the stage geometry because the hidden pane leaves the canvas
   at 300 × 150.
+
+## Layout code: gutter colour and page edge, 2026-11-13
+
+- **Fix:** Layout code couldn't set the gutter colour or the inked page edge, so code layouts never
+  had black gutters or framed outer panels.
+- **New words:** `gutters white|black|none|#hex` (sets `gutterPaper`) and `edge on|off` (sets
+  `edgeBorder`). Both are always written by `formatLayoutCode`.
+- Deleting either line returns it to the default: white gutters and no edge.
+- A `#` followed by six hex digits is now a colour, not the start of a comment.
+- Checks: `layoutcode.test.ts` (8). In the built-in pane, typing `gutters black` and `edge on` in the
+  code view rendered black gutter and edge pixels while the panel interiors stayed paper. Undo
+  restored the page.
