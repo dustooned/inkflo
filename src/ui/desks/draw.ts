@@ -287,7 +287,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const paint = group?.layers.find((l) => l.visible && !l.locked && !l.vector && !l.image && !l.screenTone && art.planes[l.id]);
     openAdjustments(ctx, target === 'layer' ? active()?.layer.id ?? null : paint?.id ?? null, keepResident);
   }
-  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); });
+  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); }, () => active()?.layer.id ?? null);
   const selectImage = (id: string) => {
     activeLayer.set(page.id, id);
     contextGroupId = active()?.group.id ?? null;

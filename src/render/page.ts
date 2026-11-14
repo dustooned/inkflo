@@ -7,7 +7,7 @@ import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack,
 import { panelForGroup } from '../geom/groups';
 import { paintBalloonGroup } from './caption';
 import { captionGroups } from '../geom/captiongroup';
-import { drawScreenTone } from './tone';
+import { drawLayerAsTone, drawScreenTone, type ToneArea } from './tone';
 
 /**
  * The one page renderer (rule 5). Screen, thumbnails, covers, print PNGs and every export draw
@@ -342,14 +342,14 @@ function makeCanvasLike(w: number, h: number): HTMLCanvasElement {
 }
 
 /** Draw a group's layers bottom to top (`which` picks masked or over-frame layers). */
-function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt | null, opts: RenderOptions, W: number, H: number, which: 'all' | 'framed' | 'over'): void {
+function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt | null, opts: RenderOptions, W: number, H: number, which: 'all' | 'framed' | 'over', area?: ToneArea): void {
   for (let i = group.layers.length - 1; i >= 0; i--) {
     const l = group.layers[i]!;
     if (which === 'framed' && l.overFrame) continue;
     if (which === 'over' && !l.overFrame) continue;
     if (!shows(l, group, opts)) continue;
     g.globalAlpha = l.opacity * group.opacity;
-    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, opts.scale);
+    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, opts.scale, area, l.id);
     const live = opts.live?.[l.id];
     const c = live ?? (art && !art.parked ? art.planes[l.id] : null);
     if (!c || !c.width) continue;
@@ -359,6 +359,8 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
       const done = outlinedLayer(c, W, H, opts.scale, image, l.outline, String(art?.revs[l.id] ?? 0));
       if (done) { g.drawImage(done, 0, 0, W, H); continue; }
     }
+    // Show as tone: the layer's greys as halftone dots (the live stroke shows as painted)
+    if (l.asTone && !live && drawLayerAsTone(g, l, c, String(art?.revs[l.id] ?? 0), W, H, opts.scale, image, area, drawLayerBitmap)) continue;
     drawLayerBitmap(g, c, W, H, opts.scale, image);
   }
   g.globalAlpha = 1;
@@ -394,7 +396,7 @@ export function renderPage(g: CanvasRenderingContext2D, page: Page, art: PageArt
       }
       g.clip(panelPath(panel.pts, s));
     }
-    drawLayers(g, grp, art, opts, W, H, 'framed');
+    drawLayers(g, grp, art, opts, W, H, 'framed', panel?.bbox);
     g.restore();
   }
   if (frame || opts.frameInk) drawGutters(g, page, s, { paper: frame, whitePaper: opts.whitePaper, panels });

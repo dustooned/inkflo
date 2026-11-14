@@ -7,6 +7,7 @@ import { derivePanels } from '../geom/carve';
 import { bookletSheets, checkCount, miniZineCells, printOrder, printOf, readerSpreads } from '../geom/printkinds';
 import { lettersReady } from '../render/fonts';
 import { drawLayerBitmap, renderPage } from '../render/page';
+import { drawLayerAsTone } from '../render/tone';
 import { encodePng, makeCanvas } from './canvasops';
 import { withPages, type Progress } from './exports';
 import { browserDeflate, PdfDoc, PdfPage, type PdfImage } from './pdf';
@@ -362,8 +363,12 @@ export async function exportLayerFiles(studio: Studio, range?: PageRange, progre
           if (!c || !c.width) continue;
           progress(`Page ${n}: ${layer.name}…`);
           await yieldToUi();
-          const placed = layer.image ? makeCanvas(art.width, art.height) : c;
-          if (layer.image) drawLayerBitmap(placed.getContext('2d')!, c, art.width, art.height, book.dpi, layer.image);
+          const placed = layer.image || layer.asTone ? makeCanvas(art.width, art.height) : c;
+          // a layer shown as tone exports as its dots, crisp at the book's resolution
+          if (layer.asTone) {
+            const pg = placed.getContext('2d')!;
+            if (!drawLayerAsTone(pg, layer, c, String(art.revs[layer.id] ?? 0), art.width, art.height, book.dpi, layer.image, undefined, drawLayerBitmap)) drawLayerBitmap(pg, c, art.width, art.height, book.dpi, layer.image);
+          } else if (layer.image) drawLayerBitmap(placed.getContext('2d')!, c, art.width, art.height, book.dpi, layer.image);
           files.push({ name: `${dir}/${gdir}/${String(li + 1).padStart(2, '0')}-${safe(layer.name)}.png`, data: await encodePng(placed) });
         }
       }

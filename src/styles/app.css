@@ -1013,3 +1013,9 @@ details > summary:hover { color: var(--text); }
 .pages { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
 .pagecard .num { font-size: var(--t-md); font-weight: 600; }
 .pagecard .acts button { min-width: 28px; min-height: 28px; font-size: var(--t-sm); border-radius: var(--r); }
+
+/* Gradient tone stops */
+.tone-stops { display: grid; gap: 8px; margin-top: 10px; }
+.tone-stops-head { display: flex; align-items: center; gap: 10px; }
+.tone-stops-head b { font-size: var(--t-sm); }
+.tone-stop { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: var(--r); }

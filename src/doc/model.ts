@@ -239,12 +239,33 @@ export interface PixelAdjustment {
 export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | PixelAdjustment;
 
 export const TONE_SHAPES = ['dot', 'square', 'diamond', 'line', 'cross'] as const;
+/** A tone that changes across the area: a stack of stops from `from` to `to` (page inches). */
+export interface ToneGradient {
+  kind: 'linear' | 'radial';
+  from: Pt;
+  to: Pt;
+  /** Position 0–1 along the gradient and tone 0–1 there; at least two. */
+  stops: { at: number; density: number }[];
+}
+
+/** How a painted layer prints as halftone dots (Show as tone). */
+export interface ToneScreen {
+  shape: typeof TONE_SHAPES[number];
+  /** Lines (cells) per inch. */
+  frequency: number;
+  angle: number;
+  /** The one ink the dots print in. */
+  color: string;
+}
+
 export interface ScreenTone {
   shape: typeof TONE_SHAPES[number];
   frequency: number;
   density: number;
   angle: number;
   color: string;
+  /** A gradient tone; `density` is then unused. */
+  gradient?: ToneGradient;
   /** Freehand mask in page inches. Otherwise the layer group's mask applies. */
   region?: Pt[];
 }
@@ -269,6 +290,8 @@ export interface Layer {
    */
   vector?: boolean;
   screenTone?: ScreenTone;
+  /** Print this painted layer as halftone dots (its pixels stay untouched). */
+  asTone?: ToneScreen;
   image?: PlacedImage;
   /**
    * An outline around everything on the layer (a border effect): white to lift art off a busy

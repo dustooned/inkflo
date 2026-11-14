@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame } from './model';
+import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen } from './model';
 import { TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -236,7 +236,27 @@ function screenTone(v: unknown, path: string): ScreenTone {
   if (angle < 0 || angle > 180) fail(`${path}.angle`, 'should be from 0 to 180 degrees');
   if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
   if (region && (region.length < 3 || region.length > 8192)) fail(`${path}.region`, 'needs 3 to 8192 points');
-  return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, density: unit(o.density, `${path}.density`, 0.2), angle, color, ...(region ? { region } : {}) };
+  const gradient = o.gradient === undefined ? undefined : toneGradient(o.gradient, `${path}.gradient`);
+  return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, density: unit(o.density, `${path}.density`, 0.2), angle, color, ...(region ? { region } : {}), ...(gradient ? { gradient } : {}) };
+}
+
+function toneGradient(v: unknown, path: string): ToneGradient {
+  const o = obj(v, path);
+  const stops = arr(o.stops, `${path}.stops`).map((s, i) => {
+    const e = obj(s, `${path}.stops[${i}]`);
+    return { at: unit(e.at, `${path}.stops[${i}].at`, 0), density: unit(e.density, `${path}.stops[${i}].density`, 0) };
+  });
+  if (stops.length < 2 || stops.length > 16) fail(`${path}.stops`, 'needs 2 to 16 stops');
+  return { kind: oneOf(o.kind, ['linear', 'radial'] as const, `${path}.kind`), from: pt(o.from, `${path}.from`), to: pt(o.to, `${path}.to`), stops };
+}
+
+function toneScreen(v: unknown, path: string): ToneScreen {
+  const o = obj(v, path);
+  const frequency = num(o.frequency, `${path}.frequency`), angle = num(o.angle, `${path}.angle`), color = str(o.color, `${path}.color`);
+  if (frequency < 5 || frequency > 120) fail(`${path}.frequency`, 'should be from 5 to 120 lines per inch');
+  if (angle < 0 || angle > 180) fail(`${path}.angle`, 'should be from 0 to 180 degrees');
+  if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.color`, 'should be a six-digit hex colour');
+  return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, angle, color };
 }
 
 function layer(v: unknown, path: string): Layer {
@@ -255,6 +275,7 @@ function layer(v: unknown, path: string): Layer {
     overFrame: bool(o.overFrame, `${path}.overFrame`, false),
     ...(o.vector === true ? { vector: true } : {}),
     ...(o.screenTone !== undefined ? { screenTone: screenTone(o.screenTone, `${path}.screenTone`) } : {}),
+    ...(o.asTone !== undefined ? { asTone: toneScreen(o.asTone, `${path}.asTone`) } : {}),
     ...(o.image !== undefined ? { image: placedImage(o.image, `${path}.image`) } : {}),
     ...(o.outline !== undefined ? { outline: paperEdge(o.outline, `${path}.outline`) } : {}),
     strokes: arr(o.strokes ?? [], `${path}.strokes`).map((x, i) => stroke(x, `${path}.strokes[${i}]`)),

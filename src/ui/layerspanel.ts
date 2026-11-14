@@ -1,4 +1,5 @@
 import type { Studio } from '../app/studio';
+import { bakeLayerTone, openLayerTone } from './layertone';
 import { LAYER_TYPES, newLayer, TYPE_DEFAULTS, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { drawLayerBitmap } from '../render/page';
@@ -97,6 +98,20 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       h('div', { class: 'row' }, h('label', {}, 'Width', width), readout));
   }
 
+  /** Show as tone: this layer's greys as halftone dots (Clip Studio's layer screentone). */
+  function toneControls(l: Layer): HTMLElement {
+    const t = l.asTone;
+    const open = () => openLayerTone(studio, page, o.art, l.id, o.refresh);
+    return h('div', { class: 'outline-controls' },
+      h('h4', {}, 'Tone'),
+      t
+        ? h('div', { class: 'row' },
+          h('button', { type: 'button', class: 'btn', onclick: open }, `${t.shape === 'dot' ? 'Dots' : t.shape} · ${t.frequency} lpi · ${t.angle}°`),
+          h('button', { type: 'button', class: 'btn', onclick: () => edit('Show layer as painted', withLayer(l.id, (x) => { delete x.asTone; })) }, 'Off'),
+          h('button', { type: 'button', class: 'btn', disabled: !!l.image, title: l.image ? 'A placed image keeps its own pixels' : 'Make the dots this layer’s pixels (undoable)', onclick: () => bakeLayerTone(studio, page, o.art, l.id, o.refresh) }, 'Bake'))
+        : h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn', onclick: open }, 'Show as tone…')));
+  }
+
   function layerMenu(l: Layer, g: LayerGroup): HTMLElement {
     const i = g.layers.findIndex((x) => x.id === l.id);
     const opacity = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: l.opacity, 'aria-label': 'Opacity' });
@@ -113,6 +128,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       l.image || l.screenTone ? null : check('Fill reference', l.fillRef, (x, v) => (x.fillRef = v), 'Colour fills stop at this layer’s lines'),
       g.kind === 'panel' ? check('Over frame', l.overFrame, (x, v) => (x.overFrame = v), 'Draw above the borders, unmasked (pop-out)') : null,
       l.screenTone ? null : outlineControls(l),
+      l.screenTone || l.vector ? null : toneControls(l),
       h('div', { class: 'sep' }),
       h('h4', {}, 'Type'),
       (l.screenTone ? ['tone' as const] : LAYER_TYPES).map((t) =>

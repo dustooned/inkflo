@@ -1302,3 +1302,51 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
   no-op for an untouched page). All tests pass.
 - **Not checked:** a real iPad and Pencil. Frame timing came from calling the preview directly,
   because the pane was hidden; on screen, pixel brushes should now draw at the display's rate.
+
+## Halftone engine: gradient tones and Show as tone, 2026-11-14
+
+- **Engine** (`render/halftone.ts`, pure): AM screening.
+  - Each pixel finds its cell on a rotated screen (lpi, angle; fixed to page inches, so dots line
+    up across panels, tiles and exports) and reads the tone at the cell centre.
+  - It inks when its threshold is below that tone. The threshold is the spot function's own
+    distribution (a 512² sample to a 4096-step lookup), so a tone d covers exactly d for every
+    shape.
+  - Shapes: Euclidean round dot (checkerboard at 50%, then round holes), square, diamond, line,
+    cross.
+  - The screen view gets ~1 px smoothed edges. Exports at whole dpi get crisp one-ink dots with a
+    zero-mean per-pixel threshold nudge against moiré.
+  - Fields: `gradientField` (linear or radial, 2–16 stops, linear between stops) and
+    `darknessField` (alpha × (1 − luma) averaged over a cell-wide box from a summed-area table).
+- **Rendering** (`render/tone.ts`): gradient tones and layers shown as tone are screened over the
+  panel's box (`drawLayers` gets `panel.bbox`) or the tone's region, and cached per layer.
+  - Screen zoom is rounded up in 1.25× steps; exports render at exactly their dpi. The pixel cap
+    is 30M.
+  - When a cell is under 2.5 px: gradients draw as a smooth fill of the same tones, and layers
+    draw as painted.
+  - During a live stroke the layer shows as painted.
+- **Data:** `ScreenTone.gradient` (`ToneGradient`) and `Layer.asTone` (`ToneScreen`), both validated
+  in the schema (2–16 stops; 5–120 lpi; 0–180°; hex ink).
+- **UI:**
+  - Screentone gets Flat | Gradient. Drag lays a gradient; dragging in a selected gradient's
+    panel re-aims it. The settings have a stops editor (where and tone per stop, + Stop at the
+    widest gap, remove), Linear/Radial, and presets (Fade out/in, Sky, Band, Spotlight, Glow).
+  - Layers → layer options → Tone: **Show as tone…** (dialog with shape, lpi, angle, ink and a
+    200 dpi preview centred on the paint), then Off and **Bake** (dots to pixels at the book dpi,
+    one undo step; not for placed images).
+- **Exports:** PSD, page images, PDF, web image, CBZ, separations and the game package all go
+  through `renderPage`, so they get the dots. "Every layer separately" now screens `asTone`
+  layers too.
+- **Checks:**
+  - `halftone.test.ts` (8): crisp coverage at 600 dpi / 60 lpi for every shape, measured
+    requested→inked: dot 10.0/30.0/49.8/70.1/90.1; square 10.0/29.9/50.0/70.2/90.1; diamond
+    9.8/29.8/49.9/70.2/90.2; line 10.1/30.3/50.4/70.7/90.5; cross 10.6/29.8/49.6/69.7/90.2. Also
+    smoothed edges, 15°, 0/100%, gradient average, and the cell-averaged painted field.
+  - `doc/tone.test.ts`: book-file round trip.
+  - In the pane (real tools, 600 dpi `renderPage`): painted 20/50/80% greys printed 20.0/49.6/80.0%
+    with 0 partly-inked pixels; a dragged Fade-out gradient measured 54.5/30.0/4.8% against
+    54.5/30.0/4.9% expected; full page with two tone layers in 1.4 s.
+  - Moiré (spread of a flat 30% over 0.2 in windows): mean exactly 30.0% everywhere, worst ±0.73
+    (85 lpi at 45°, 300 dpi; it was ±1.96 before the nudge). At 600 dpi all are ±0.55 or better.
+  - Bake made crisp dots and undo restored the painting and the setting. The dialog's preview
+    rendered the layer.
+- **Not checked:** printing on paper; a real press may need dot-gain compensation (not added).
