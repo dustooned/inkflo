@@ -497,7 +497,8 @@ function layout(v: unknown, path: string): PageLayout | undefined {
     if (!invert(matrix) || matrix.some((n) => Math.abs(n) > 10000)) fail(`${entry}.matrix`, 'has an invalid transform');
     return { at: relativePoint(item.at, `${entry}.at`), matrix, order: num(item.order, `${entry}.order`) };
   });
-  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}), ...(panelTransforms?.length ? { panelTransforms } : {}) };
+  const order = o.order === undefined ? undefined : arr(o.order, `${path}.order`).slice(0, 200).map((v, i) => relativePoint(v, `${path}.order[${i}]`));
+  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}), ...(panelTransforms?.length ? { panelTransforms } : {}), ...(order?.length ? { order } : {}) };
 }
 
 function source(o: Obj, path: string): Letter['src'] | undefined {

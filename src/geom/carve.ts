@@ -309,13 +309,73 @@ export function cutPath(c: Cut, page: Page): Pt[] {
   return toInches(cutPathProto(c, layoutOf(page).curve));
 }
 
-function readingOrder(polys: Pt[][]): Pt[][] {
-  // rows of ~70 proto px (~0.9 in), then left to right
-  return polys.sort((a, b) => {
-    const ca = centroid(a);
-    const cb = centroid(b);
-    return Math.round(ca.y / 70) - Math.round(cb.y / 70) || ca.x - cb.x;
+/** Right to left (manga): set from the open book's print settings. */
+let readRtl = false;
+export function setReadingRtl(on: boolean): void { readRtl = on; }
+export const readingRtl = () => readRtl;
+
+type Box = { x0: number; y0: number; x1: number; y1: number };
+const boxOf = (poly: Pt[]): Box => ({ x0: Math.min(...poly.map((p) => p.x)), y0: Math.min(...poly.map((p) => p.y)), x1: Math.max(...poly.map((p) => p.x)), y1: Math.max(...poly.map((p) => p.y)) });
+
+/**
+ * Reading order by the page's own structure: split the panels into rows wherever a gap runs
+ * clear across them, each row into columns wherever a gap runs clear down it, and so on
+ * (an XY cut). A tall panel beside two short ones is one column, then the next, so it reads
+ * tall → top → bottom. Columns go right to left for manga. Panels that no clean line separates
+ * (slanted cuts) fall back to rows of ~0.9 in by centre.
+ */
+export function autoOrder<T>(items: T[], box: (t: T) => Box, rtl = false): T[] {
+  const slack = 3; // proto px (~0.04 in) of overlap still counts as a clean line
+  const split = (set: T[], axis: 'y' | 'x'): T[][] | null => {
+    const lo = axis === 'y' ? 'y0' : 'x0', hi = axis === 'y' ? 'y1' : 'x1';
+    const sorted = [...set].sort((a, b) => box(a)[lo] - box(b)[lo]);
+    const groups: T[][] = [];
+    let reach = -Infinity;
+    for (const t of sorted) {
+      const b = box(t);
+      if (!groups.length || b[lo] >= reach - slack) groups.push([t]);
+      else groups[groups.length - 1]!.push(t);
+      reach = Math.max(reach, b[hi]);
+    }
+    return groups.length > 1 ? groups : null;
+  };
+  const order = (set: T[], depth: number): T[] => {
+    if (set.length < 2 || depth > 12) return set;
+    const rows = split(set, 'y');
+    if (rows) return rows.flatMap((r) => order(r, depth + 1));
+    const cols = split(set, 'x');
+    if (cols) return (rtl ? cols.reverse() : cols).flatMap((c) => order(c, depth + 1));
+    // nothing separates them cleanly: rows by centre, then across
+    return [...set].sort((a, b) => {
+      const A = box(a), B = box(b), ca = { x: (A.x0 + A.x1) / 2, y: (A.y0 + A.y1) / 2 }, cb = { x: (B.x0 + B.x1) / 2, y: (B.y0 + B.y1) / 2 };
+      return Math.round(ca.y / 70) - Math.round(cb.y / 70) || (rtl ? cb.x - ca.x : ca.x - cb.x);
+    });
+  };
+  return order(items, 0);
+}
+
+/**
+ * The page's panels in reading order: the automatic order, then the page's own order where the
+ * author set one (`layout.order`, points inside panels). Panels the stored order doesn't name
+ * keep their automatic place after the panel before them.
+ */
+function readingOrder(polys: Pt[][], page: Page): Pt[][] {
+  const auto = autoOrder(polys, boxOf, readRtl);
+  const named = layoutOf(page).order;
+  if (!named?.length) return auto;
+  const rank = new Map<Pt[], number>();
+  named.forEach((at, k) => {
+    const q = { x: at.x * page.widthIn * K, y: at.y * page.heightIn * K };
+    const poly = auto.find((pp) => !rank.has(pp) && pointInPoly(q, pp));
+    if (poly) rank.set(poly, k);
   });
+  let last = -1;
+  const key = new Map<Pt[], number>();
+  auto.forEach((poly, i) => {
+    const r = rank.get(poly);
+    if (r !== undefined) { last = r; key.set(poly, r); } else key.set(poly, last + 0.001 * (i + 1));
+  });
+  return [...auto].sort((a, b) => key.get(a)! - key.get(b)!);
 }
 
 export interface GutterPath { cut: Cut; points: Pt[] }
@@ -325,7 +385,7 @@ const cache = new WeakMap<Page, { key: string; value: CarvedPage }>();
 
 function carvePage(page: Page): CarvedPage {
   const curve = layoutOf(page).curve;
-  const key = JSON.stringify([page.widthIn, page.heightIn, curve, page.cuts]);
+  const key = JSON.stringify([page.widthIn, page.heightIn, curve, page.cuts, layoutOf(page).order, readRtl]);
   const cached = cache.get(page);
   if (cached?.key === key) return cached.value;
   let ps: Pt[][] = [trimProto(page)];
@@ -336,7 +396,7 @@ function carvePage(page: Page): CarvedPage {
     ps = ps.flatMap((poly) => divide(poly, path, boundaries));
     for (const pts of boundaries) gutters.push({ cut, points: toInches(pts) });
   }
-  const value = { polys: readingOrder(ps), gutters };
+  const value = { polys: readingOrder(ps, page), gutters };
   cache.set(page, { key, value });
   return value;
 }

@@ -13,6 +13,7 @@ import { openGrid } from '../grid';
 import { openPageTemplates } from '../pagetemplates';
 import { applyPageTemplate, splitPanelCuts } from '../../geom/pagetemplates';
 import { layoutBins } from '../layoutbins';
+import { beatsFollowing, layoutWithOrder, orderPoints } from '../../geom/readingorder';
 import { sideChoice } from '../binpanel';
 import { resample, pathLength } from '../../engine/core/quickshape';
 import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../geom/cutshape';
@@ -327,6 +328,35 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     ctx.chrome();
     ctx.request();
   }, true);
+  // ---- Reading order: tap panels in the order they're read
+  let taps: Panel[] = [];
+  const sameSource = (a: Panel, b: Panel) => (a.source ?? a).index === (b.source ?? b).index;
+  function setOrder(points: Pt[] | null, label: string): void {
+    const next = layoutWithOrder(page, points);
+    const beats = beatsFollowing(page, next);
+    studio.editPage(page, label, ['layout', 'beats'], (pg) => { pg.layout = next; pg.beats = beats; });
+    taps = [];
+    sel = null;
+    ctx.chrome();
+    ctx.request();
+  }
+  function finishOrder(): void {
+    if (!taps.length) return;
+    // panels not tapped follow in their current order
+    const rest = displayPanels().filter((q) => !taps.some((t) => sameSource(t, q)));
+    setOrder(orderPoints(page, [...taps, ...rest]), 'Reading order');
+    ctx.hint('Reading order set. Script beats moved with their panels.', { timeout: 3000 });
+  }
+  function tapOrder(p: Pt): void {
+    const hit = panelAt(displayPanels(), p);
+    if (!hit) return;
+    const at = taps.findIndex((t) => sameSource(t, hit));
+    if (at >= 0) taps = taps.slice(0, at); // tap a numbered panel again to go back to it
+    else taps.push(hit);
+    if (taps.length >= displayPanels().length) { finishOrder(); return; }
+    ctx.chrome();
+    ctx.request();
+  }
   const side = sideChoice('layout', 'Panels', () => ctx.chrome());
   const bins = layoutBins({
     page, stage: ctx.stage, toPage: (e) => ctx.toPage(e),
@@ -373,21 +403,33 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       { id: 'resize', label: 'Resize gutters', glyph: '⇔', key: 'r', group: 'edit' },
       { id: 'place', label: 'Transform panel', glyph: '↗', key: 'v', group: 'edit' },
       { id: 'curve', label: 'Curve edges', glyph: '⌒', key: 'b', group: 'edit' },
+      { id: 'order', label: 'Reading order', glyph: '①', key: 'o', group: 'edit' },
     ],
     tool: 'knife',
     cursor: () => {
       if (mode.tool === 'knife') return 'cross';
       if (mode.tool === 'curve') return 'cross';
       if (mode.tool === 'place') return 'move';
+      if (mode.tool === 'order') return 'pointer';
       if (mode.tool !== 'resize') return '';
       const edge = drag?.moves[0] ?? hoverCut;
       return !edge || drag?.whole ? 'move' : edge.axis === 'x' ? 'ew-resize' : 'ns-resize';
     },
     ctx(bar) {
+      if (mode.tool !== 'order' && taps.length) taps = [];
       bar.append(h('button', { class: 'btn document-option', type: 'button', 'aria-pressed': String(codeOpen), title: 'Edit the layout as numbers and code in the sidebar', onclick: () => setCodeOpen(!codeOpen) }, codeOpen ? 'Close code' : 'Code'));
       const L = layoutOf(page);
       if (mode.tool === 'place') {
         bar.append(...placement.controls());
+        return;
+      }
+      if (mode.tool === 'order') {
+        const n = displayPanels().length;
+        bar.append(
+          h('span', { class: 'hint' }, taps.length ? `${taps.length} of ${n} · tap the next panel · tap a numbered one to go back` : `Tap the panels in the order they’re read${L.order?.length ? ' · this page has its own order' : ''}`),
+          h('button', { class: 'btn primary', type: 'button', disabled: !taps.length, title: 'Panels not tapped follow in their current order', onclick: finishOrder }, 'Done'),
+          h('button', { class: 'btn', type: 'button', disabled: !taps.length, onclick: () => { taps = []; ctx.chrome(); ctx.request(); } }, 'Start over'),
+          h('button', { class: 'btn', type: 'button', disabled: !L.order?.length, title: 'Read rows top to bottom, then across (right to left for manga)', onclick: () => setOrder(null, 'Automatic reading order') }, 'Automatic order'));
         return;
       }
       if (mode.tool === 'knife') {
@@ -498,12 +540,14 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         { label: 'Resize gutters', key: 'R', checked: mode.tool === 'resize', run: use('resize') },
         { label: 'Transform panel', key: 'V', checked: mode.tool === 'place', run: use('place') },
         { label: 'Curve edges', key: 'B', checked: mode.tool === 'curve', run: use('curve') },
+        { label: 'Reading order', key: 'O', checked: mode.tool === 'order', run: use('order') },
         'sep',
         { label: 'Page templates…', run: templates },
         { label: 'Even out', disabled: !canEvenOut(page), run: () => studio.editPage(page, 'Even out', ['cuts'], (q) => (q.cuts = evenOut(q))) },
       ];
     },
     down(p, e) {
+      if (mode.tool === 'order') { tapOrder(p); return; }
       if (mode.tool === 'place') { placement.down(p, e); return; }
       if (mode.tool === 'curve') {
         const c = curveCut();
@@ -666,6 +710,26 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       g.font = `600 ${Math.max(10, 0.11 * s)}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
+      if (mode.tool === 'order') {
+        // the order being tapped: big numbers on tapped panels, faded current numbers on the rest
+        for (const p of ps) {
+          const at = panelNumberAt(p, displayPage(), s) ?? p.centroid;
+          const k = taps.findIndex((t) => sameSource(t, p));
+          const r = Math.max(14, 0.22 * s);
+          g.beginPath();
+          g.arc(at.x * s, at.y * s, r, 0, Math.PI * 2);
+          g.fillStyle = k >= 0 ? '#2F6F7E' : 'rgba(255,253,247,.85)';
+          g.fill();
+          g.lineWidth = 2;
+          g.strokeStyle = k >= 0 ? '#1d4a54' : 'rgba(25,26,31,.35)';
+          g.stroke();
+          g.fillStyle = k >= 0 ? '#fff' : 'rgba(25,26,31,.45)';
+          g.font = `700 ${Math.round(r * 1.05)}px system-ui, sans-serif`;
+          g.fillText(k >= 0 ? String(k + 1) : String(p.index + 1), at.x * s, at.y * s + 1);
+        }
+        g.restore();
+        return;
+      }
       for (const p of ps) {
         const at = panelNumberAt(p, displayPage(), s);
         if (!at) continue;

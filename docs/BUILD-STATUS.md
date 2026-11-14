@@ -365,8 +365,6 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 
 ## Known issues
 
-- Reading order buckets panels by centroid rows, so a tall panel next to two short ones can be
-  read out of the expected order (inherited from the prototype).
 - Pages that have been drawn on stay in memory for the session (pixel undo needs their canvases).
   The memory budget does not apply to them.
 - Autosave flushes on tab hide, but a hard reload within 400 ms of an edit can lose that edit.
@@ -1144,3 +1142,34 @@ an iPad pays for on every frame:
   - Light kept 28 of 142 points; All kept 142;
   - Simplify lines at Medium took both lines from 170 to 32 points, and one undo restored them.
   The test lines were removed.
+
+## Reading order, 2026-11-14
+
+- **Automatic order** (`autoOrder` in `geom/carve.ts`) is an XY cut over the panels' bounding
+  boxes. It splits into rows wherever a line runs clear across (3 proto px of slack), each row
+  into columns wherever a line runs clear down, and recurses. Panels that no clean line
+  separates (slanted cuts) fall back to the old rule: centre rows of ~0.9 in, then across.
+  - A tall panel beside two stacked ones reads tall → top → bottom. The old rule read top,
+    tall, bottom.
+  - Columns go right to left when the book reads right to left. `setReadingRtl` is set when the
+    studio opens a book and in `setPrint` (and its undo). The carve cache key includes it.
+- **Order set by hand:** `PageLayout.order` holds points (0–1) inside the unmoved panels, read
+  first to last, and is validated in the schema. `readingOrder` ranks the panels it names; panels
+  it doesn't name keep their automatic place after the panel before them.
+- **Layout → Reading order** (`O`, also in the canvas menu):
+  - Tap panels in order; big numbered discs show the taps. Tapping a numbered panel goes back to
+    it.
+  - The order is set when every panel is tapped, or with **Done**, where untapped panels follow
+    in their current order. **Start over** and **Automatic order** clear it.
+- **Beats stay with their panels** (`geom/readingorder.ts`, `beatsFollowing`): `beats[i]` is
+  panel i, so changing the order permutes the beats to match. Groups, dialogue panels, moves and
+  corners are anchored by points and need nothing. One undo step covers `layout` and `beats`.
+- **Behaviour change:** existing pages whose automatic order changes under the new rule (tall
+  panels beside stacks, and every multi-column page in a right-to-left book) now pair their
+  beats with the new order. Use Reading order to set it by hand if needed.
+- Checks: `carve.test.ts` (29). It covers tall-beside-two, right to left, a grid still reading
+  rows first, a partial hand order, and beats following panels there and back. All 424 tests
+  pass. In the built-in pane on a 13 × 4 in strip (tall panel + two stacked):
+  - the automatic order was tall, top right, bottom right;
+  - tapping bottom right, top right, tall set that order and moved each beat with its panel;
+  - Automatic order restored both, undo brought the hand order back, and the page was restored.

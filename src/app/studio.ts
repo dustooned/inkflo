@@ -13,7 +13,8 @@ import { metaFromFile, openStore, requestPersistence, type BookMeta, type Store 
 import { renderThumb } from '../render/page';
 import { readUserBrushes, setBookBrushes, setUserBrushes, snapshotId, type BrushEntry } from '../draw/brushes';
 import { gridCuts } from '../geom/composition';
-import { derivePanels, layoutOf } from '../geom/carve';
+import { derivePanels, layoutOf, setReadingRtl } from '../geom/carve';
+import { printOf } from '../geom/printkinds';
 import { reconcileDialogue } from '../geom/lettering';
 
 /**
@@ -149,6 +150,7 @@ export class Studio {
   private attach(book: Book, art: Map<string, PageArt>): void {
     this.assetHistory.clear();
     this.book = book;
+    setReadingRtl(printOf(book).rtl);
     setBookBrushes(book.brushes);
     this.art = art;
     for (const page of book.pages) this.ensureArt(page);
@@ -349,11 +351,13 @@ export class Studio {
       label: resize ? 'Print kind and page size' : 'Print settings',
       do: () => {
         b.print = { ...after };
+        setReadingRtl(!!after.rtl);
         if (resize) scalePages(() => ({ w: size!.w, h: size!.h }));
       },
       undo: () => {
         if (before) b.print = { ...before };
         else delete b.print;
+        setReadingRtl(printOf(b).rtl);
         if (resize) {
           const was = new Map(oldPages.map((o) => [o.id, o]));
           scalePages((id) => ({ w: was.get(id)!.w, h: was.get(id)!.h }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, layoutOf, makeCut, mapPanelPoint, nearestCut, panelAt, planKnifeCut, pointInPoly, presetCuts, shiftCut, sourcePanelAt } from './carve';
+import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, layoutOf, makeCut, mapPanelPoint, nearestCut, panelAt, planKnifeCut, pointInPoly, presetCuts, setReadingRtl, shiftCut, sourcePanelAt } from './carve';
 import { invert } from '../engine/core/selxform';
 import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
@@ -320,5 +320,78 @@ describe('moved panels', () => {
     // the visible halves no longer touch: their nearest corners are about a gutter apart
     const gap = Math.min(...halves[0]!.pts.flatMap((u) => halves[1]!.pts.map((v) => Math.hypot(u.x - v.x, u.y - v.y))));
     expect(gap).toBeGreaterThan(0.25);
+  });
+});
+
+describe('reading order', () => {
+  const tallBeside = () => {
+    const p = newPage();
+    const W = p.widthIn, H = p.heightIn;
+    // a full-height left panel, and the right half split into top and bottom
+    p.cuts = [
+      { id: 'v', mode: 'across', pts: [{ x: W / 2, y: 0 }, { x: W / 2, y: H }] },
+      { id: 'h', mode: 'panel', pts: [{ x: W / 2 - 1, y: H * 0.45 }, { x: W + 1, y: H * 0.45 }], extended: [{ x: W / 2, y: H * 0.45 }, { x: W, y: H * 0.45 }] },
+    ];
+    return p;
+  };
+
+  it('reads a tall panel first, then the two beside it top to bottom', () => {
+    const ps = derivePanels(tallBeside());
+    expect(ps).toHaveLength(3);
+    expect(ps[0]!.bbox.y1 - ps[0]!.bbox.y0).toBeGreaterThan(9);
+    expect(ps[1]!.centroid.y).toBeLessThan(ps[2]!.centroid.y);
+    expect(ps[1]!.centroid.x).toBeGreaterThan(ps[0]!.centroid.x);
+  });
+
+  it('reads columns right to left for manga', () => {
+    setReadingRtl(true);
+    try {
+      const ps = derivePanels(tallBeside());
+      expect(ps[0]!.centroid.x).toBeGreaterThan(ps[2]!.centroid.x);
+      expect(ps[0]!.centroid.y).toBeLessThan(ps[1]!.centroid.y);
+      expect(ps[2]!.bbox.y1 - ps[2]!.bbox.y0).toBeGreaterThan(9);
+    } finally { setReadingRtl(false); }
+  });
+
+  it('keeps rows first on an ordinary grid', () => {
+    const p = newPage();
+    p.cuts = presetCuts(p, 'grid6');
+    const ps = derivePanels(p);
+    expect(ps).toHaveLength(6);
+    for (let i = 1; i < ps.length; i++) {
+      const a = ps[i - 1]!, b = ps[i]!;
+      expect(b.centroid.y > a.centroid.y + 0.5 || (Math.abs(b.centroid.y - a.centroid.y) < 0.5 && b.centroid.x > a.centroid.x)).toBe(true);
+    }
+  });
+
+  it('follows an order set by hand, and fits panels it does not name', () => {
+    const p = newPage();
+    p.cuts = presetCuts(p, 'grid4');
+    const auto = derivePanels(p);
+    // read the bottom-right panel first, then the top-left; the rest keep their places after
+    const rel = (q: { x: number; y: number }) => ({ x: q.x / p.widthIn, y: q.y / p.heightIn });
+    p.layout = { ...layoutOf(p), order: [rel(auto[3]!.centroid), rel(auto[0]!.centroid)] };
+    const ps = derivePanels(p);
+    expect(ps[0]!.centroid).toEqual(auto[3]!.centroid);
+    expect(ps[1]!.centroid).toEqual(auto[0]!.centroid);
+    expect(ps.slice(2).map((q) => q.centroid)).toEqual([auto[1]!.centroid, auto[2]!.centroid]);
+  });
+});
+
+describe('reordering keeps beats with panels', () => {
+  it('moves each beat with its panel', async () => {
+    const { beatsFollowing, layoutWithOrder, orderPoints } = await import('./readingorder');
+    const p = newPage();
+    p.cuts = presetCuts(p, 'grid4');
+    p.beats = ['A', 'B', 'C', 'D', 'E'].map((d) => ({ id: d, desc: d, lines: [] }));
+    const auto = derivePanels(p);
+    const next = layoutWithOrder(p, orderPoints(p, [auto[3]!, auto[2]!, auto[1]!, auto[0]!]));
+    const beats = beatsFollowing(p, next);
+    expect(beats.map((b) => b.desc)).toEqual(['D', 'C', 'B', 'A', 'E']);
+    const after = derivePanels({ ...p, layout: next });
+    expect(after[0]!.centroid).toEqual(auto[3]!.centroid);
+    // back to automatic: the beats return
+    const back = beatsFollowing({ ...p, layout: next, beats }, layoutWithOrder({ ...p, layout: next }, null));
+    expect(back.map((b) => b.desc)).toEqual(['A', 'B', 'C', 'D', 'E']);
   });
 });

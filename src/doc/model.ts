@@ -348,6 +348,8 @@ export interface PageLayout {
   panelTransforms?: PanelTransform[];
   cornerRadius?: number;
   panelCorners?: { at: Pt; radius: number }[];
+  /** Reading order set by hand: a point inside each panel (0–1 of the page), first read first. */
+  order?: Pt[];
 }
 
 export interface ModularGrid {
