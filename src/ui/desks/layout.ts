@@ -1,12 +1,12 @@
 import type { Cut, CutMode, PageLayout, Pt } from '../../doc/model';
-import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, presetCuts, type Panel, type Preset } from '../../geom/carve';
+import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, type Panel } from '../../geom/carve';
 import { invert } from '../../engine/core/selxform';
 import { anchorFor } from '../../geom/groups';
 import { movePanelCuts, sameGutterTopology } from '../../geom/paneltransform';
 import { inGutter } from '../../geom/gutters';
 import { panelPath } from '../../render/page';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
-import { confirmDialog, h, seg, slider, toast } from '../dom';
+import { h, seg, slider, toast } from '../dom';
 import { centreCrossing, DEFAULT_GRID, downbeatPanel, gridLines, revealIssues, snapGridCut, staggerCentre } from '../../geom/composition';
 import { drawModularGrid } from '../composition';
 import { openGrid } from '../grid';
@@ -55,14 +55,6 @@ function panelNumberAt(panel: Panel, page: DeskCtx['page'], scale: number): Pt |
   return null;
 }
 
-const PRESETS: { id: Preset; label: string }[] = [
-  { id: 'splash', label: 'Splash' },
-  { id: 'rows2', label: '2 rows' },
-  { id: 'tier3', label: '3 tiers' },
-  { id: 'grid4', label: '4' },
-  { id: 'grid6', label: '6' },
-  { id: 'grid9', label: '9' },
-];
 
 /** Layout: carve panels with a knife; drag a panel's edge to move the cut under it. */
 export function layoutDesk(ctx: DeskCtx): DeskMode {
@@ -439,7 +431,6 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           h('label', { class: 'mini', title: 'Hold at the end of a cut: it snaps to a straight line, an arc, a zig-zag or a smooth curve. Keep holding and drag to adjust.' }, snap, 'Auto Shape'));
       }
       bar.append(
-        h('button', { class: 'btn document-option', type: 'button', onclick: templates }, 'Page templates'),
         slider('Gutter', 0, 2, 0.01, L.gutter, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ gutter: v }, false), (v) => setLayout({ gutter: v }, true)),
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),
@@ -474,17 +465,9 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       const activeCuts = new Set(gutterPaths(page).map(({ cut }) => cut.id));
       const unused = page.cuts.length - activeCuts.size;
       el.append(
-        h('div', { class: 'sec' }, h('h4', {}, 'Presets'),
-          h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' },
-            PRESETS.map((pr) => h('button', { class: 'btn', type: 'button', onclick: async () => {
-              if (page.cuts.length && !(await confirmDialog('Replace the layout?', 'The preset replaces this page’s cuts. Undo brings them back.', 'Replace'))) return;
-              studio.editPage(page, `Preset: ${pr.label}`, ['cuts', 'layout'], (pg) => {
-                pg.cuts = presetCuts(pg, pr.id);
-                if (pg.layout?.panelTransforms) delete pg.layout.panelTransforms;
-              });
-              sel = null;
-              ctx.chrome();
-            } }, pr.label)))),
+        h('div', { class: 'sec stack' }, h('h4', {}, 'Grids and saved layouts'),
+          h('p', { class: 'note', style: 'margin:0' }, 'Tap a grid to lay out the page, or drag it onto a panel to split just that panel.'),
+          h('button', { class: 'btn', type: 'button', onclick: () => side.open('bins') }, 'Open layout bins')),
       );
       const grid = page.grid ?? book.fixedGrid;
       const show = h('input', { type: 'checkbox', checked: showGrid, disabled: !grid });

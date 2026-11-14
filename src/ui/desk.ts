@@ -782,7 +782,11 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   /** Tools that don't fit the rail's height go into More (the current tool always stays). */
   function fitRail(visible: Tool[], opt: HTMLElement): void {
+    toolRail.classList.remove('compact');
     if (!toolRail.clientHeight || toolRail.scrollHeight <= toolRail.clientHeight + 1) return;
+    // first drop the labels (tooltips still name the tools), then move what still doesn't fit
+    toolRail.classList.add('compact');
+    if (toolRail.scrollHeight <= toolRail.clientHeight + 1) return;
     const hidden: Tool[] = [];
     const more = h('button', { class: 'tool rail-more', type: 'button', 'aria-label': 'More tools', 'aria-haspopup': 'menu', title: 'More tools' }, h('span', {}, '⋯'), h('em', {}, 'More'));
     toolRail.insertBefore(more, opt);

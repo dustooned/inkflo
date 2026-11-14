@@ -1203,3 +1203,40 @@ The audit is in `docs/UI-AUDIT.md`. These are its four P0 items:
   - Choosing Transform from the rail's More made it active on the rail.
 - **Not checked:** a real iPad (Safari's `beforeunload` support is limited; `pagehide` and
   `visibilitychange` cover backgrounding there).
+
+## UI audit P1 fixes, 2026-11-14
+
+5. **Control kit.** New tokens in `tokens.css`: `--ctl-sm` 32, `--ctl` 36, `--ctl-touch` 44, `--r`
+   8, `--r-lg` 12, and type sizes `--t-xs`…`--t-xl` (11 / 12 / 13 / 15 / 18). A kit block at the end
+   of `app.css` sets `.btn`, `.icon`, `.seg`, `.pager`, `.field`, `.mini` and every bar, sidebar
+   and dialog `select` to them; selects get one chevron style, with no bare browser controls.
+   Across the five desks, the measured fonts went from 8 sizes (including 11.5 and 12.5 px) to 5.
+   Heights are mostly 32 px, with 44 px for rail tools.
+6. **Touch.** Under `pointer: coarse`, controls are 44 px and checkboxes 22 px. Script card
+   arrows, layer row icons and the rail option get an invisible 8 px hit margin. Rail fades are
+   off on touch. At 1280 × 800, no control on any desk is now under 28 px (Script alone had 18).
+7. **One sidebar switch.** Layers/Panels/Balloon | Bins is 32 px and text-only in every desk.
+   Draw's version had picked up a stacked icon from the icon pass.
+8. **Caption kinds.** With the Letter tool, a kind strip (Speech, Thought, Shout, Whisper,
+   Caption, SFX, each with a live mini balloon) comes first in the bar, so it never folds into
+   More.
+9. **Export files** is grouped: Share & read (Web image, CBZ, Spreads), Production (Page images,
+   Layers, Two-ink), Apps & games (2Dope, Game package) and Backup (.inkflo). One group shows at a
+   time and the choice is remembered. Each group is about one screen; the tab was 1816 px.
+10. **Layout:** the inspector's Presets chips and the bar's Page templates button are gone. A
+    "Grids and saved layouts" section opens Layout bins (`sideChoice().open`). Page templates is
+    still in the desk's actions.
+11. **Book screen:** Rename and Delete moved into a "⋯ Book actions" menu. Delete names the page
+    count and stays red.
+12. **Script:** no inspector column; the editor gets the width. The bar reads "N beats · N lines
+    · N panels" and turns amber with ⚠ when beats and panels differ.
+13. **Top bar:** Spread preview, Display settings, Manual, Simple/Studio and Focus layout always
+    live in View ▾.
+- **Rail labels hide only when needed:** `fitRail` first adds `.compact` (icon-only, tooltips name
+  the tools), then moves what still doesn't fit into More. At 800 px tall, Draw is compact and
+  all 14 tools fit; Layout and Caption keep their labels.
+- Checks: 425 tests pass. In the built-in pane, every desk at 1280 × 800, 1180 × 820 and
+  820 × 1180 had Export on screen and zero header, context-bar and rail overflow. The kind strip,
+  Script width, Export groups and Book menu were checked on screen.
+- **Not checked:** the coarse-pointer sizes on a real iPad (the pane can't emulate a finger
+  pointer at tablet size).

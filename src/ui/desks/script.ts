@@ -228,7 +228,10 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
     ctx(bar) {
       bar.append(seg<'cards' | 'code'>([{ id: 'cards', label: 'Cards' }, { id: 'code', label: 'Code' }], view, (v) => { if (view === 'code') { applyCode(); commit('Edit script'); } setView(v); }, 'Script view'));
       bar.append(h('button', { class: 'btn document-option', type: 'button', onclick: () => openDialogue(ctx) }, 'Dialogue & panels'));
-      bar.append(h('span', { class: 'hint' }, `${page.beats.length} beat${page.beats.length === 1 ? '' : 's'} · ${page.beats.reduce((n, b) => n + b.lines.length, 0)} lines`));
+      const panels = ctx.panels().length;
+      const mismatch = page.beats.length > 0 && panels !== page.beats.length;
+      bar.append(h('span', { class: 'hint' + (mismatch ? ' warn' : ''), title: mismatch ? (page.cuts.length ? 'Adjust the layout so each beat has a panel.' : 'Send to Layout carves one panel per beat.') : '' },
+        `${page.beats.length} beat${page.beats.length === 1 ? '' : 's'} · ${page.beats.reduce((n, b) => n + b.lines.length, 0)} lines · ${panels} panel${panels === 1 ? '' : 's'}${mismatch ? ' ⚠' : ''}`));
     },
     inspector(el) {
       const panels = ctx.panels().length;

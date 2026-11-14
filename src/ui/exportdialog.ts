@@ -18,6 +18,13 @@ import { letterBox } from '../render/caption';
 import { download, h, seg, slug } from './dom';
 
 type Tab = 'print' | 'files' | 'apps' | 'scroll';
+type FilesGroup = 'share' | 'production' | 'apps' | 'backup';
+const FILES_NOTE: Record<FilesGroup, string> = {
+  share: 'For readers: a web image, a comic-reader file, or spreads to proof.',
+  production: 'For your team: page images and separations, every layer apart, two-ink plates.',
+  apps: 'For other tools: a 2Dope motion comic or a game engine package.',
+  backup: 'The whole editable book, to keep or move to another device.',
+};
 
 const PRINT_MODES: { id: PrintMode; title: string; body: string }[] = [
   { id: 'shop', title: 'Print shop', body: 'A PDF of single pages with bleed and crop marks, trim and bleed boxes set. Blank pages are added if the binding needs them.' },
@@ -44,6 +51,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     buttons.forEach((b) => (b.disabled = on));
   };
   let tab: Tab = start;
+  let filesGroup: FilesGroup = (() => { try { const g = localStorage.getItem('inkflo:export-group'); return g === 'production' || g === 'apps' || g === 'backup' ? g : 'share'; } catch { return 'share'; } })();
 
   const run = async (label: string, make: () => Promise<Blob>, file: string) => {
     if (exporting) return;
@@ -429,7 +437,6 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         filesPreview.replaceChildren(...(figs.length ? figs : [h('p', { class: 'note' }, 'Tick at least one kind of page to preview it.')]));
       });
     };
-    queueMicrotask(refreshFiles);
     const pageImages = h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
         h('b', {}, 'Page images'),
         h('p', {}, 'Finished pages, or separations for colourists, inkers and letterers: inks only, colours only, pencils only, lettering only. Each kind goes in its own folder.'),
@@ -453,19 +460,21 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         filesPreview);
     // any option change refreshes the preview
     pageImages.addEventListener('change', () => queueMicrotask(refreshFiles));
-    return h('div', { class: 'stack' },
-      webImage(),
-      pageImages,
-      h('div', { class: 'option' },
-        h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),
-        btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),
-      twoInkOptions(from, to),
-      h('div', { class: 'option' },
-        h('div', {}, h('b', {}, 'Reader spreads (.pdf)'), h('p', {}, `Pages side by side as the reader sees them${printOf(book!).rtl ? ' (right to left)' : ''}, the cover alone. For proofing.`)),
-        btn('Export', () => void run('Spreads', () => exportSpreadsPdf(studio, (m) => (progress.textContent = m)), `${name}-spreads.pdf`))),
+    // grouped so the tab is one screen, not three (UI audit P1 9)
+    const groups: Record<FilesGroup, () => (HTMLElement | null)[]> = {
+      share: () => [webImage(),
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Comic archive (.cbz)'), h('p', {}, `Every page at ${book!.dpi} dpi with ComicInfo.xml, for comic readers.`)),
         btn('Export', () => void run('Comic archive', () => exportCbz(studio, (m) => (progress.textContent = m)), `${name}.cbz`))),
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Reader spreads (.pdf)'), h('p', {}, `Pages side by side as the reader sees them${printOf(book!).rtl ? ' (right to left)' : ''}, the cover alone. For proofing.`)),
+        btn('Export', () => void run('Spreads', () => exportSpreadsPdf(studio, (m) => (progress.textContent = m)), `${name}-spreads.pdf`)))],
+      production: () => [pageImages,
+      h('div', { class: 'option' },
+        h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),
+        btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),
+      twoInkOptions(from, to)],
+      apps: () => [
       h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
         h('div', { style: 'display:flex;gap:12px;align-items:flex-start' },
           h('div', {}, h('b', {}, 'Motion comic for 2Dope (.2dope)'),
@@ -477,10 +486,21 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
           select('Per panel', [[1.2, '1.2 s'], [2, '2 s'], [3, '3 s'], [4, '4 s']], motion.panelHold, (v) => (motion.panelHold = v)),
           select('Frame rate', [[12, '12 fps'], [24, '24 fps'], [30, '30 fps']], motion.fps, (v) => (motion.fps = v)),
           select('Balloons', [['live', 'Live captions'], ['image', 'Images']], motion.captions, (v) => (motion.captions = v)))),
-      gamePackage(),
+      gamePackage()],
+      backup: () => [
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Book file (.inkflo)'), h('p', {}, 'The whole book with every stroke, to back up or open on another device.')),
-        btn('Export', () => void run('Book file', () => studio.exportInkflo(), `${name}.inkflo`))),
+        btn('Export', () => void run('Book file', () => studio.exportInkflo(), `${name}.inkflo`)))],
+    };
+    if (filesGroup === 'production') queueMicrotask(refreshFiles);
+    return h('div', { class: 'stack' },
+      seg<FilesGroup>([{ id: 'share', label: 'Share & read' }, { id: 'production', label: 'Production' }, { id: 'apps', label: 'Apps & games' }, { id: 'backup', label: 'Backup' }], filesGroup, (v) => {
+        filesGroup = v;
+        try { localStorage.setItem('inkflo:export-group', v); } catch { /* private mode */ }
+        render();
+      }, 'Kind of export'),
+      h('p', { class: 'note', style: 'margin:0' }, FILES_NOTE[filesGroup]),
+      ...groups[filesGroup](),
     );
   }
 

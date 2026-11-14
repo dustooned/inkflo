@@ -24,6 +24,17 @@
   --type-4: 17px;
   --type-5: 20px;
   --ui-scale: 1;
+  /* control kit: three heights, one type scale, two radii (UI audit P1) */
+  --ctl-sm: 32px;
+  --ctl: 36px;
+  --ctl-touch: 44px;
+  --r: 8px;
+  --r-lg: 12px;
+  --t-xs: 11px;
+  --t-sm: 12px;
+  --t-md: 13px;
+  --t-lg: 15px;
+  --t-xl: 18px;
   /* palette (PLAN §4) */
   --paper: #ede6d8;
   --paper-lift: #f7f2e8;

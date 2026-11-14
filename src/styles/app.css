@@ -900,18 +900,17 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .ctx-more .hint { font-size: 12px; color: var(--text-soft); }
 
 /* Tool rail on shorter screens: icons only (tooltips name them), tighter; a fade where it scrolls */
-@media (max-height: 940px) {
-  .rail { gap: 2px; padding: 6px 5px; }
-  .rail .tool { min-height: 40px; padding: 6px 2px; gap: 0; justify-content: center; }
-  .rail .tool em { display: none; }
-  .rail .tool span { font-size: 18px; }
-  .rail hr { margin: 2px auto; }
-}
+/* .compact is set by fitRail only when the rail doesn't fit with its labels */
+.rail.compact { gap: 2px; padding: 6px 5px; }
+.rail.compact .tool { min-height: 40px; padding: 6px 2px; gap: 0; justify-content: center; }
+.rail.compact .tool em { display: none; }
+.rail.compact .tool span { font-size: 18px; }
+.rail.compact hr { margin: 2px auto; }
 .rail.more-below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
 .rail.more-above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
 .rail.more-above.more-below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 @media (max-height: 820px) {
-  .rail .tool { min-height: 34px; padding: 4px 2px; }
+  .rail.compact .tool { min-height: 34px; padding: 4px 2px; }
   .rail .tool span { font-size: 17px; }
   .rail .railopt { padding: 5px 0; }
 }
@@ -919,3 +918,70 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
   .bar .crumb { flex: 0 1 auto; }
   .bar .bar-done { display: none !important; }
 }
+
+/* ===== Control kit (UI audit P1 5–6) =====================================================
+   One set of sizes for every desk: controls are 32 px (44 px for fingers), corners 8 px, text
+   on the 11 / 12 / 13 / 15 / 18 scale. Placed last so it settles earlier one-off sizes. */
+.btn { min-height: var(--ctl-sm); border-radius: var(--r); font-size: var(--t-sm); padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1.2; }
+.btn.icon-only { width: var(--ctl-sm); min-width: var(--ctl-sm); padding: 0; }
+.icon { width: var(--ctl-sm); height: var(--ctl-sm); border-radius: var(--r); }
+.seg { border-radius: var(--r); }
+.seg button { min-height: calc(var(--ctl-sm) - 2px); font-size: var(--t-sm); padding: 0 12px; }
+.pager button { min-width: var(--ctl-sm); min-height: var(--ctl-sm); border-radius: var(--r); }
+.field { font-size: var(--t-sm); }
+.field input, .field textarea, .field select { font-size: var(--t-md); border-radius: var(--r); }
+.field input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), .field select { min-height: var(--ctl-sm); }
+.mini { font-size: var(--t-sm); }
+.mini b { font-size: var(--t-xs); }
+.ctx-name { font-size: 10px; }
+.rail .tool em { font-size: 10px; }
+.note, .hint { font-size: var(--t-sm); }
+.ins-title { font-size: var(--t-lg); }
+.insp h4, .sec > h4 { font-size: var(--t-xs); }
+/* every dropdown in the bars and sidebars looks the same (no bare browser controls) */
+.ctx select, .insp select, .mini select, .field select, .content select {
+  appearance: none; -webkit-appearance: none;
+  min-height: var(--ctl-sm); padding: 0 28px 0 10px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a8069' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center / 10px 6px;
+  color: var(--text); font-size: var(--t-sm);
+}
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent, var(--focus)); }
+
+/* Fingers (iPad, touch screens): 44 px targets. Pen and mouse keep the compact sizes. */
+@media (pointer: coarse) {
+  .btn, .seg button, .ctx select, .insp select, .mini select, .field select, .content select { min-height: var(--ctl-touch); }
+  .field input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]) { min-height: var(--ctl-touch); }
+  .icon, .pager button, .btn.icon-only { min-width: var(--ctl-touch); min-height: var(--ctl-touch); }
+  input[type=checkbox] { width: 22px; height: 22px; }
+  /* small icon buttons keep their look but get a bigger invisible hit area */
+  .beat header button, .lt, .railopt, .page-jump-trigger { position: relative; }
+  .beat header button::after, .lt::after, .railopt::after { content: ''; position: absolute; inset: -8px; }
+  .beat header button { min-width: 36px; min-height: 36px; }
+  .rail.more-below, .rail.more-above { mask-image: none; }
+}
+/* kit: the last one-off corners and the Script card buttons */
+.rail .tool, .lt, .lname, .layer-picker button { border-radius: var(--r); }
+.beat header button { min-width: 28px; min-height: 28px; border-radius: var(--r); display: inline-grid; place-items: center; }
+.beat header button:hover:not([disabled]) { background: var(--btn); }
+/* one sidebar switch for every desk: text only, same height (UI audit P1 7) */
+.side-switch .seg button { display: inline-flex; flex-direction: row; align-items: center; justify-content: center; }
+.side-switch .seg button > .ico, .side-switch .seg button > svg { display: none; }
+
+/* Caption: balloon kinds in the tool bar */
+.kind-strip { display: flex; gap: 4px; flex: none; }
+.kind-strip button { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-width: 52px; min-height: var(--ctl-sm); padding: 2px 6px; border: 1px solid transparent; border-radius: var(--r); font-size: 10px; color: var(--text-soft); }
+.kind-strip button:hover { background: var(--btn); }
+.kind-strip button[aria-pressed="true"] { border-color: var(--line); background: var(--btn); color: var(--text); font-weight: 600; }
+.kind-strip canvas { display: block; }
+@media (pointer: coarse) { .kind-strip button { min-height: var(--ctl-touch); } }
+
+.pop .item.danger { color: var(--spot-red); }
+/* the top bar: secondary view buttons always live in View ▾ (UI audit P1 13) */
+.bar .bar-extra { display: none !important; }
+.bar .bar-view { display: inline-flex; }
+
+/* Script: the writing gets the width; counts live in the tool bar (UI audit P1 12) */
+.screen[data-desk="script"]:not(.focus):not(.simple) .work { grid-template-columns: minmax(0, 1fr); }
+.screen[data-desk="script"]:not(.focus):not(.simple) .work > .insp { display: none; }
+.ctx .hint.warn { color: var(--spot-ochre); font-weight: 600; }

@@ -18,7 +18,7 @@ session. P2 is polish.
 | 3 | Draw tool rail, desktop/landscape | **The bottom tools are cut off.** The rail scrolls, but nothing shows that it can. | Rail is 144 px too tall at 800 px high, 124 px at 820 px. Position image and Artist mark are hidden. | Compact rail below ~900 px: icon only (labels in tooltips), tighter padding, plus a fade or chevron when it scrolls. |
 | 4 | Saving | **A hard reload within 400 ms of an edit can lose that edit.** This is a known issue. | `docs/BUILD-STATUS.md` known issues | Flush on `beforeunload` too; save immediately after a stroke ends (pen-up), not only on the 400 ms timer. |
 
-## P1: slows artists down
+## P1: slows artists down (fixed 2026-11-14, see BUILD-STATUS)
 
 | # | Where | Problem | Evidence | Fix |
 |---|---|---|---|---|

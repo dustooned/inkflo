@@ -399,6 +399,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     cursor: () => (mode.tool === 'select' ? 'move' : 'cross'),
     skipBalloon: () => undefined,
     ctx(bar) {
+      if (mode.tool === 'letter') {
+        // the balloon kind, one tap away (first in the bar, so it never folds into More)
+        const kind = variantOf(mode, 'letter') || 'speech';
+        bar.append(h('div', { class: 'kind-strip', role: 'group', 'aria-label': 'Balloon kind' }, KINDS.map((k) => {
+          const sample = newLetter(book, { x: 200, y: 200 }, k.id).cap;
+          return h('button', { type: 'button', 'aria-pressed': String(k.id === kind), 'aria-label': `${k.label} (${k.key.toUpperCase()})`, title: `${k.label} (${k.key.toUpperCase()})`, onclick: () => ctx.setVariant('letter', k.id) },
+            balloonSwatch(sample, sheet(), page.widthIn, page.heightIn, 34, 22), h('span', {}, (KIND_LABEL[k.id] ?? k.label).replace('Caption box', 'Caption').replace('Sound effect', 'SFX')));
+        })));
+      }
       if (mode.tool === 'draw-balloon') {
         const preserve = h('input', { type: 'checkbox', checked: state.keepDrawnOutline });
         preserve.addEventListener('change', () => { state.keepDrawnOutline = preserve.checked; });

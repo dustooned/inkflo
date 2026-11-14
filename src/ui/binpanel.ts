@@ -279,8 +279,14 @@ export function binPanel<T extends BinItem>(src: BinSource<T>, stage: HTMLElemen
 export function sideChoice(desk: string, label: string, onChange: () => void) {
   const key = 'inkflo:side:' + desk;
   let side: 'main' | 'bins' = (() => { try { return localStorage.getItem(key) === 'bins' ? 'bins' : 'main'; } catch { return 'main'; } })();
+  const set = (id: 'main' | 'bins') => {
+    side = id;
+    try { localStorage.setItem(key, id); } catch { /* private mode */ }
+    onChange();
+  };
   return {
     bins: () => side === 'bins',
+    open: set,
     switcher(): HTMLElement {
       const wrap = h('div', { class: 'sec side-switch' });
       const b = (id: 'main' | 'bins', text: string) => h('button', { type: 'button', 'aria-pressed': String(side === id), onclick: () => {

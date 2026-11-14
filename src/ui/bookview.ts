@@ -3,7 +3,7 @@ import { sheetOf, STAGES, type Page } from '../doc/model';
 import { renderThumb } from '../render/page';
 import { openExport } from './exportdialog';
 import { askText, confirmDialog, h } from './dom';
-import { displayButton } from './popover';
+import { closePopover, displayButton, popover } from './popover';
 import { spreadButton } from './spread';
 import { applyPageTemplate } from '../geom/pagetemplates';
 import { openPageTemplates } from './pagetemplates';
@@ -58,21 +58,31 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
   };
   const last = book.pages.find((p) => p.id === book.lastPageId) ?? book.pages[0]!;
 
+  // Rename and Delete live in one menu, so Delete is never one slip away from Rename
+  function bookMenu(): HTMLElement {
+    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Book actions', title: 'Rename or delete this book', 'aria-haspopup': 'menu' }, '⋯');
+    b.addEventListener('click', () => {
+      const item = (label: string, run: () => void, danger = false) => h('button', { class: 'item' + (danger ? ' danger' : ''), type: 'button', role: 'menuitem', onclick: () => { closePopover(); run(); } }, label);
+      popover(b, h('div', { class: 'chrome-menu', role: 'menu', 'aria-label': 'Book actions' },
+        item('Rename…', async () => {
+          const t = await askText('Rename book', 'Title', book.title, 'Rename');
+          if (t !== null) await studio.renameBook(t, book.author);
+        }),
+        item(`Delete book (${book.pages.length} page${book.pages.length === 1 ? '' : 's'})…`, async () => {
+          if (await confirmDialog('Delete book?', `“${book.title}” and its ${book.pages.length} page${book.pages.length === 1 ? '' : 's'} are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
+            await studio.deleteBook(book.id);
+            go('#home');
+          }
+        }, true)), 'below', 'Book actions');
+    });
+    return b;
+  }
   root.replaceChildren(
     h('div', { class: 'screen' },
       h('header', { class: 'bar' },
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to library', onclick: () => go('#home') }, '←'),
         h('div', {}, titleEl, h('div', {}, metaEl)),
-        h('button', { class: 'btn', type: 'button', onclick: async () => {
-          const t = await askText('Rename book', 'Title', book.title, 'Rename');
-          if (t !== null) await studio.renameBook(t, book.author);
-        } }, 'Rename'),
-        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-          if (await confirmDialog('Delete book?', `“${book.title}” and all its pages are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
-            await studio.deleteBook(book.id);
-            go('#home');
-          }
-        } }, 'Delete'),
+        bookMenu(),
         h('span', { class: 'spacer' }),
         save,
         displayButton(),
