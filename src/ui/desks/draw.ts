@@ -41,6 +41,7 @@ import { layersPanel, type LayerScope, type LayerTarget, type LayerView } from '
 import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
 import { applyPanelTransform, renderPage } from '../../render/page';
 import { assetBins } from '../assetbins';
+import { sideChoice } from '../binpanel';
 import { brushWidth, eraseStrokes, hitStroke, pointAt, removePoint, reshape, scaleWidth, simplify, smooth, type VectorErase } from '../../draw/vectoredit';
 
 type SizedTool = 'pencil' | 'ink' | 'eraser';
@@ -290,12 +291,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const marks = markTool(ctx);
   // Asset bins share the sidebar with Layers; made once so scroll and drags survive repaints
   const bins = assetBins({ studio, stage: ctx.stage, toPage: (e) => ctx.toPage(e), place: (a, at, reference) => images.placeAsset(a, at, reference) });
-  let side: 'layers' | 'bins' = (() => { try { return localStorage.getItem('inkflo:draw-side') === 'bins' ? 'bins' : 'layers'; } catch { return 'layers'; } })();
-  const sideSwitch = () => seg<'layers' | 'bins'>([{ id: 'layers', label: 'Layers' }, { id: 'bins', label: 'Bins' }], side, (v) => {
-    side = v;
-    try { localStorage.setItem('inkflo:draw-side', v); } catch { /* private mode */ }
-    ctx.chrome();
-  }, 'Sidebar');
+  const side = sideChoice('draw', 'Layers', () => ctx.chrome());
 
   function contextGroup(): LayerGroup | undefined {
     ctx.panels();
@@ -1681,8 +1677,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         el.append(h('div', { class: 'sec' }, inspectorLayers), images.options(), bins.el);
         return;
       }
-      el.append(h('div', { class: 'sec side-switch' }, sideSwitch()));
-      if (side === 'bins') { bins.refresh(); el.append(bins.el); return; }
+      el.append(side.switcher());
+      if (side.bins()) { bins.refresh(); el.append(bins.el); return; }
       docked = h('div', { class: 'layer-picker layer-dock' });
       el.append(
         h('div', { class: 'insp-head' }, h('div', { class: 'ins-title' }, 'Layers')),

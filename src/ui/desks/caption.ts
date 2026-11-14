@@ -1,5 +1,7 @@
 import { newId, PT, sheetOf, type Letter, type Pt } from '../../doc/model';
 import { relabelLetters, type ClipPayload } from '../../app/clipboard';
+import { balloonBins, lettersCentre } from '../balloonbins';
+import { sideChoice } from '../binpanel';
 import { BUNDLED_FONTS } from '../../engine/lettering/fonts';
 import { readBalloon, shapeForText } from '../../engine/lettering/geometry';
 import { resample } from '../../engine/core/quickshape';
@@ -69,6 +71,25 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   const onPage = (p: Pt, l: Letter): Pt => rotateAround(p, l.cap, l.rotation ?? 0);
   const rootOf = (l: Letter) => firstBalloon(page.balloons, l);
   const groupOf = (l: Letter) => balloonGroup(page.balloons, rootOf(l));
+  /** Copies of saved or starter lettering, centred on `at` (inches) or the page middle. One undo step. */
+  function placeLetters(source: Letter[], at: Pt | null, label: string): void {
+    const centre = lettersCentre(source);
+    const to = at ? { x: Math.max(0, Math.min(W, at.x)), y: Math.max(0, Math.min(H, at.y)) } : { x: W / 2, y: H / 2 };
+    const letters = relabelLetters(source, { x: (to.x - centre.x) * PT, y: (to.y - centre.y) * PT }, () => newId('lt'));
+    for (const l of letters) clampLetter(l, page);
+    edit(label, () => page.balloons.push(...letters));
+    selId = letters[0]?.id ?? null;
+    if (mode.tool !== 'select') mode.tool = 'select';
+    ctx.chrome();
+    ctx.request();
+  }
+  const side = sideChoice('caption', 'Balloon', () => ctx.chrome());
+  const bins = balloonBins({
+    studio, stage: ctx.stage, toPage: (e) => ctx.toPage(e),
+    selected: () => { const l = sel(); return l ? groupOf(l) : null; },
+    place: placeLetters,
+    pageSize: () => ({ w: W, h: H }),
+  });
   const plusAt = (l: Letter, k: number): Pt => {
     const b = box(l);
     const margin = 18 / k;
@@ -415,6 +436,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     },
     inspector(el) {
       if (mode.tool === 'type') { type.inspector(el); return; }
+      el.append(side.switcher());
+      if (side.bins()) { bins.refresh(); el.append(bins.el); return; }
       const l = sel();
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Caption'), h('div', { class: 'ins-title' }, l ? KIND_LABEL[l.cap.style] ?? 'Balloon' : `${page.balloons.length} balloon${page.balloons.length === 1 ? '' : 's'}`)));
       if (reviewOpen) el.append(revisionPanel());
@@ -744,7 +767,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       }
       return false;
     },
-    dispose: cancelDrag,
+    dispose() { cancelDrag(); bins.dispose(); },
   };
 
   // ---- inspector: one letter

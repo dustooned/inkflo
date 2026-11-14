@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, ScreenTone, TextFrame } from './model';
+import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame } from './model';
 import { TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -684,6 +684,22 @@ function book(v: unknown, v1Art?: Obj): Book {
   if (Array.isArray(o.bins)) {
     const bins = [...new Set(o.bins.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean))].slice(0, 60);
     if (bins.length) b.bins = bins;
+  }
+  if (o.balloonKit !== undefined) {
+    const kit = obj(o.balloonKit, 'book.balloonKit');
+    const list = arr(kit.items, 'book.balloonKit.items');
+    if (list.length > 300) fail('book.balloonKit.items', 'has more than 300 balloons');
+    const items = list.map((v, i): SavedBalloon => {
+      const path = `book.balloonKit.items[${i}]`;
+      const it = obj(v, path);
+      const letters = arr(it.letters, `${path}.letters`);
+      if (!letters.length || letters.length > 12) fail(`${path}.letters`, 'should hold 1 to 12 balloons');
+      const name = str(it.name, `${path}.name`).trim().slice(0, 120) || 'Balloon';
+      const bin = typeof it.bin === 'string' ? it.bin.trim().slice(0, 40) : '';
+      return { key: str(it.key, `${path}.key`), name, ...(bin ? { bin } : {}), letters: letters.map((l, j) => letterOf(l, `${path}.letters[${j}]`)) };
+    });
+    const bins = Array.isArray(kit.bins) ? [...new Set(kit.bins.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean))].slice(0, 60) : [];
+    if (items.length || bins.length) b.balloonKit = { ...(bins.length ? { bins } : {}), items };
   }
   if (typeof o.artistMark === 'string' && b.assets?.some((a) => a.key === o.artistMark)) b.artistMark = o.artistMark;
   if (o.fixedGrid !== undefined) b.fixedGrid = modularGrid(o.fixedGrid, 'book.fixedGrid');

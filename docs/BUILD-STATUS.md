@@ -1066,3 +1066,45 @@ an iPad pays for on every frame:
 - **Not checked:** a real finger on an iPad, and an OS file drop (synthetic DataTransfer only in
   code review). The hidden pane gave the canvas a 300 × 150 default size, so drop accuracy over
   a laid-out page was not measured on screen.
+
+## Bins in Caption and Layout, 2026-11-13
+
+- **One bin panel** (`ui/binpanel.ts`) now serves every kind of bin. A `BinSource` gives it
+  read/write, an optional built-in bin, thumbnails, place, a menu, header buttons and file drops.
+  The panel owns:
+  - chips (All, the bins, built-in, +) and the bin menu (rename, reorder, delete);
+  - search;
+  - mouse and pen drag, and touch hold-to-drag, with the ghost and highlight;
+  - hold-and-lift or right-click menus.
+  `sideChoice(desk, label)` gives each desk's sidebar a "<label> / Bins" switch. The setting is
+  stored in `inkflo:side:<desk>`; Draw's old `inkflo:draw-side` key is no longer read.
+- `geom/bins.ts` is generic over `{ key, name, bin? }` (`BinState` = `{ bins, items }`).
+- **Image bins** (`ui/assetbins.ts`) are now an adapter over the shared panel; behaviour is
+  unchanged.
+- **Balloon bins** (`ui/balloonbins.ts`, Caption):
+  - **Starters** is a built-in bin of six kinds, made from the book's style sheet.
+  - **+ Save** keeps the selected balloon group as a `SavedBalloon` in `book.balloonKit`, without
+    its script link or generated flags. The schema validates each letter with `letterOf`: 300
+    items, 1–12 letters each.
+  - Placing relabels the copies (`relabelLetters`), centres them on the drop point (or the page
+    middle), clamps them and selects the first. One undo step.
+- **Layout bins** (`ui/layoutbins.ts`, Layout):
+  - **Built-in** holds the six preset grids. Saved layouts are the device's page templates
+    (`inkflo.page-templates.v1`, now with `bin`), and the bin order is in `inkflo.layout-bins.v1`.
+    Layout bin edits are device data, so they're not on the book's undo stack.
+  - Tap: `applyPageTemplate` on the whole page.
+  - Drop on a panel: `splitPanelCuts(page, at, template)` (`geom/pagetemplates.ts`) scales each
+    template line into the panel's box, runs it past the edges, and knife-cuts every piece of
+    that panel it crosses (`planKnifeCut`, panel mode). That's one undo step. Moved panels are
+    refused with a hint.
+- Checks: `bins.test.ts` (6, including the balloon kit book round-trip, which drops `src`) and
+  `placement.test.ts` (split: rows2 + grid4 gave 5 panels with the top one untouched).
+  In the built-in pane:
+  - Layout: tapping Two rows took 4 panels to 2. Dropping Four panels on the bottom panel gave
+    the top panel plus a 2 × 2 grid in the bottom half. Undo restored both.
+  - Caption: Shout dragged to (3, 1) in landed exactly there. + Save made "Big shout", and
+    tapping it placed a new copy at the page middle. Undo removed everything.
+  - Draw: the image bins still listed the book's image.
+- **Not checked:** real touch on iPad; dropping onto a laid-out canvas in a visible pane. The
+  test points were computed from the stage geometry because the hidden pane leaves the canvas
+  at 300 × 150.

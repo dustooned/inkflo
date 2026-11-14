@@ -1,8 +1,10 @@
 import type { Cut, ModularGrid, Page, PageLayout, PanelTransform, Pt } from '../doc/model';
-import { layoutOf, newCutId } from './carve';
+import { derivePanels, layoutOf, newCutId, panelAt, planKnifeCut, pointInPoly } from './carve';
 
 export interface PageTemplate {
   name: string;
+  /** The Layout bin it is sorted into (absent = Unsorted). */
+  bin?: string;
   cuts: Omit<Cut, 'id'>[];
   layout: PageLayout;
   size?: { w: number; h: number };
@@ -38,4 +40,35 @@ export function scalePanelTransforms(placements: PanelTransform[], sx: number, s
   return placements.map(({ at, matrix: [a, b, c, d, x, y], order }) => ({
     at, matrix: [a, b * sy / sx, c * sx / sy, d, x * sx, y * sy], order,
   }));
+}
+
+/**
+ * Split one panel with a template's cuts, scaled into that panel's box (Layout bins: drop a
+ * layout onto a panel). Each template line cuts every piece of the original panel it crosses,
+ * so a grid dropped on a panel becomes a grid inside it. Returns the new cuts, or null when the
+ * point is not in an unmoved panel or nothing would be cut.
+ */
+export function splitPanelCuts(page: Page, at: Pt, template: PageTemplate): Cut[] | null {
+  const target = panelAt(derivePanels(page), at);
+  if (!target || target.transform) return null;
+  const b = target.bbox, w = b.x1 - b.x0, hgt = b.y1 - b.y0;
+  const work: Page = { ...page, cuts: [...page.cuts] };
+  const added: Cut[] = [];
+  for (const c of template.cuts) {
+    const pts = c.pts.map((p) => ({ x: b.x0 + p.x * w, y: b.y0 + p.y * hgt }));
+    if (pts.length < 2) continue;
+    // run each end on past the panel's edge so the knife reads it as crossing the panel
+    const reach = Math.max(w, hgt);
+    const out = (end: Pt, from: Pt) => { const d = Math.hypot(end.x - from.x, end.y - from.y) || 1; return { x: end.x + (end.x - from.x) / d * reach, y: end.y + (end.y - from.y) / d * reach }; };
+    const stroke = [out(pts[0]!, pts[1]!), ...pts, out(pts.at(-1)!, pts.at(-2)!)];
+    const pieces = derivePanels(work).filter((q) => !q.transform && pointInPoly(q.centroid, target.pts));
+    for (const q of pieces) {
+      const plan = planKnifeCut(work, stroke, 'panel', true, q.centroid);
+      if (!plan) continue;
+      const cut: Cut = { id: newCutId(), ...plan.cut };
+      work.cuts.push(cut);
+      added.push(cut);
+    }
+  }
+  return added.length ? added : null;
 }

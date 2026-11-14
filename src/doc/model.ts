@@ -453,6 +453,15 @@ export interface BookAsset {
   bin?: string;
 }
 
+/** A balloon (with any joined balloons) kept in the Caption bins to reuse. */
+export interface SavedBalloon {
+  key: string;
+  name: string;
+  bin?: string;
+  /** Lettering in points, as it was on its page; placement moves it to the drop point. */
+  letters: Letter[];
+}
+
 export interface Book {
   id: string;
   title: string;
@@ -473,6 +482,8 @@ export interface Book {
   assets?: BookAsset[];
   /** Asset bins in the order shown; a bin can be empty. */
   bins?: string[];
+  /** Saved balloons for the Caption bins. */
+  balloonKit?: { bins?: string[]; items: SavedBalloon[] };
   /** The creator's mark (signature, monogram, symbol): a key in `assets`, stored once. */
   artistMark?: string;
   pages: Page[];

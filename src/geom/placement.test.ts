@@ -32,3 +32,24 @@ it('rescales a saved layout to a new trim without copying content', () => {
   expect(target.cuts.map((c) => c.id)).not.toEqual(from.cuts.map((c) => c.id));
   expect(target.cuts.some((c) => !!c.extended)).toBe(true);
 });
+
+describe('layout bins', () => {
+  it('splits one panel with a template scaled into it', async () => {
+    const { newPage } = await import('../doc/model');
+    const { derivePanels, presetCuts } = await import('./carve');
+    const { capturePageTemplate, splitPanelCuts } = await import('./pagetemplates');
+    const page = newPage();
+    page.cuts = presetCuts(page, 'rows2');
+    const grid = { ...newPage(), widthIn: page.widthIn, heightIn: page.heightIn };
+    grid.cuts = presetCuts(grid, 'grid4');
+    const template = capturePageTemplate(grid, 'Four');
+    const bottom = derivePanels(page)[1]!;
+    const cuts = splitPanelCuts(page, bottom.centroid, template)!;
+    expect(cuts.length).toBeGreaterThanOrEqual(2);
+    const after = derivePanels({ ...page, cuts: [...page.cuts, ...cuts] });
+    expect(after).toHaveLength(5);
+    // the top panel is untouched
+    expect(after.filter((p) => p.bbox.y1 <= page.heightIn / 2 + 0.01)).toHaveLength(1);
+    expect(splitPanelCuts(page, { x: -5, y: -5 }, template)).toBeNull();
+  });
+});

@@ -1,29 +1,32 @@
-import type { Book, BookAsset } from '../doc/model';
-
 /**
- * Asset bins: named groups of a book's images, like an editor's media bins. Pure functions that
- * return new arrays, so every change is one undo step (see ui/assetbins.ts).
+ * Bins: named groups of reusable things (images, balloons, layouts), like an editor's media
+ * bins. Pure functions that return new arrays, so each change is one undo step.
  */
+export interface BinItem { key: string; name: string; bin?: string }
+export interface BinState<T extends BinItem> { bins?: string[]; items?: T[] }
+
 export const UNSORTED = 'Unsorted';
 export const ALL = '';
 
 export const cleanBin = (name: string) => name.replace(/\s+/g, ' ').trim().slice(0, 40);
 
-/** Bins in order: the stored list, then any bin an asset names, then Unsorted when used. */
-export function binsOf(book: Pick<Book, 'bins' | 'assets'>): string[] {
-  const out = [...(book.bins ?? [])];
-  for (const a of book.assets ?? []) if (a.bin && !out.includes(a.bin)) out.push(a.bin);
-  if ((book.assets ?? []).some((a) => !a.bin) && !out.includes(UNSORTED)) out.push(UNSORTED);
+/** Bins in order: the stored list, then any bin an item names, then Unsorted when used. */
+export function binsOf<T extends BinItem>(s: BinState<T>): string[] {
+  const out = [...(s.bins ?? [])];
+  for (const a of s.items ?? []) if (a.bin && !out.includes(a.bin)) out.push(a.bin);
+  if ((s.items ?? []).some((a) => !a.bin) && !out.includes(UNSORTED)) out.push(UNSORTED);
   return out;
 }
 
-export const binOf = (a: BookAsset) => a.bin || UNSORTED;
+export const binOf = (a: BinItem) => a.bin || UNSORTED;
 
-/** Assets in a bin (ALL = every asset), optionally filtered by name. */
-export function assetsIn(assets: BookAsset[] | undefined, bin: string, search = ''): BookAsset[] {
+/** Items in a bin (ALL = every item), optionally filtered by name. */
+export function itemsIn<T extends BinItem>(items: T[] | undefined, bin: string, search = ''): T[] {
   const q = search.trim().toLowerCase();
-  return (assets ?? []).filter((a) => (bin === ALL || binOf(a) === bin) && (!q || a.name.toLowerCase().includes(q)));
+  return (items ?? []).filter((a) => (bin === ALL || binOf(a) === bin) && (!q || a.name.toLowerCase().includes(q)));
 }
+/** Kept for the image bins' callers. */
+export const assetsIn = itemsIn;
 
 /** A name not already used, from `wanted` ("Props", "Props 2", …). */
 export function uniqueBin(bins: string[], wanted: string): string {
@@ -33,32 +36,32 @@ export function uniqueBin(bins: string[], wanted: string): string {
   return name;
 }
 
-export const withBin = (a: BookAsset, bin: string): BookAsset => {
+export function withBin<T extends BinItem>(a: T, bin: string): T {
   const { bin: _old, ...rest } = a;
-  return bin && bin !== UNSORTED ? { ...rest, bin } : rest;
-};
-
-export function moveToBin(assets: BookAsset[], keys: string[], bin: string): BookAsset[] {
-  const set = new Set(keys);
-  return assets.map((a) => set.has(a.key) ? withBin(a, bin) : a);
+  return (bin && bin !== UNSORTED ? { ...rest, bin } : rest) as T;
 }
 
-export function renameBin(book: Pick<Book, 'bins' | 'assets'>, from: string, to: string): { bins: string[]; assets: BookAsset[] } {
+export function moveToBin<T extends BinItem>(items: T[], keys: string[], bin: string): T[] {
+  const set = new Set(keys);
+  return items.map((a) => set.has(a.key) ? withBin(a, bin) : a);
+}
+
+export function renameBin<T extends BinItem>(s: BinState<T>, from: string, to: string): { bins: string[]; items: T[] } {
   const name = cleanBin(to);
-  const bins = binsOf(book);
-  if (!name || from === UNSORTED) return { bins, assets: book.assets ?? [] };
+  const bins = binsOf(s);
+  if (!name || from === UNSORTED) return { bins, items: s.items ?? [] };
   const target = bins.some((b) => b !== from && b.toLowerCase() === name.toLowerCase()) ? uniqueBin(bins.filter((b) => b !== from), name) : name;
   return {
     bins: bins.map((b) => b === from ? target : b),
-    assets: (book.assets ?? []).map((a) => a.bin === from ? { ...a, bin: target } : a),
+    items: (s.items ?? []).map((a) => a.bin === from ? { ...a, bin: target } : a),
   };
 }
 
-/** Remove a bin; its images go to Unsorted (nothing is deleted). */
-export function deleteBin(book: Pick<Book, 'bins' | 'assets'>, bin: string): { bins: string[]; assets: BookAsset[] } {
+/** Remove a bin; its items go to Unsorted (nothing is deleted). */
+export function deleteBin<T extends BinItem>(s: BinState<T>, bin: string): { bins: string[]; items: T[] } {
   return {
-    bins: binsOf(book).filter((b) => b !== bin && b !== UNSORTED),
-    assets: (book.assets ?? []).map((a) => a.bin === bin ? withBin(a, UNSORTED) : a),
+    bins: binsOf(s).filter((b) => b !== bin && b !== UNSORTED),
+    items: (s.items ?? []).map((a) => a.bin === bin ? withBin(a, UNSORTED) : a),
   };
 }
 

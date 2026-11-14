@@ -6,12 +6,25 @@ import { renderThumb } from '../render/page';
 import { askText, confirmDialog, h, toast } from './dom';
 
 const KEY = 'inkflo.page-templates.v1';
-const STANDARD: [Preset, string][] = [
+const BINS_KEY = 'inkflo.layout-bins.v1';
+
+/** Save the device's templates (and Layout bin order). Returns false when storage refuses. */
+export function writeTemplates(list: PageTemplate[], bins?: string[]): boolean {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+    if (bins) localStorage.setItem(BINS_KEY, JSON.stringify(bins));
+    return true;
+  } catch { return false; }
+}
+export function readLayoutBins(): string[] {
+  try { const v: unknown = JSON.parse(localStorage.getItem(BINS_KEY) ?? '[]'); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, 60) : []; } catch { return []; }
+}
+export const STANDARD: [Preset, string][] = [
   ['splash', 'Splash'], ['rows2', 'Two rows'], ['tier3', 'Three tiers'],
   ['grid4', 'Four panels'], ['grid6', 'Six panels'], ['grid9', 'Nine panels'],
 ];
 
-function readTemplates(): PageTemplate[] {
+export function readTemplates(): PageTemplate[] {
   try {
     const list: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]');
     if (!Array.isArray(list)) return [];

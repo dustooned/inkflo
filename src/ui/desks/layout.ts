@@ -11,7 +11,9 @@ import { centreCrossing, DEFAULT_GRID, downbeatPanel, gridLines, revealIssues, s
 import { drawModularGrid } from '../composition';
 import { openGrid } from '../grid';
 import { openPageTemplates } from '../pagetemplates';
-import { applyPageTemplate } from '../../geom/pagetemplates';
+import { applyPageTemplate, splitPanelCuts } from '../../geom/pagetemplates';
+import { layoutBins } from '../layoutbins';
+import { sideChoice } from '../binpanel';
 import { resample, pathLength } from '../../engine/core/quickshape';
 import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../geom/cutshape';
 import { snapCutEnd } from '../../geom/cutangle';
@@ -325,6 +327,25 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     ctx.chrome();
     ctx.request();
   }, true);
+  const side = sideChoice('layout', 'Panels', () => ctx.chrome());
+  const bins = layoutBins({
+    page, stage: ctx.stage, toPage: (e) => ctx.toPage(e),
+    applyPage(template) {
+      studio.editPage(page, 'Apply ' + template.name, ['cuts', 'layout', 'grid', 'downbeat'], (p) => applyPageTemplate(p, template));
+      sel = null;
+      ctx.chrome();
+      ctx.request();
+    },
+    splitPanel(template, at) {
+      const cuts = splitPanelCuts(page, at, template);
+      if (!cuts) return false;
+      studio.editPage(page, 'Split panel with ' + template.name, ['cuts'], (p) => { p.cuts = [...p.cuts, ...cuts]; });
+      sel = null;
+      ctx.chrome();
+      ctx.request();
+      return true;
+    },
+  });
   function markDownbeat(panel: Panel, clear = false): void {
     studio.editPage(page, clear ? 'Clear downbeat' : 'Mark downbeat', ['downbeat'], (pg) => {
       if (clear) delete pg.downbeat;
@@ -386,6 +407,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     inspector(el) {
       if (codeOpen) { el.append(codePanel()); return; }
+      el.append(side.switcher());
+      if (side.bins()) { bins.refresh(); el.append(bins.el); return; }
       const ps = displayPanels();
       const p = selected();
       el.append(h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, `${ps.length} panel${ps.length === 1 ? '' : 's'}`)));
@@ -728,7 +751,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       }
       return false;
     },
-    dispose: cancelDrag,
+    dispose() { cancelDrag(); bins.dispose(); },
   };
   return mode;
 }
