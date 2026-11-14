@@ -1240,3 +1240,24 @@ The audit is in `docs/UI-AUDIT.md`. These are its four P0 items:
   Script width, Export groups and Book menu were checked on screen.
 - **Not checked:** the coarse-pointer sizes on a real iPad (the pane can't emulate a finger
   pointer at tablet size).
+
+## UI audit P2 fixes, 2026-11-14
+
+- **14–15:** rail labels and the desk name in the bar are at least 10 px, and the Print kind
+  dropdown uses the kit select (32 px, 8 px corners, chevron). Both came from the P1 kit.
+- **16:** light theme board `#d9d0bd` (was `#e6dfd0`) and page shadow alpha .36, so the cream page
+  stands clear of the board.
+- **17:** Layout panel numbers are 13–22 px (scaling with zoom) on a rounded paper pill.
+- **18:** opening a desk no longer shows "Unsaved / Saving…". `setLast` (the last page and desk,
+  for Continue) now calls `markDirty(true)`, a quiet save: it's still written, but the status
+  stays and `pending` stays false, so it never triggers the "Leave site?" guard. Real work after
+  it shows as usual. Traced with a markDirty stack: the only caller on open was `setLast`.
+- **19:** Home has a compact "Start something" row (New book, Vertical comic, Comic strip,
+  Starter), then "Your books". A title search appears once there are 12 or more books.
+- **20:** Script cards are tighter (smaller padding; textareas grow with their text from 44 px). Every
+  `details` disclosure uses a styled chevron instead of the browser's triangle.
+- **21:** Book screen page thumbnails are 180 px+ wide (rendered at 320), with 13 px page numbers
+  and 28 px page action buttons.
+- Checks: `autosave.test.ts` (9, including the quiet save: no dirty or saving state, nothing
+  pending, still written). In the built-in pane: Home's new rows; Draw → Layout → Draw shows
+  "Saved" throughout with nothing pending; Layout numbers on pills; Book thumbnails 182 × 281.

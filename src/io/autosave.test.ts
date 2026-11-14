@@ -132,6 +132,26 @@ describe('autosave', () => {
     expect(s.store.heads.size).toBe(1);
   });
 
+  it('saves bookkeeping quietly: no Unsaved status and no pending save to wait for', async () => {
+    const s = setup();
+    s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), true);
+    const states: string[] = [];
+    s.saver.onStatus = () => states.push(s.saver.state);
+    s.book.lastStage = 'draw';
+    s.saver.markDirty(true);
+    expect(s.saver.pending).toBe(false);
+    expect(s.saver.state).not.toBe('dirty');
+    await s.clock.advance(400);
+    await drain(s.saver);
+    expect(s.store.heads.size).toBe(1);
+    expect(states).not.toContain('dirty');
+    expect(states).not.toContain('saving');
+    // real work after it is shown as usual
+    s.draw(s.book.pages[0]!.id, 'ink', 'Y');
+    expect(s.saver.pending).toBe(true);
+    expect(s.saver.state).toBe('dirty');
+  });
+
   it('keeps an automatic restore point every 10 commands', async () => {
     const s = setup();
     s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), true);

@@ -264,7 +264,7 @@ export class Studio {
     if (b.lastPageId === page.id && b.lastStage === stage) return;
     b.lastPageId = page.id;
     b.lastStage = stage;
-    this.saver.markDirty();
+    this.saver.markDirty(true);
   }
 
   addPage(after?: Page, setup?: (page: Page) => void): Page {

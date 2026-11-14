@@ -101,18 +101,27 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
       starter.disabled = false;
     }
   } }, h('div', { class: 'sheet', 'aria-hidden': 'true' }, '▤'), h('h3', {}, 'Open starter comic'), h('small', {}, 'The Last Train · Two panels'));
-  const grid = h('div', { class: 'books' },
+  // new work in its own short row; the library below it (UI audit P2 19)
+  const starts = h('div', { class: 'starts' },
     h('button', { class: 'card new', type: 'button', onclick: newBook }, h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New book'), h('small', {}, 'One page, ready to script')),
     h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
     h('button', { class: 'card new', type: 'button', onclick: newStrip }, h('div', { class: 'sheet' }, h('span', { class: 'strip-mini', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))), h('h3', {}, 'Comic strip'), h('small', {}, '3 or 4 panels, or stacked')),
-    starter,
-    books.map((b) =>
-      h('button', { class: 'card', type: 'button', onclick: () => go(`#book/${b.id}`) },
+    starter);
+  const bookCard = (b: (typeof books)[number]) =>
+      h('button', { class: 'card', type: 'button', 'data-title': b.title.toLowerCase(), onclick: () => go(`#book/${b.id}`) },
         h('div', { class: 'sheet' }, cover(b.cover)),
         h('h3', {}, b.title),
         h('small', {}, `${b.pages} page${b.pages === 1 ? '' : 's'} · ${b.lastStage} · ${new Date(b.modified).toLocaleDateString()}`),
-        h('div', { class: 'dots', 'aria-hidden': 'true' }, STAGES.map((s) => h('i', { class: STAGES.indexOf(s) <= STAGES.indexOf(b.lastStage) ? 'done' : '' }))))),
-  );
+        h('div', { class: 'dots', 'aria-hidden': 'true' }, STAGES.map((s) => h('i', { class: STAGES.indexOf(s) <= STAGES.indexOf(b.lastStage) ? 'done' : '' }))));
+  const grid = h('div', { class: 'books' }, books.map(bookCard));
+  const none = h('p', { class: 'empty', hidden: true }, 'No book matches.');
+  const search = books.length >= 12 ? h('input', { type: 'search', class: 'book-search', placeholder: `Find among ${books.length} books`, 'aria-label': 'Find a book by title' }) : null;
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const c of grid.children) { const hit = !q || (c as HTMLElement).dataset.title!.includes(q); (c as HTMLElement).hidden = !hit; if (hit) shown++; }
+    none.hidden = shown > 0;
+  });
 
   root.replaceChildren(
     h('div', { class: 'screen' },
@@ -125,9 +134,11 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         h('button', { class: 'btn', type: 'button', onclick: importBook }, 'Import .inkflo'),
         h('button', { class: 'btn primary', type: 'button', onclick: newBook }, 'New book')),
       h('main', { class: 'body' },
-        h('div', { class: 'rowlabel' }, 'Your books'),
+        h('div', { class: 'rowlabel' }, 'Start something'),
+        starts,
+        h('div', { class: 'rowlabel books-head' }, h('span', {}, 'Your books'), search),
         books.length ? null : h('p', { class: 'empty' }, 'Script a page, carve its panels, draw, letter, then export page images, a comic archive, or a motion comic that opens in 2Dope. Everything stays on this device.'),
-        grid)),
+        grid, none)),
   );
   // free cover URLs when the screen goes away
   const off = new MutationObserver(() => {

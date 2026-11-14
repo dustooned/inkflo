@@ -79,6 +79,8 @@ export class Autosaver {
   private versionChanges = 0;
   private versionPending = false;
   private lastGcAt = 0;
+  /** Every change since the last save is bookkeeping (last page opened): save without showing it. */
+  private quiet = false;
 
   constructor(
     private readonly store: Store,
@@ -116,17 +118,22 @@ export class Autosaver {
 
   /** True while a change is waiting to be written or is being written. */
   get pending(): boolean {
-    return this.timer !== null || this.state === 'dirty' || this.state === 'saving';
+    return (this.timer !== null && !this.quiet) || this.state === 'dirty' || (this.state === 'saving' && !this.quiet);
   }
 
-  /** Call after every command (do, undo, redo). */
-  markDirty(): void {
+  /**
+   * Call after every command (do, undo, redo). `quiet` is for bookkeeping that isn't the user's
+   * work (which page was open last): it is saved, but the status stays "Saved" and closing the
+   * tab doesn't ask to wait for it.
+   */
+  markDirty(quiet = false): void {
+    this.quiet = quiet && (this.quiet || this.savedChanges === this.changes);
     this.changes += 1;
     this.schedule();
   }
 
   private schedule(): void {
-    if (this.state !== 'saving') this.set('dirty');
+    if (this.state !== 'saving' && !this.quiet) this.set('dirty');
     const now = this.clock.now();
     if (!this.timer) this.firstDirtyAt = now;
     if (this.timer) this.clock.clearTimeout(this.timer);
@@ -150,7 +157,8 @@ export class Autosaver {
     return this.enqueue(async () => {
       if (this.savedChanges === this.changes) return;
       const at = this.changes;
-      this.set('saving');
+      const quiet = this.quiet;
+      if (!quiet) this.set('saving');
       try {
         const settled = await this.capture().settle();
         const json = stringifyBookFile(settled.file);
@@ -164,7 +172,8 @@ export class Autosaver {
         if (this.meta?.id === meta.id) this.meta = card;
         this.savedChanges = at;
         this.lastSavedAt = now;
-        this.set(this.changes === at ? 'saved' : 'dirty');
+        if (this.changes === at) this.quiet = false;
+        if (!(quiet && this.changes === at && this.state !== 'saving')) this.set(this.changes === at ? 'saved' : 'dirty');
         if (this.changes !== at) this.schedule();
         // Queued after this save, not awaited: awaiting a queued job from inside the queue deadlocks.
         if (at - this.versionChanges >= this.opt.versionEveryChanges && !this.versionPending) void this.saveVersion('Automatic', true);

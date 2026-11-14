@@ -24,7 +24,7 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
         const c = thumbs.get(p.id) ?? document.createElement('canvas');
         thumbs.set(p.id, c);
         const a = studio.art.get(p.id) ?? null;
-        renderThumb(p, a && !a.parked ? a : null, 220, c, sheetOf(book));
+        renderThumb(p, a && !a.parked ? a : null, 320, c, sheetOf(book));
         return h('div', { class: 'card pagecard' },
           h('button', { class: 'sheet', type: 'button', 'aria-label': `Open page ${i + 1}`, onclick: () => go(deskOf(p)) }, c),
           h('div', { class: 'foot' },

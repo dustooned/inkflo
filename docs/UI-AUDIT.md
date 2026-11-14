@@ -32,7 +32,7 @@ session. P2 is polish.
 | 12 | Script | **The right inspector is mostly empty** while the editor and legend are cramped. | Inspector shows only the beat and panel counts. | Fold the counts into the context bar ("4 beats · 6 panels ⚠") and give the width to the editor. The legend becomes a collapsible drawer. |
 | 13 | Top bar | **Six icon-only buttons in a row** (layout toggles, theme, spread, focus, checks). | Header icons with no visible labels. | Group into "View ▾" (panels, spread, focus, theme) and keep Checks visible with a count badge. |
 
-## P2: polish
+## P2: polish (fixed 2026-11-14, see BUILD-STATUS)
 
 | # | Where | Problem | Fix |
 |---|---|---|---|

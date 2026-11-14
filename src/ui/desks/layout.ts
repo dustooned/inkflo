@@ -690,7 +690,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       const downbeat = downbeatPanel(page, ps);
       // panel numbers
       g.save();
-      g.font = `600 ${Math.max(10, 0.11 * s)}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
+      const numSize = Math.max(13, Math.min(22, 0.12 * s));
+      g.font = `600 ${numSize}px ${getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace'}`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       if (mode.tool === 'order') {
@@ -716,8 +717,15 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       for (const p of ps) {
         const at = panelNumberAt(p, displayPage(), s);
         if (!at) continue;
-        g.fillStyle = p === downbeat ? '#8F4723' : 'rgba(25,26,31,.55)';
-        g.fillText((p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0'), at.x * s, at.y * s);
+        const label = (p === downbeat ? '◆ ' : '') + String(p.index + 1).padStart(2, '0');
+        // a paper pill behind the number keeps it readable over art
+        const w = g.measureText(label).width + numSize * 0.9, ht = numSize * 1.5;
+        g.fillStyle = 'rgba(255,253,247,.88)';
+        g.beginPath();
+        g.roundRect(at.x * s - w / 2, at.y * s - ht / 2, w, ht, ht / 2);
+        g.fill();
+        g.fillStyle = p === downbeat ? '#8F4723' : 'rgba(25,26,31,.72)';
+        g.fillText(label, at.x * s, at.y * s + 1);
       }
       const p = selected();
       if (mode.tool === 'place') placement.overlay(g, s, p);
