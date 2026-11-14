@@ -1359,6 +1359,8 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
 - The manual (`public/manual/index.html`) starts with **About inkflo**: the same credit, that it is
   tested and updated regularly so students have open access to creative software, and that books
   stay on the device. Linked first in the contents.
+- "Long Beach City College" (home credit and manual) links to https://www.lbcc.edu/digitalmedia
+  (Digital Media Arts) in a new tab; the rest of the credit opens About.
 - Checks: `npx vitest run` 438 passed; `npm run build` passed; checked in the browser on a
   separate test origin (127.0.0.1:5317): the credit shows at the bottom right of Home and
   `manual/index.html#about` opens on the new section. Not checked on an iPad.

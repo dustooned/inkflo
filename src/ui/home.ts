@@ -1,7 +1,8 @@
 import { openManual } from './manual';
 
-/** Who made inkflo (the manual's About section says more). */
-export const ABOUT_CREDIT = 'Designed, programmed and developed by Professor T at Long Beach City College';
+/** Who made inkflo (the manual's About section says more). The college's name links to its Digital Media Arts program. */
+export const ABOUT_CREDIT = 'Designed, programmed and developed by Professor T';
+export const LBCC_URL = 'https://www.lbcc.edu/digitalmedia';
 import type { Studio } from '../app/studio';
 import { STAGES } from '../doc/model';
 import { askText, h, pickFile, toast } from './dom';
@@ -143,7 +144,10 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         books.length ? null : h('p', { class: 'empty' }, 'Script a page, carve its panels, draw, letter, then export page images, a comic archive, or a motion comic that opens in 2Dope. Everything stays on this device.'),
         grid, none),
       h('footer', { class: 'home-credit' },
-        h('button', { class: 'credit', type: 'button', title: 'About inkflo', onclick: () => openManual('about') }, ABOUT_CREDIT))),
+        h('span', { class: 'credit-line' },
+          h('button', { class: 'credit', type: 'button', title: 'About inkflo', onclick: () => openManual('about') }, ABOUT_CREDIT),
+          ' at ',
+          h('a', { class: 'credit', href: LBCC_URL, target: '_blank', rel: 'noopener noreferrer', title: 'Digital Media Arts at Long Beach City College (opens in a new tab)' }, 'Long Beach City College')))),
   );
   // free cover URLs when the screen goes away
   const off = new MutationObserver(() => {

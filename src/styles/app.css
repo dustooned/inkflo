@@ -49,9 +49,11 @@ input, textarea, select { font: inherit; color: inherit; }
 .dots i.done { background: var(--acc-layout); }
 .empty { color: var(--text-soft); max-width: 34rem; line-height: 1.6; }
 .home-credit { display: flex; justify-content: flex-end; padding: 4px 16px max(4px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line, rgba(127,127,127,.25)); }
-.home-credit .credit { min-height: 44px; padding: 0 10px; background: none; border: 0; color: var(--text-soft); font: inherit; font-size: 12px; cursor: pointer; text-align: right; }
+.home-credit .credit-line { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; color: var(--text-soft); font-size: 12px; }
+.home-credit .credit { min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; background: none; border: 0; color: var(--text-soft); font: inherit; cursor: pointer; }
+.home-credit a.credit { text-decoration: underline; text-underline-offset: 2px; }
 .home-credit .credit:hover, .home-credit .credit:focus-visible { color: var(--text); text-decoration: underline; }
-@media (max-width: 600px) { .home-credit { justify-content: center; } .home-credit .credit { text-align: center; } }
+@media (max-width: 600px) { .home-credit, .home-credit .credit-line { justify-content: center; } }
 .pages { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .pagecard .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; }
 .pagecard .num { font: 600 11px/1 var(--mono); color: var(--text-soft); }
