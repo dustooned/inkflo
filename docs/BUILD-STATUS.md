@@ -1120,3 +1120,27 @@ an iPad pays for on every frame:
 - Checks: `layoutcode.test.ts` (8). In the built-in pane, typing `gutters black` and `edge on` in the
   code view rendered black gutter and edge pixels while the panel interiors stayed paper. Undo
   restored the page.
+
+## Shorter layout code; vector point control, 2026-11-13
+
+- **Layout code order:** the build comes first (cuts, keeps, panel moves and corners), then
+  `# look` (gutter, border, curve, and round when set).
+  - `gutters` and `edge` are written only when they're not the defaults (white gutters, no edge).
+  - Panel numbers are written to 0.01.
+- **Drawn cuts written short:** `cutWords(c)` thins a drawn path with Ramer–Douglas–Peucker
+  (0.02 in) and writes points to 0.01 in. An 80-point wobble became 9 points.
+  - When a line's words still equal `cutWords(old)`, parsing returns the original cut object, so
+    a drawn cut keeps every point until its line is edited.
+  - An edited line becomes the cut it says, and keeps the old id.
+- **Vector pen Points** (device setting, `ink.vectorPoints`): All / Light / Medium / Strong
+  (0 / 0.003 / 0.008 / 0.02 in). It simplifies each freehand vector line as it lands; shapes and
+  ruler lines aren't simplified. It's shown for the Vector pen and Edit lines tools. Edit lines →
+  Simplify uses at least the chosen level.
+- **Simplify lines** acts on the active vector layer, or on every unlocked vector layer on the
+  page, as one undo step (`history.combine`). A toast gives the point counts before and after.
+- Checks: `layoutcode.test.ts` (10, including build-before-look, defaults hidden, short drawn
+  cuts and the identity round-trip). In the built-in pane, with real pointer events on the
+  Vector pen:
+  - Light kept 28 of 142 points; All kept 142;
+  - Simplify lines at Medium took both lines from 170 to 32 points, and one undo restored them.
+  The test lines were removed.

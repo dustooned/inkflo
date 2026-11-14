@@ -79,6 +79,34 @@ describe('layout code', () => {
     expect(parseLayoutCode('edge maybe', p).errors[0]!.message).toMatch(/on or off/);
   });
 
+  it('writes the build first, then the look, without default settings', () => {
+    const p = page();
+    p.cuts = presetCuts(p, 'rows2');
+    const code = formatLayoutCode(p);
+    expect(code.indexOf('cut ')).toBeLessThan(code.indexOf('gutter '));
+    expect(code).not.toMatch(/^gutters /m);
+    expect(code).not.toMatch(/^edge /m);
+    expect(code).toMatch(/^# look$/m);
+  });
+
+  it('writes a drawn cut short, and reads an unchanged line back as the same cut', () => {
+    const p = page();
+    // a hand-drawn wobble: 80 points along a gentle curve
+    const pts = Array.from({ length: 80 }, (_, i) => ({ x: (i / 79) * p.widthIn + 0.0004 * Math.sin(i * 7), y: 4 + Math.sin(i / 79 * Math.PI) * 0.8 + 0.0003 * Math.cos(i * 5) }));
+    p.cuts = [{ id: 'cdrawn1', mode: 'across', pts }];
+    const code = formatLayoutCode(p);
+    const line = code.split(String.fromCharCode(10)).find((l) => l.startsWith('cut '))!;
+    expect(line.split('->').length).toBeLessThan(20);
+    expect(line).not.toMatch(/[.][0-9]{3}/);
+    const back = parseLayoutCode(code, p);
+    expect(back.errors).toEqual([]);
+    expect(back.cuts[0]).toBe(p.cuts[0]);
+    // edit the line: the cut becomes what the line says
+    const edited = parseLayoutCode(code.replace(line, 'cut 0,4 -> 6.63,4'), p);
+    expect(edited.cuts[0]!.pts).toHaveLength(2);
+    expect(edited.cuts[0]!.id).toBe('cdrawn1');
+  });
+
   it('keeps every character for highlighting', () => {
     const src = '  cut 1,0 -> 1,9   # left strip';
     const r = parseLayoutCode(src, page());

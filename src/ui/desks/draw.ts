@@ -49,11 +49,18 @@ const MIN_SIZE = 0.25;
 const SIZE_STEP = 0.05;
 const maxSize = (tool: SizedTool) => tool === 'eraser' ? 72 : 36;
 
+type PointsLevel = 'off' | 'light' | 'medium' | 'strong';
+/** Simplify tolerance in inches: light is invisible at print size, strong keeps only the shape. */
+const POINTS_EPS: Record<PointsLevel, number> = { off: 0, light: 0.003, medium: 0.008, strong: 0.02 };
+const POINTS_LEVELS: { id: PointsLevel; label: string }[] = [{ id: 'off', label: 'All' }, { id: 'light', label: 'Light' }, { id: 'medium', label: 'Medium' }, { id: 'strong', label: 'Strong' }];
+
 /** Device-remembered inking setup (never book data). */
 interface InkPrefs {
   brush: Record<LinePass, string>;
   vectorBrush?: string;
   vectorStabilize?: number;
+  /** How hard the Vector pen thins out points as each line lands (missing = light). */
+  vectorPoints?: PointsLevel;
   gPenPressure?: GPenPressure;
   symmetry?: SymmetryMode;
   sizes: Record<string, number>;
@@ -289,6 +296,28 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   };
   const images = imagePlacement(ctx, () => active()?.layer.id ?? null, selectImage);
   const marks = markTool(ctx);
+  /** Vector layers Simplify acts on: the active one, or every vector layer on the page. */
+  const vectorTargets = () => {
+    const a = active()?.layer;
+    return a?.vector ? [a] : page.groups.flatMap((g) => g.layers.filter((l) => l.vector && l.strokes.length && !l.locked && !g.locked));
+  };
+  /** Thin out the lines on those layers (one undo step). */
+  function simplifyLayer(level: PointsLevel): void {
+    const layers = vectorTargets().filter((l) => l.strokes.length);
+    if (!layers.length) return;
+    let before = 0, after = 0, changed = 0;
+    for (const layer of layers) {
+      const next = layer.strokes.map((s) => simplify(s, POINTS_EPS[level]));
+      const b = layer.strokes.reduce((n, s) => n + s.pts.length, 0), a = next.reduce((n, s) => n + s.pts.length, 0);
+      before += b; after += a;
+      if (a < b) { editVector(layer.id, 'Simplify lines', next); changed++; }
+    }
+    if (!changed) { toast('These lines are already as simple as this setting makes them.', 2000); return; }
+    if (changed > 1) studio.history.combine(changed, 'Simplify lines');
+    toast(`${before.toLocaleString()} → ${after.toLocaleString()} points${layers.length > 1 ? ` on ${layers.length} vector layers` : ` on “${layers[0]!.name}”`}.`, 2400);
+    ctx.chrome();
+    ctx.request();
+  }
   // Asset bins share the sidebar with Layers; made once so scroll and drags survive repaints
   const bins = assetBins({ studio, stage: ctx.stage, toPage: (e) => ctx.toPage(e), place: (a, at, reference) => images.placeAsset(a, at, reference) });
   const side = sideChoice('draw', 'Layers', () => ctx.chrome());
@@ -636,8 +665,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (l.record.brush.vectorStyle) stroke.styledVector = true;
       stroke.pts = pts.map((q) => ({ x: q.x / dpi, y: q.y / dpi }));
       stroke.pressure = pts.map((q) => Math.max(0, Math.min(1, q.pressure)));
+      // thin out the points as the line lands (a ruler or shape is already exact)
+      const eps = POINTS_EPS[ink.vectorPoints ?? 'light'];
+      const landed = eps && !l.shape && stroke.pts.length > 2 ? simplify(stroke, eps) : stroke;
       const layer = findLayer(page, l.layerId)!.layer;
-      editVector(l.layerId, 'Vector line', [...layer.strokes, stroke]);
+      editVector(l.layerId, 'Vector line', [...layer.strokes, landed]);
       if (createdForStroke) studio.history.combine(2, 'Vector line on a new layer');
       if (allowShapeEdit && l.shape) {
         shapeTool = mode.tool;
@@ -1593,7 +1625,15 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         bar.append(seg<VectorErase>([{ id: 'intersection', label: 'Touched part' }, { id: 'crossing', label: 'To crossings' }, { id: 'whole', label: 'Whole line' }], vstate.erase, (v) => { vstate.erase = v; ctx.chrome(); }, 'Vector erase'),
           h('span', { class: 'hint' }, vstate.erase === 'crossing' ? 'Cleans overshoots: removes the piece up to the nearest crossing lines.' : vstate.erase === 'whole' ? 'Removes every line the eraser touches.' : 'Cuts only where the eraser crosses a line.'));
       }
-      if (mode.tool === 'vpen') bar.append(h('span', { class: 'hint' }, 'Editable lines on a vector layer. Reshape and re-weight them with Edit lines (A).'));
+      if (mode.tool === 'vpen' || mode.tool === 'vedit') {
+        const level = ink.vectorPoints ?? 'light';
+        const targets = vectorTargets();
+        bar.append(
+          h('span', { class: 'mini', title: 'How many points each new vector line keeps. Fewer points: lighter files and easier editing.' }, 'Points'),
+          seg<PointsLevel>(POINTS_LEVELS, level, (v) => { ink.vectorPoints = v; saveInk(); ctx.chrome(); }, 'Points per line'),
+          h('button', { class: 'btn', type: 'button', disabled: !targets.some((l) => l.strokes.length), title: active()?.layer.vector ? 'Simplify every line on this vector layer (one undo step)' : 'Simplify every vector line on this page (one undo step)', onclick: () => simplifyLayer(level === 'off' ? 'light' : level) }, 'Simplify lines'));
+        if (mode.tool === 'vpen') bar.append(h('span', { class: 'hint' }, 'Editable lines on a vector layer. Reshape and re-weight them with Edit lines (A).'));
+      }
       if (mode.tool === 'tone') bar.append(...tone.controls(active()?.layer.id).filter((el) => el !== null));
       if (mode.tool === 'vedit') {
         const v = editVariant();
@@ -1610,7 +1650,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
               h('b', {}, `${(sel.w * 72).toFixed(1)}pt`),
               h('button', { class: 'btn', type: 'button', title: 'Thicker line', onclick: () => changeSelected('Thicker line', (x) => scaleWidth(x, 1.2)) }, '+')),
             h('button', { class: 'btn', type: 'button', title: 'Smooth out wobbles', onclick: () => changeSelected('Smooth line', (x) => smooth(x, 3)) }, 'Smooth'),
-            h('button', { class: 'btn', type: 'button', title: 'Drop points the line does not need', onclick: () => { const n = sel.pts.length; changeSelected('Simplify line', (x) => simplify(x, 0.006)); const m = vsel ? findLayer(page, vsel.layerId)?.layer.strokes[vsel.index]?.pts.length : 0; toast(`${n} → ${m ?? n} points.`, 1400); } }, 'Simplify'),
+            h('button', { class: 'btn', type: 'button', title: 'Drop points the line does not need', onclick: () => { const n = sel.pts.length; changeSelected('Simplify line', (x) => simplify(x, Math.max(0.006, POINTS_EPS[ink.vectorPoints ?? 'light']))); const m = vsel ? findLayer(page, vsel.layerId)?.layer.strokes[vsel.index]?.pts.length : 0; toast(`${n} → ${m ?? n} points.`, 1400); } }, 'Simplify'),
             h('button', { class: 'btn', type: 'button', title: 'Reset width changes along the line', onclick: () => changeSelected('Even width', (x) => { const { pw: _pw, ...rest } = x; return rest; }) }, 'Even width'),
             h('button', { class: 'btn danger', type: 'button', title: 'Delete line (Del)', onclick: () => changeSelected('Delete line', () => null) }, 'Delete'),
           );

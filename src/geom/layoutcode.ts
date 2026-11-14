@@ -32,7 +32,6 @@ export interface ParsedLayout {
 }
 
 const r3 = (n: number) => String(Math.round(n * 1000) / 1000);
-const pt = (p: Pt) => `${r3(p.x)},${r3(p.y)}`;
 const short = (id: string) => 'c' + id.replace(/[^a-z0-9]/gi, '').slice(-5);
 
 /** A moved panel's transform as move, turn and scale about its own centre. */
@@ -51,21 +50,46 @@ export function transformMatrix(centre: Pt, move: Pt, turn: number, scale: numbe
   return [a, b, c, d, centre.x + move.x - (a * centre.x + c * centre.y), centre.y + move.y - (b * centre.x + d * centre.y)];
 }
 
-/** Write a page's layout as code. */
+const r2 = (n: number) => String(Math.round(n * 100) / 100);
+const pt2 = (p: Pt) => `${r2(p.x)},${r2(p.y)}`;
+
+/** Drop points a drawn cut doesn't need for its shape (Ramer–Douglas–Peucker, inches). */
+function thin(pts: readonly Pt[], eps: number): Pt[] {
+  if (pts.length < 3) return [...pts];
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack: [number, number][] = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const A = pts[a]!, B = pts[b]!;
+    const dx = B.x - A.x, dy = B.y - A.y, l = Math.hypot(dx, dy) || 1e-9;
+    let far = -1, fd = 0;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((pts[i]!.x - A.x) * dy - (pts[i]!.y - A.y) * dx) / l;
+      if (d > fd) { fd = d; far = i; }
+    }
+    if (far > 0 && fd > eps) { keep[far] = 1; stack.push([a, far], [far, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+/**
+ * A cut's words after `cut`: its points to 0.01 in, and a drawn cut thinned to the points its
+ * shape needs. An unchanged line reads back as the very same cut, so nothing is lost by showing
+ * it short; editing the line replaces the cut with what the line says.
+ */
+export function cutWords(c: Cut): string {
+  const pts = c.pts.length > 2 ? thin(c.pts, 0.02) : c.pts;
+  return pts.map(pt2).join(' -> ') + (c.handles ? ` bend ${pt2(c.handles[0])} ${pt2(c.handles[1])}` : '');
+}
+
+/** Write a page's layout as code: the build (cuts, then panels), then its look. */
 export function formatLayoutCode(page: Page): string {
   const L = layoutOf(page);
-  const out = [
-    `# page ${r3(page.widthIn)} × ${r3(page.heightIn)} in`,
-    `gutter ${r3(L.gutter)}`,
-    `border ${r3(L.border * 72)}pt`,
-    `curve ${L.curve}`,
-    `gutters ${gutterWord(L.gutterPaper)}`,
-    `edge ${L.edgeBorder ? 'on' : 'off'}`,
-  ];
-  if (L.cornerRadius) out.push(`round ${r3(L.cornerRadius)}`);
+  const out = [`# page ${r3(page.widthIn)} × ${r3(page.heightIn)} in`];
   for (const c of page.cuts) {
     if (c.mode === 'panel') { out.push(`keep ${short(c.id)}  # one-panel cut drawn in Layout`); continue; }
-    out.push(`cut ${c.pts.map(pt).join(' -> ')}${c.handles ? ` bend ${pt(c.handles[0])} ${pt(c.handles[1])}` : ''}`);
+    out.push(`cut ${cutWords(c)}`);
   }
   const panels = derivePanels({ ...page, layout: { ...L, panelTransforms: [] } });
   for (const p of panels) {
@@ -73,11 +97,16 @@ export function formatLayoutCode(page: Page): string {
     const t = L.panelTransforms?.filter((x) => inside(x.at)).at(-1);
     if (t) {
       const d = describeTransform(t, p.centroid);
-      out.push(`panel ${p.index + 1} move ${pt(d.move)} turn ${r3(d.turn)} scale ${r3(d.scale)}`);
+      out.push(`panel ${p.index + 1} move ${pt2(d.move)} turn ${r2(d.turn)} scale ${r2(d.scale)}`);
     }
     const corner = L.panelCorners?.filter((x) => inside(x.at)).at(-1);
-    if (corner) out.push(`panel ${p.index + 1} round ${r3(corner.radius)}`);
+    if (corner) out.push(`panel ${p.index + 1} round ${r2(corner.radius)}`);
   }
+  // the look; settings left at their defaults aren't written
+  out.push('', '# look', `gutter ${r3(L.gutter)}`, `border ${r3(L.border * 72)}pt`, `curve ${L.curve}`);
+  if (L.cornerRadius) out.push(`round ${r3(L.cornerRadius)}`);
+  if (L.gutterPaper !== undefined && gutterWord(L.gutterPaper) !== 'white') out.push(`gutters ${gutterWord(L.gutterPaper)}`);
+  if (L.edgeBorder) out.push('edge on');
   return out.join('\n');
 }
 
@@ -176,6 +205,8 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       if (Math.hypot(p.at(-1)!.x - p[0]!.x, p.at(-1)!.y - p[0]!.y) < 0.05) return fail('That cut is too short to divide anything.');
       // reuse the id of the cut in the same place, so gutters keep their identity
       const old = oldAcross[acrossIndex++];
+      // an unchanged line is the very same cut, with all its drawn points
+      if (old && cutWords(old) === args.join(' ')) { cuts.push(old); lines.push({ tokens }); return; }
       const outside = p.some((q) => q.x < -1e-6 || q.y < -1e-6 || q.x > page.widthIn + 1e-6 || q.y > page.heightIn + 1e-6);
       const cut: Cut = { id: old?.id ?? newId('c'), mode: 'across', pts: p, ...(outside ? { bounded: true } : {}) };
       if (handles.length === 2) cut.handles = handles as [Pt, Pt];

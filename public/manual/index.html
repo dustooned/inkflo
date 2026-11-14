@@ -202,6 +202,7 @@ section[hidden] { display: none; }
 <table>
 <tr><th>Type</th><th>Does</th></tr>
 <tr><td><code>gutter 0.2</code> · <code>border 2.5pt</code> · <code>curve 2</code> · <code>round 0.1</code></td><td>Gutter width, border width, rounding of drawn cuts, corner radius</td></tr>
+<tr><td colspan="2">The code lists the build first (cuts, then panel moves) and the look after it under <code># look</code>. Settings at their defaults (white gutters, no edge) aren't written; add the line to change them. Drawn cuts are shown with only the points their shape needs, to 0.01 in. Leave the line as it is and the cut keeps every drawn point; edit it and the cut becomes what the line says.</td></tr>
 <tr><td><code>gutters black</code> · <code>edge on</code></td><td>Gutter colour (white, black, none for see-through, or a hex like <code>#1a1a1a</code>); ink the page edge so outer panels are framed too</td></tr>
 <tr><td><code>cut 3.3,0 -&gt; 3.3,10</code></td><td>A cut through these points (inches from the top-left); it runs on to the page edges</td></tr>
 <tr><td><code>cut … bend 2,1 4,3</code></td><td>Curves the cut with two handles</td></tr>
@@ -241,7 +242,7 @@ section[hidden] { display: none; }
 <tr><td>Smudge</td><td><kbd>S</kbd></td><td>Blending and softening.</td></tr>
 <tr><td>Eraser</td><td><kbd>E</kbd></td><td>Erase ink, pencil or vector lines (right-click the tool for the choice).</td></tr>
 <tr><td>Clone</td><td></td><td>Copy texture from one spot to another: set a source, then paint.</td></tr>
-<tr><td>Vector pen</td><td><kbd>V</kbd></td><td>Lines you can reshape later: smooth, sharp at any zoom.</td></tr>
+<tr><td>Vector pen</td><td><kbd>V</kbd></td><td>Lines you can reshape later: smooth, sharp at any zoom. <strong>Points</strong> (All, Light, Medium, Strong) sets how many points each new line keeps; Light is the default and looks the same at print size. <strong>Simplify lines</strong> thins every line on the active vector layer, or on every vector layer on the page, in one undo step.</td></tr>
 <tr><td>Edit lines</td><td><kbd>A</kbd></td><td>Pull, move, thicken or thin vector lines and edit their points.</td></tr>
 <tr><td>Rulers</td><td></td><td>Straight edges, perspective and symmetry guides that strokes snap to.</td></tr>
 </table>
