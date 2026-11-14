@@ -206,6 +206,7 @@ section[hidden] { display: none; }
 </table>
 <p>Draw with the Knife and the code updates; edit the code and the page updates. Each pause in typing is one undo step.</p>
 <p><strong>For game makers:</strong> both Script's and Layout's code views have <strong>Copy JSON</strong> and <strong>Download</strong>: every panel's shape (in inches and as 0–1 page fractions), its position, any move or turn, its description and its lines with speaker and kind. Script also exports the whole book. Use it for cutscenes, visual novels, motion comics or your own reader.</p>
+<p><strong>Game engine package:</strong> <strong>Export → Export files → Game engine package (.zip)</strong> packs a page range for Unity, Godot, Unreal or Ren’Py at 1024, 2048 or 4096 px wide. Inside: <code>manifest.json</code> (pages, panels, camera boxes and balloons with speaker, text, size and tail points, all in pixels), each panel as a PNG cut to its shape, each page’s art without lettering, the lettering alone on transparent, the finished page, the dialogue as Yarn Spinner and/or Ink tagged by panel, and a README with loading examples. Lines come from Script; a panel with no script uses its balloons.</p>
 <h3 id="panel-tools">Moving and shaping panels</h3>
 <ul>
 <li><strong>Resize gutters</strong> (<kbd>R</kbd>): drag a gutter or a panel's handle to move the cut under it.</li>
@@ -362,6 +363,7 @@ section[hidden] { display: none; }
 <tr><td>Every layer separately</td><td>Each layer as a PNG in folders</td><td>Rebuilding the page in another app</td></tr>
 <tr><td>Reader spreads PDF / Comic archive (.cbz)</td><td>Spreads for proofing; a file for comic reader apps</td><td>Reading and review</td></tr>
 <tr><td>Motion comic (.2dope)</td><td>A project that pans across your panels</td><td>Animated comics in 2Dope</td></tr>
+<tr><td>Game engine package (.zip)</td><td>Manifest, panel cut-outs, art and lettering apart, Yarn/Ink dialogue</td><td>Games, visual novels, custom readers</td></tr>
 <tr><td>Book file (.inkflo)</td><td>The whole editable book</td><td>Backups and moving devices</td></tr>
 </table>
 <div class="history">Two-colour printing on a <strong>risograph</strong>, a stencil duplicator from Japan, became a favourite of zine makers and small presses because it's cheap, fast and gives bold, slightly imperfect colour. Designing in two inks is a classic small-press skill.</div>

@@ -1009,3 +1009,28 @@ an iPad pays for on every frame:
     worked.
   - Panel 1's Turn field set exactly 10°, the cuts didn't change, and Put back in place removed only
     that panel's move.
+
+## Game engine package, 2026-11-13
+
+- **Export → Export files → Game engine package (.zip)** (`io/gameexport.ts`): page range, page width
+  (1024 / 2048 / 4096 px) and dialogue format (Yarn, Ink or both). The option lists what's inside and
+  counts pages, panel images and balloons before export.
+- **ZIP contents:**
+  - `manifest.json`: format `inkflo-game`, version 1, pixels with the origin top-left. Per panel:
+    polygon, `norm` (0–1), box, centre, move/turn/scale, image path, description and lines. Per
+    balloon: panel, kind, speaker, text, box, centre, tails and `after` for joined balloons.
+  - `pages/NNN/page.png`, `art.png` (no lettering), `lettering.png` (transparent) and
+    `panel-NN.png` (cut to the panel's shape, transparent outside).
+  - `dialogue.yarn` (one node per page, `<<panel N>>`, kind hashtags, `<<jump>>`) and/or
+    `dialogue.ink` (one knot per page, `#panel:N` tags, Ink-escaped text, `-> END`).
+  - `README.md` with Unity, Godot 4 and Unreal loading notes.
+- Lines come from Script. A panel with no script lines falls back to its balloons.
+- `buildManifest`, `yarnScript` and `inkScript` are pure; balloon bounds use a passed-in measurer, so
+  they're testable in Node.
+- Checks: `gameexport.test.ts` (4). In the built-in pane, two pages at 1024 px gave 18 files (0.13 MB)
+  that decoded correctly:
+  - the balloon fell in panel 1 with a box and tail in px;
+  - the lettering PNG was 99% transparent;
+  - panel 1's crop was 256 × 316 px;
+  - the Yarn and Ink text read correctly.
+- **Not checked:** loading the package in a real Unity, Godot or Unreal project.

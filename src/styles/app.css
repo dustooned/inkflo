@@ -847,3 +847,8 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .panel-numbers .field input { width: 100%; }
 .json-export { display: grid; gap: 6px; margin-top: 10px; }
 .json-export h4 { margin: 0; }
+
+/* Game engine package contents */
+.game-contents { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 4px 0 0; font-size: 12px; }
+.game-contents dt code { font: 12px var(--mono); }
+.game-contents dd { margin: 0; color: var(--text-soft); }

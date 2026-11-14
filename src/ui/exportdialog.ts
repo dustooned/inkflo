@@ -10,6 +10,7 @@ import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
 import { DEFAULT_SCROLL_GAP, exportScroll, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
 import { exportWebImage, WEB_WIDTH, webSize } from '../io/webimage';
+import { exportGamePackage, type DialogueFormat } from '../io/gameexport';
 import { loadMarks, markKeys } from '../render/marks';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
@@ -365,6 +366,45 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       h('div', { style: 'display:flex;gap:12px;align-items:end;justify-content:space-between;margin-top:6px' }, preview, go));
   }
 
+  // ---- Game engine package: manifest, panel cut-outs, art and lettering apart, dialogue script
+  const game = { from: 1, to: book.pages.length, width: 2048, dialogue: 'both' as DialogueFormat };
+  function gamePackage(): HTMLElement {
+    const info = h('p', { class: 'note', 'aria-live': 'polite', style: 'margin:0' });
+    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.from, 'aria-label': 'From page', style: 'width:60px' });
+    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.to, 'aria-label': 'To page', style: 'width:60px' });
+    const clampPage = (v: number) => Math.max(1, Math.min(book!.pages.length, Math.round(v || 1)));
+    const refresh = () => {
+      const a = Math.min(game.from, game.to), b = Math.max(game.from, game.to);
+      const pages = book!.pages.slice(a - 1, b);
+      const panels = pages.reduce((n, p) => n + derivePanels(p).length, 0);
+      const balloons = pages.reduce((n, p) => n + p.balloons.length, 0);
+      const tall = Math.max(...pages.map((p) => Math.round(p.heightIn * game.width / p.widthIn)));
+      info.textContent = `${pages.length} page${pages.length === 1 ? '' : 's'} · ${panels} panel image${panels === 1 ? '' : 's'} · ${balloons} balloon${balloons === 1 ? '' : 's'} · pages ${game.width} px wide (up to ${tall} px tall)`;
+    };
+    from.addEventListener('change', () => { game.from = clampPage(from.valueAsNumber); from.value = String(game.from); refresh(); });
+    to.addEventListener('change', () => { game.to = clampPage(to.valueAsNumber); to.value = String(game.to); refresh(); });
+    queueMicrotask(refresh);
+    const contents: [string, string][] = [
+      ['manifest.json', 'pages, panels, camera boxes and balloons, in pixels'],
+      ['panel-NN.png', 'each panel cut to its shape, transparent outside'],
+      ['art.png · lettering.png', 'the page without words, and the words alone'],
+      ['page.png', 'the finished page'],
+      ['dialogue.yarn / .ink', 'the script for Yarn Spinner or Ink, tagged by panel'],
+      ['README.md', 'loading examples for Unity, Godot and Unreal'],
+    ];
+    return h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+      h('b', {}, 'Game engine package (.zip)'),
+      h('p', {}, 'For Unity, Godot, Unreal, Ren’Py or your own reader: everything a game needs to show the comic panel by panel, with dialogue it can voice or restyle.'),
+      h('dl', { class: 'game-contents' }, contents.flatMap(([f, d]) => [h('dt', {}, h('code', {}, f)), h('dd', {}, d)])),
+      h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px' },
+        h('label', { class: 'field' }, 'Pages', h('span', { class: 'page-range' }, from, h('span', {}, 'to'), to)),
+        select('Page width', [[1024, '1024 px'], [2048, '2048 px'], [4096, '4096 px']], game.width, (v) => { game.width = v; refresh(); }),
+        select('Dialogue', [['both', 'Yarn and Ink'], ['yarn', 'Yarn Spinner'], ['ink', 'Ink']], game.dialogue, (v) => (game.dialogue = v))),
+      info,
+      h('div', { style: 'display:flex;justify-content:flex-end;margin-top:6px' },
+        btn('Export', () => void run('Game package', () => exportGamePackage(studio, { range: { from: Math.min(game.from, game.to), to: Math.max(game.from, game.to) }, width: game.width, dialogue: game.dialogue }, (m) => (progress.textContent = m)), `${name}-game.zip`), true)));
+  }
+
   function filesTab(): HTMLElement {
     const sepBoxes = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' },
       (Object.keys(SEPARATION_LABEL) as Separation[]).map((s) => check(SEPARATION_LABEL[s], fo.seps.includes(s), (on) => {
@@ -437,6 +477,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
           select('Per panel', [[1.2, '1.2 s'], [2, '2 s'], [3, '3 s'], [4, '4 s']], motion.panelHold, (v) => (motion.panelHold = v)),
           select('Frame rate', [[12, '12 fps'], [24, '24 fps'], [30, '30 fps']], motion.fps, (v) => (motion.fps = v)),
           select('Balloons', [['live', 'Live captions'], ['image', 'Images']], motion.captions, (v) => (motion.captions = v)))),
+      gamePackage(),
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Book file (.inkflo)'), h('p', {}, 'The whole book with every stroke, to back up or open on another device.')),
         btn('Export', () => void run('Book file', () => studio.exportInkflo(), `${name}.inkflo`))),
