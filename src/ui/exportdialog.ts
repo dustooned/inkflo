@@ -1,3 +1,4 @@
+import { askToReduce } from './reducechoice';
 import type { Studio } from '../app/studio';
 import { sheetOf } from '../doc/model';
 import { derivePanels } from '../geom/carve';
@@ -8,6 +9,8 @@ import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, pl
 import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
 import { DEFAULT_SCROLL_GAP, exportScroll, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
+import { exportWebImage, WEB_WIDTH, webSize } from '../io/webimage';
+import { loadMarks, markKeys } from '../render/marks';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
@@ -47,6 +50,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     progress.textContent = `${label}…`;
     try {
       await studio.saver.flush();
+      await loadMarks(markKeys(book), (k) => studio.store.getAsset(k));
       const t0 = performance.now();
       const blob = await make();
       download(blob, file);
@@ -185,7 +189,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       const file = addArt.files?.[0];
       if (!file) return;
       try {
-        const { asset, bytes } = await prepareAsset(file);
+        const { asset, bytes } = await prepareAsset(file, askToReduce);
         await studio.addAssets([asset], new Map([[asset.key, bytes]]));
         breakSet.key = asset.key;
         render();
@@ -323,6 +327,44 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     return details;
   }
 
+  // ---- Web image: one page (a strip) as a PNG sized in pixels
+  const web = { page: currentPage, width: WEB_WIDTH };
+  function webImage(): HTMLElement {
+    const info = h('p', { class: 'note', 'aria-live': 'polite', style: 'margin:0' });
+    const preview = h('div', { class: 'export-previews' });
+    const go = btn('Download PNG', () => {
+      const page = book!.pages[web.page - 1]!;
+      void run('Web image', async () => {
+        const blob = await exportWebImage(studio, page, web.width);
+        const s = webSize(page, web.width);
+        queueMicrotask(() => { info.textContent = `${s.width} × ${s.height} px · ${(blob.size / 1024 / 1024).toFixed(2)} MB PNG`; });
+        return blob;
+      }, `${name}-page-${web.page}-${webSize(page, web.width).width}px.png`);
+    }, true);
+    const refresh = () => {
+      const page = book!.pages[web.page - 1]!;
+      const s = webSize(page, web.width);
+      info.textContent = s.tooLarge
+        ? `${s.width} × ${s.height} px is too large for the browser. Choose a smaller width.`
+        : `${s.width} × ${s.height} px PNG · page ${web.page} (${page.widthIn}″ × ${page.heightIn}″ trim)`;
+      go.disabled = exporting || s.tooLarge;
+      void thumb(web.page - 1, 'all').then((c) => preview.replaceChildren(h('figure', {}, c, h('figcaption', {}, 'Page ' + web.page))));
+    };
+    const pageField = h('input', { type: 'number', min: 1, max: book!.pages.length, value: web.page, 'aria-label': 'Page' });
+    pageField.addEventListener('change', () => { web.page = Math.max(1, Math.min(book!.pages.length, Math.round(pageField.valueAsNumber || 1))); pageField.value = String(web.page); refresh(); });
+    const widthField = h('input', { type: 'number', min: 200, max: 16384, step: 10, value: web.width, 'aria-label': 'Width in pixels' });
+    widthField.addEventListener('change', () => { web.width = Math.max(200, Math.min(16384, Math.round(widthField.valueAsNumber || WEB_WIDTH))); widthField.value = String(web.width); refresh(); });
+    const presets = h('div', { class: 'type-toggles' }, ([[1080, 'Phone 1080'], [1600, 'Web 1600'], [2400, 'Large 2400']] as const).map(([w, label]) =>
+      h('button', { class: 'btn', type: 'button', onclick: () => { web.width = w; widthField.value = String(w); refresh(); } }, label)));
+    queueMicrotask(refresh);
+    return h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+      h('b', {}, 'Web image (PNG)'),
+      h('p', {}, 'One page, such as a strip, as a single PNG sized in pixels for phones, social posts and websites. Lettering and your Artist mark included.'),
+      h('div', { class: 'export-app-fields' }, h('label', { class: 'field' }, 'Page', pageField), h('label', { class: 'field' }, 'Width (px)', widthField)),
+      presets, info,
+      h('div', { style: 'display:flex;gap:12px;align-items:end;justify-content:space-between;margin-top:6px' }, preview, go));
+  }
+
   function filesTab(): HTMLElement {
     const sepBoxes = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' },
       (Object.keys(SEPARATION_LABEL) as Separation[]).map((s) => check(SEPARATION_LABEL[s], fo.seps.includes(s), (on) => {
@@ -372,6 +414,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     // any option change refreshes the preview
     pageImages.addEventListener('change', () => queueMicrotask(refreshFiles));
     return h('div', { class: 'stack' },
+      webImage(),
       pageImages,
       h('div', { class: 'option' },
         h('div', {}, h('b', {}, 'Every layer separately (.zip)'), h('p', {}, 'Each layer as a transparent, page-sized PNG in page / panel / layer folders, so they stack back up in any app.')),

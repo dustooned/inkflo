@@ -1,10 +1,11 @@
+import { askToReduce } from './reducechoice';
 import { findLayer, newLayer, type BookAsset, type LayerGroup, type PlacedImage, type Pt } from '../doc/model';
 import { mapPanelPoint, panelAt } from '../geom/carve';
 import { invert, type Mat } from '../engine/core/selxform';
 import { groupLabel, insertIndex, panelForGroup } from '../geom/groups';
 import { fitImage, hitsImage, imageDpi, imagePoint, type PlacementBox } from '../geom/placement';
 import { decodePngInto, makeCanvas } from '../io/canvasops';
-import { IMAGE_ACCEPT, readAssetImage } from '../io/bookassets';
+import { IMAGE_ACCEPT, ImportCancelled, readAssetImage } from '../io/bookassets';
 import { touchLayer } from '../draw/residency';
 import { cleanCutout, toImageUnits } from '../geom/collage';
 import { createMarquee } from './marquee';
@@ -122,7 +123,7 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
           if (!bytes) throw new Error('This asset’s image is missing.');
           canvas = makeCanvas(asset.width, asset.height);
           await decodePngInto(canvas, bytes);
-        } else ({ canvas, reduced } = await readAssetImage(f!));
+        } else ({ canvas, reduced } = await readAssetImage(f!, askToReduce));
         if (!d.open) return;
         if (!ctx.stage.isConnected || studio.book !== ctx.book || !ctx.book.pages.includes(page)) { d.close(); return; }
         const group = page.groups.find((g) => g.id === groupId && g.visible && !g.locked);
@@ -140,9 +141,11 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
         });
         d.close();
         select(layer.id);
-        toast(reduced ? 'Image placed. The large source was reduced to ' + canvas.width + ' × ' + canvas.height + ' pixels.' : 'Image placed.');
+        const dpi = imageDpi(layer.image!);
+        toast((reduced ? 'Image placed as a working copy of ' + canvas.width + ' × ' + canvas.height + ' px (your original is unchanged).' : 'Image placed: ' + canvas.width + ' × ' + canvas.height + ' px.')
+          + ' ' + dpi + ' dpi at this size' + (dpi < ctx.book.dpi ? ', below the book’s ' + ctx.book.dpi + ' dpi.' : '.'), 5000);
       } catch (e) {
-        status.textContent = e instanceof Error ? 'Could not place this image. ' + e.message : 'Could not place this image.';
+        status.textContent = e instanceof ImportCancelled ? e.message : e instanceof Error ? 'Could not place this image. ' + e.message : 'Could not place this image.';
       } finally {
         submit.disabled = false;
       }
@@ -170,7 +173,9 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     credit.addEventListener('change', () => commit(layer.id, { ...image, credit: credit.value.trim() || undefined }, 'Edit image credit'));
     const span = Math.max(page.widthIn, page.heightIn);
     return h('div', { class: 'sec image-inspector' }, h('h4', {}, layer.name),
-      h('p', { class: 'note' }, image.pixelWidth + ' × ' + image.pixelHeight + ' px · ' + imageDpi(image) + ' dpi at placed size'),
+      imageDpi(image) < ctx.book.dpi
+        ? h('p', { class: 'warnline' }, image.pixelWidth + ' × ' + image.pixelHeight + ' px · ' + imageDpi(image) + ' dpi at placed size, below this book’s ' + ctx.book.dpi + ' dpi. It may print soft; place it smaller or use a larger source.')
+        : h('p', { class: 'note' }, image.pixelWidth + ' × ' + image.pixelHeight + ' px · ' + imageDpi(image) + ' dpi at placed size'),
       h('div', { class: 'image-placement-actions' }, ...[false, true].map((fill) =>
         h('button', { class: 'btn', type: 'button', disabled: locked, onclick: () => commit(layer.id, fitImage(image, box(group), fill), fill ? 'Fill image area' : 'Fit image area') }, fill ? 'Fill area' : 'Fit inside'))),
       h('div', { class: 'image-fields' },

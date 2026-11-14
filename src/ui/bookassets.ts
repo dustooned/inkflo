@@ -1,3 +1,4 @@
+import { askToReduce } from './reducechoice';
 import { loadMarks } from '../render/marks';
 import type { Studio } from '../app/studio';
 import type { Book, BookAsset } from '../doc/model';
@@ -92,7 +93,7 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
       const assets = new Map<string, BookAsset>(), bytes = new Map<string, Uint8Array>();
       let skipped = 0;
       for (const file of files) {
-        try { const result = await prepareAsset(file); assets.set(result.asset.key, result.asset); bytes.set(result.asset.key, result.bytes); }
+        try { const result = await prepareAsset(file, askToReduce); assets.set(result.asset.key, result.asset); bytes.set(result.asset.key, result.bytes); }
         catch { skipped++; }
       }
       ensureOpen();

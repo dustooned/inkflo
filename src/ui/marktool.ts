@@ -1,3 +1,4 @@
+import { askToReduce } from './reducechoice';
 import { newId, type BookAsset, type PageMark, type Pt } from '../doc/model';
 import { printOf } from '../geom/printkinds';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
@@ -85,10 +86,10 @@ export function markTool(ctx: DeskCtx) {
       const file = importInput.files?.[0];
       if (!file) return;
       try {
-        const { asset: a, bytes } = await prepareAsset(file);
+        const { asset: a, bytes, reduced, source } = await prepareAsset(file, askToReduce);
         await studio.addAssets([a], new Map([[a.key, bytes]]));
         await chooseMark(a.key);
-        ctx.hint('Artist mark set. Place it on the page.', { timeout: 3000 });
+        ctx.hint(`Artist mark set (${source.width} × ${source.height} px${reduced ? `, reduced to ${a.width} × ${a.height}` : ''}). Place it on the page.`, { timeout: 4000 });
       } catch (error) { ctx.hint(error instanceof Error ? error.message : String(error), { tone: 'warn' }); }
     });
     const m = selected();

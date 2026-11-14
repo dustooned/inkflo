@@ -909,3 +909,34 @@ an iPad pays for on every frame:
 - **Not done yet:** explicit-reduction import flow, the single-strip Web image export,
   browser end-to-end checks of the acceptance list, and schema save/load tests for marks.
   Typecheck, 385 tests and the build pass; none of this is browser-verified yet.
+- **Finished, 2026-11-13:**
+  - **Web image export** (Export files → Web image): one page as a PNG. Pick the page, a width
+    (Phone 1080, Web 1600, Large 2400 or custom) and see the pixel size, trim and a preview first;
+    the actual file size shows after download. Over the browser limit it refuses with a fix.
+    `io/webimage.ts`.
+  - **Explicit reduction:** an image over 8192 px or 16 MP now asks before storing a working copy,
+    naming both sizes. Cancel imports nothing, and the original file is never changed.
+    Undecodable files get an actionable message. The image placement toast and inspector show
+    the source size and the dpi at placed size, flagged below the book's dpi. All exports load
+    mark images first.
+  - Manual: a **Comic strips and your Artist mark** section.
+  - **Checks:** `strip.test.ts` (5): strip cuts and order, mark save/load including hidden, bad
+    keys refused, web sizing, working-copy size. In the built-in browser pane, with real
+    pointer events (Chrome extension unavailable, so no screenshots):
+    1. A 3-panel strip in two clicks from the library opens in Draw. Strokes stayed in panels
+       1 and 3. A Layout gutter drag moved 4.33″ → 5.13″ and undo/redo worked. 4-panel
+       (13 × 4″) and stacked (4 × 12″) strips were created, and a preset then undo went 2 → 3
+       panels.
+    2. A 240 × 120 transparent mark: imported, placed bottom-right inside the safe area, moved,
+       corner-resized 1″ → 1.4″, two undos and redos. Hidden: 0 mark pixels in the page render
+       and in the PNG (1446 when shown). The .inkflo export/reimport kept the key, placements
+       and alpha (corner 0, ink 255). Assets → Copy assets brought it into another book.
+    3. Phone PNG 1080 × 332 with the mark over visible paper; ink in panels 1 and 3 in order.
+       Print-on-demand PDF TrimBox 936 × 288 pt (13 × 4″). The layered PSD has an "Artist mark"
+       layer.
+    4. A 120 × 80 image at 6″ warned "20 dpi … below this book's 300 dpi". A 9000 × 2000
+       image asked first: Cancel left nothing; Reduce stored 8192 × 1820 with the original
+       file unchanged.
+    5. At 768 px (tablet), the strip dialog, Draw and the Export center had no overflow.
+  - **Not checked:** physical devices and third-party apps, and pixels inside the print PDF (its
+    trim was read, not its image).
