@@ -1350,3 +1350,15 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
   - Bake made crisp dots and undo restored the painting and the setting. The dialog's preview
     rendered the layer.
 - **Not checked:** printing on paper; a real press may need dot-gain compensation (not added).
+
+## About / credit area, 2026-11-14
+
+- Home (`src/ui/home.ts`) ends with a credit footer: "Designed, programmed and developed by
+  Professor T at Long Beach City College" (`ABOUT_CREDIT`), a 44 px button that opens the manual
+  at `#about`. Styles: `.home-credit` in `src/styles/app.css` (centred under 600 px).
+- The manual (`public/manual/index.html`) starts with **About inkflo**: the same credit, that it is
+  tested and updated regularly so students have open access to creative software, and that books
+  stay on the device. Linked first in the contents.
+- Checks: `npx vitest run` 438 passed; `npm run build` passed; checked in the browser on a
+  separate test origin (127.0.0.1:5317): the credit shows at the bottom right of Home and
+  `manual/index.html#about` opens on the new section. Not checked on an iPad.
