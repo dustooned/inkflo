@@ -940,3 +940,18 @@ an iPad pays for on every frame:
     5. At 768 px (tablet), the strip dialog, Draw and the Export center had no overflow.
   - **Not checked:** physical devices and third-party apps, and pixels inside the print PDF (its
     trim was read, not its image).
+
+## Cleaner PSD folders, 2026-11-13
+
+- **Keep artwork** PSDs now contain only what has content. Empty folders (Over panels,
+  Gutters, Background, panels with no art) and blank layers are left out, and so is an empty
+  Lettering layer when a page has no balloons.
+- **Moved panels** are one folder, "Panel N · beat (moved)", holding Border, Artwork and
+  Panel paper, instead of loose border and paper layers at the top level.
+- **Naming:** panel folders are always "Panel N", or "Panel N · beat" when the page has a beat;
+  named groups keep their own names.
+- **Drawing template** is unchanged in content (blank Pencil, Ink and Colour in every panel,
+  masks kept), with the same naming.
+- Checks: decoded three books in both modes with ag-psd. Flattening the layers matched the stored
+  composite (0–34 px over 64/255, at anti-aliased edges), and the template panel folders keep
+  their masks.

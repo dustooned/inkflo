@@ -17,7 +17,7 @@ it('describes a single active page as one PSD with trim and pixel size', () => {
   expect(p.pagesLabel).toBe('Page 2');
   expect(p.trimLabel).toContain(`${page.widthIn}″ × ${page.heightIn}″ trim`);
   expect(p.pixelsLabel).toBe(`${Math.round(page.widthIn * 300).toLocaleString('en-US')} × ${Math.round(page.heightIn * 300).toLocaleString('en-US')} px at 300 dpi`);
-  expect(p.contents.join(' ')).toMatch(/artwork layers/);
+  expect(p.contents.join(' ')).toMatch(/panel that has artwork/);
   expect(p.tooLarge).toBe(false);
 });
 

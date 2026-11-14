@@ -59,6 +59,15 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     paint();
     return { name, ...cropped(g) };
   };
+  // Keep artwork exports what has content: a layer with no pixels, or a folder with nothing in
+  // it, is left out. The drawing template is the mode that adds blank layers on purpose.
+  const keep = (l: PsdLayer | null): l is PsdLayer => !!l && (mode === 'template' || !!l.imageData || !!l.children?.length);
+  // One naming scheme: "Panel 3", or "Panel 3 · its beat"; named groups keep their own name.
+  const nameOf = (grp: LayerGroup) => {
+    const label = groupLabel(source, panels, grp);
+    const n = grp.kind === 'panel' && !grp.name ? panelForGroup(panels, grp)?.index : undefined;
+    return n !== undefined ? label.replace(/^\d+ · /, `Panel ${n + 1} · `) : label;
+  };
   const layer = (grp: LayerGroup, l: Layer): PsdLayer => ({
     ...(l.screenTone || art?.planes[l.id]?.width ? painted(l.name, () => {
       const only = { ...grp, visible: true, opacity: 1, layers: [{ ...l, visible: true, opacity: 1 }] };
@@ -70,7 +79,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     protected: l.locked || grp.locked ? { composite: true } : undefined,
   });
   const group = (grp: LayerGroup, over = false): PsdLayer | null => {
-    const name = groupLabel(source, panels, grp);
+    const name = nameOf(grp);
     if (mode === 'template') {
       if (grp.kind !== 'panel' || over) return null;
       const panel = panelForGroup(panels, grp);
@@ -95,32 +104,37 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
     }
     const layers = grp.kind === 'panel' ? grp.layers.filter((l) => l.overFrame === over) : grp.layers;
     if (over && !layers.length) return null;
+    const children = [...layers].reverse().map((l) => layer(grp, l)).filter(keep);
+    if (!children.length) return null;
     return {
       name: over ? name + ' · Over frame' : name,
-      children: [...layers].reverse().map((l) => layer(grp, l)),
+      children,
       hidden: !grp.visible,
       opened: !grp.collapsed,
     };
   };
   const lettering = captionGroups(page.balloons);
-  const letteringLayer: PsdLayer = lettering.some((group) => group.length > 1)
+  const letteringLayer: PsdLayer | null = lettering.some((group) => group.length > 1)
     ? { name: 'Lettering', children: lettering.map((group, i) => {
       const root = group[0]!;
       const panel = panelAt(panels, { x: root.cap.x / PT, y: root.cap.y / PT });
       const label = groupWords(group).replace(/\s+/g, ' ').slice(0, 44) || `Caption ${i + 1}`;
       return painted((panel ? `Panel ${panel.index + 1} · ` : '') + label, () => drawBalloons(g, { ...page, balloons: group }, dpi, sheet));
     }).reverse() }
-    : page.balloons.length ? painted('Lettering', () => drawBalloons(g, page, dpi, sheet)) : { name: 'Lettering' };
+    : page.balloons.length ? painted('Lettering', () => drawBalloons(g, page, dpi, sheet)) : null;
   const fixed = source.groups.filter((grp) => grp.kind === 'panel' && !panelForGroup(panels, grp)?.transform);
   const placed = panelStack(panels).reverse().flatMap((panel) => {
     if (!panel.transform) return [];
     const groups = source.groups.filter((grp) => grp.kind === 'panel' && panelForGroup(panels, grp) === panel);
-    return [
+    // a moved panel is one folder: its pop-out art, border, artwork and paper, top to bottom
+    const label = groups[0] ? nameOf(groups[0]) : `Panel ${panel.index + 1}`;
+    const inside = [
       ...groups.map((grp) => group(grp, true)),
-      painted(`Panel ${panel.index + 1} border`, () => paintPlacedFrame(g, page, panel, dpi, 'ink')),
-      ...groups.map((grp) => group(grp)),
-      painted(`Panel ${panel.index + 1} paper`, () => paintPlacedFrame(g, page, panel, dpi, 'paper')),
-    ];
+      painted('Border', () => paintPlacedFrame(g, page, panel, dpi, 'ink')),
+      ...groups.map((grp) => { const art = group(grp); return art ? { ...art, name: 'Artwork' } : null; }),
+      painted('Panel paper', () => paintPlacedFrame(g, page, panel, dpi, 'paper')),
+    ].filter(keep);
+    return inside.length ? [{ name: label + ' (moved)', children: inside.reverse() } as PsdLayer] : [];
   });
   const markLayer: PsdLayer | null = (page.marks ?? []).some((m) => !m.hidden) ? painted('Artist mark', () => drawMarks(g, page, dpi)) : null;
   const children: (PsdLayer | null)[] = [
@@ -141,7 +155,7 @@ export function pagePsd(book: Book, page: Page, art: PageArt | null, dpi: number
   return {
     width, height, imageData,
     // The writer serializes PSD layer records in the order supplied, back to front.
-    children: children.filter((l) => l !== null).reverse(),
+    children: children.filter(keep).reverse(),
     imageResources: { resolutionInfo: {
       horizontalResolution: dpi, verticalResolution: dpi,
       horizontalResolutionUnit: 'PPI', verticalResolutionUnit: 'PPI',
@@ -188,8 +202,8 @@ export function psdPlan(book: Book, range: PageRange, mode: PsdMode, dpi: number
       'No artwork. Your drawing starts on the blank layers.',
     ]
     : [
-      'Every panel group with its artwork layers (pencil, ink, colour, tones, placed images).',
-      'Background, gutter and over-panel groups, borders and the paper.',
+      'A folder for each panel that has artwork (named Panel 1, Panel 2…), with its pencil, ink, colour, tone and image layers. Empty folders and blank layers are left out.',
+      'Moved panels as one folder each (border, artwork, paper). Background, gutter and over-panel art when there is some, borders and the paper.',
       'Lettering as pixels on its own layer, split by caption group when balloons are grouped.',
       'Vector ink and screentones are rendered as pixels.',
     ];
