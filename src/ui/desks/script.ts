@@ -7,6 +7,8 @@ import { printOf, readerSpreads } from '../../geom/printkinds';
 import type { DeskCtx, DeskMode } from '../desk';
 import { h, toast } from '../dom';
 import { openDialogue } from '../dialogue';
+import { formatScriptCode, parseScriptCode, SCRIPT_LEGEND } from '../../geom/scriptcode';
+import { seg } from '../dom';
 /** Script: the page as a list of beats. Each beat becomes a panel; its lines become balloons. */
 export function scriptDesk(ctx: DeskCtx): DeskMode {
   const { studio, book, page } = ctx;
@@ -94,12 +96,80 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
     location.hash = '#desk/' + book.id + '/' + to.id + '/script';
   }
 
+  // ---- Code view: the page's script as text, parsed live into the beats
+  let view: 'cards' | 'code' = (() => { try { return localStorage.getItem('inkflo:script-view') === 'code' ? 'code' : 'cards'; } catch { return 'cards'; } })();
+  const setView = (v: 'cards' | 'code') => { view = v; try { localStorage.setItem('inkflo:script-view', v); } catch { /* private mode */ } ctx.chrome(); };
+  const code = h('textarea', { class: 'script-code-input', spellcheck: false, 'aria-label': 'Script as code', autocapitalize: 'off', autocomplete: 'off' });
+  const shade = h('pre', { class: 'script-code-shade', 'aria-hidden': 'true' });
+  const problems = h('ul', { class: 'script-code-problems', 'aria-live': 'polite' });
+  const live = h('ol', { class: 'script-code-live', 'aria-label': 'Panels as read so far' });
+  const editor = h('div', { class: 'script-code-editor' }, shade, code);
+  let applyTimer = 0;
+  const sameBeats = (a: { desc: string; lines: string[] }[]) => a.length === page.beats.length && a.every((b, i) => b.desc === page.beats[i]!.desc && JSON.stringify(b.lines) === JSON.stringify(page.beats[i]!.lines));
+  function paint(): void {
+    const parsed = parseScriptCode(code.value);
+    shade.replaceChildren(...parsed.lines.map((l, i) => h('div', { class: 'cl' + (l.error ? ' bad' : '') },
+      h('span', { class: 'ln' }, String(i + 1)), ...l.tokens.map((t) => h('span', { class: 't-' + t.kind }, t.text)), '\n')));
+    problems.replaceChildren(...parsed.errors.map((e) => h('li', {}, h('button', { type: 'button', onclick: () => jumpTo(e.line) }, 'Line ' + e.line), ' ', e.message)));
+    live.replaceChildren(...parsed.beats.map((b, i) => h('li', {},
+      h('b', {}, 'Panel ' + (i + 1)), h('span', {}, b.desc.split('\n')[0] || 'No description yet'),
+      h('small', {}, b.lines.length + (b.lines.length === 1 ? ' balloon' : ' balloons')))));
+    syncScroll();
+  }
+  function syncScroll(): void { shade.scrollTop = code.scrollTop; shade.scrollLeft = code.scrollLeft; }
+  function jumpTo(line: number): void {
+    const rows = code.value.split('\n');
+    const at = rows.slice(0, line - 1).reduce((n, r) => n + r.length + 1, 0);
+    code.focus();
+    code.setSelectionRange(at, at + (rows[line - 1]?.length ?? 0));
+  }
+  /** Apply the text to the page now (live while typing; one undo step per editing session). */
+  function applyCode(): void {
+    clearTimeout(applyTimer);
+    const parsed = parseScriptCode(code.value);
+    if (sameBeats(parsed.beats)) return;
+    begin();
+    const kept = page.beats;
+    page.beats = parsed.beats.map((pb, i) => kept[i] ?? { id: newId('bt'), desc: pb.desc, lines: [] });
+    parsed.beats.forEach((pb, i) => { const b = page.beats[i]!; b.desc = pb.desc; replaceDialogue(page, b, pb.lines); });
+  }
+  let pauseTimer = 0;
+  code.addEventListener('input', () => {
+    paint();
+    clearTimeout(applyTimer);
+    clearTimeout(pauseTimer);
+    applyTimer = window.setTimeout(applyCode, 250);
+    // a pause in typing closes the undo step, so Undo works without leaving the editor
+    pauseTimer = window.setTimeout(() => { applyCode(); commit('Edit script'); }, 1500);
+  });
+  code.addEventListener('scroll', syncScroll);
+  code.addEventListener('blur', () => { clearTimeout(pauseTimer); applyCode(); commit('Edit script'); ctx.chrome(); });
+  code.addEventListener('keydown', (e) => {
+    // Tab indents instead of leaving the editor (Shift+Tab still moves focus away)
+    if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); code.setRangeText('  ', code.selectionStart, code.selectionEnd, 'end'); code.dispatchEvent(new Event('input')); }
+  });
+  function codeView(el: HTMLElement): void {
+    // keep the student's own text (comments, spacing) unless the page changed elsewhere
+    if (document.activeElement !== code && !sameBeats(parseScriptCode(code.value).beats)) code.value = formatScriptCode(page.beats);
+    if (!code.value) code.value = 'PANEL 1: ';
+    paint();
+    const legend = h('aside', { class: 'script-legend', 'aria-label': 'How to write script code' },
+      h('h4', {}, 'Legend'),
+      h('dl', {}, SCRIPT_LEGEND.flatMap((l) => [h('dt', {}, h('code', {}, l.code)), h('dd', {}, l.means)])),
+      h('h4', {}, 'Live'), live,
+      h('p', { class: 'note' }, 'Changes apply as you type. Each pause in typing is one undo step.'));
+    el.replaceChildren(h('div', { class: 'script-code' }, h('div', { class: 'script-code-main' }, editor, problems,
+      h('div', { class: 'beat-actions' }, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('span', { class: 'spacer' }),
+        h('button', { class: 'btn primary', type: 'button', disabled: !page.beats.length, onclick: () => { applyCode(); commit('Edit script'); sendToLayout(); } }, 'Send to Layout →')))), legend));
+  }
+
   const mode: DeskMode = {
     id: 'script',
     actions: [{ label: 'Dialogue & panels', glyph: '❝', run: () => openDialogue(ctx) }],
     tools: [],
     tool: '',
     pane(el) {
+      if (view === 'code') { codeView(el); return; }
       const panels = ctx.panels();
       const downbeat = downbeatPanel(page, panels);
       const issues = new Map(revealIssues(book, page, panels).map(({ index, text }) => [index, text]));
@@ -152,6 +222,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       el.replaceChildren(list, actions);
     },
     ctx(bar) {
+      bar.append(seg<'cards' | 'code'>([{ id: 'cards', label: 'Cards' }, { id: 'code', label: 'Code' }], view, (v) => { if (view === 'code') { applyCode(); commit('Edit script'); } setView(v); }, 'Script view'));
       bar.append(h('button', { class: 'btn document-option', type: 'button', onclick: () => openDialogue(ctx) }, 'Dialogue & panels'));
       bar.append(h('span', { class: 'hint' }, `${page.beats.length} beat${page.beats.length === 1 ? '' : 's'} · ${page.beats.reduce((n, b) => n + b.lines.length, 0)} lines`));
     },

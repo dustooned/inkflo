@@ -156,6 +156,18 @@ section[hidden] { display: none; }
 <li><strong>Dialogue &amp; panels</strong> assigns each line to a panel and a lettering preset, such as a whisper style for one character.</li>
 <li><strong>Send to Layout</strong> carries the beat count over, so Layout knows how many panels the page wants.</li>
 </ul>
+<h3 id="script-code">Writing the script as code</h3>
+<p>Prefer typing to cards? Switch Script to <strong>Code</strong> in the tool bar and write the whole page as plain text, like a screenplay. A legend beside the editor shows the syntax, colours mark each part as you type, and the panels update live (the <em>Live</em> list shows what inkflo has read). Switch back to <strong>Cards</strong> any time; both edit the same script.</p>
+<table>
+<tr><th>Type</th><th>Gives you</th></tr>
+<tr><td><code>PANEL 1: Wide shot…</code></td><td>A new panel and what we see (the number is optional)</td></tr>
+<tr><td><code>&gt; more description</code></td><td>More of the panel description</td></tr>
+<tr><td><code>MAYA: We're late.</code></td><td>A speech balloon</td></tr>
+<tr><td><code>MAYA (whisper): Shh.</code></td><td>A whisper; also (shout) and (thought)</td></tr>
+<tr><td><code>CAPTION: Midnight.</code> · <code>SFX: KRAK!</code></td><td>A caption box · a sound effect</td></tr>
+<tr><td><code># note</code></td><td>A comment for yourself</td></tr>
+</table>
+<p>Mistakes are listed under the editor in plain words (click one to jump to its line). Each pause in typing is one undo step.</p>
 <div class="history">There are two classic ways to write comics. In a <strong>full script</strong>, the writer describes every panel and every line before anyone draws, as in a film script. In the <strong>Marvel method</strong>, made famous at Marvel Comics in the 1960s, the writer handed the artist a plot; the artist designed the pages; and the dialogue was written to fit the finished art. inkflo supports both. Write everything first, or draw first and come back to Script to add the words. Caption will pick up the changes.</div>
 <div class="tip">Keep balloons short. Lettering takes up space, and a panel crowded with words leaves no room for the picture. A common rule of thumb is about 25 words per balloon and a few balloons per panel.</div>
 </section>
@@ -171,7 +183,7 @@ section[hidden] { display: none; }
 <li><strong>Across page</strong> cuts every panel the line crosses, from page edge to page edge.</li>
 <li><strong>One panel</strong> cuts only the panel you draw in.</li>
 <li>Draw anywhere: from the board around the page, or just across the part you want split. A line drawn inside the page runs on to the edges by itself.</li>
-<li>Hold <kbd>Shift</kbd> for a perfectly straight cut.</li>
+<li>Hold <kbd>Shift</kbd> for a perfectly straight cut that turns in 15° steps. While you cut, a readout by the pen shows the angle in degrees with an arc from level; straight cuts click to level, upright and 45° when you get within a few degrees, and turn green with a guide across the page.</li>
 <li><strong>Auto Shape</strong> (on by default): pause at the end of a cut without lifting, and inkflo snaps it to the cleanest shape it sees: a <strong>straight line</strong>, an <strong>arc</strong>, a <strong>zig-zag</strong> for jagged action edges, or a <strong>smooth curve</strong> with the wobble taken out. Keep holding and drag to adjust the end, then lift.</li>
 <li><strong>Curve</strong> in the tool bar rounds every corner of the cut; set it to 0 for sharp zig-zags.</li>
 <li><strong>Uncut</strong> (<kbd>E</kbd>) removes a cut: click its gutter.</li>

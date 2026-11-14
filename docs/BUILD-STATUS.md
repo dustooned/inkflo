@@ -955,3 +955,32 @@ an iPad pays for on every frame:
 - Checks: decoded three books in both modes with ag-psd. Flattening the layers matched the stored
   composite (0–34 px over 64/255, at anti-aliased edges), and the template panel folders keep
   their masks.
+
+## Script as code and the Knife angle readout, 2026-11-13
+
+- **Script → Cards / Code:** Code writes the whole page as plain text (`PANEL n: …`, `> more
+  description`, `NAME: …`, `NAME (whisper): …`, `CAPTION:`, `SFX:`, `\n`, `# comment`).
+  - A legend sits beside the editor. Syntax colouring comes from a highlighted layer under a
+    transparent textarea.
+  - Errors are listed in plain words, with click-to-line, and their lines are tinted.
+  - A **Live** list shows the panels as read.
+  - Text applies to the beats 250 ms after typing (existing beats keep their ids, and dialogue
+    goes through `replaceDialogue`). Each pause of 1.5 s, or leaving the editor, is one undo
+    step. The student's own text, comments included, is kept unless the script changes
+    elsewhere.
+  - `geom/scriptcode.ts`: pure parse/format with tokens and errors; it round-trips. The view
+    choice is remembered on the device.
+- **Knife angle:**
+  - While cutting, a readout by the pen shows the angle (0° level, 90° upright) with a level
+    reference and an arc (`ui/cutangleoverlay.ts`).
+  - Straight cuts (Shift or a held Auto Shape line) click to 0/45/90/135° within 3°. With Shift
+    they step by 15°. A snapped cut turns green and shows a guide across the page, and the
+    saved cut uses the snapped end (`geom/cutangle.ts`).
+- Checks: `scriptcode.test.ts` (5) and `cutangle.test.ts` (3). In the built-in pane:
+  - Code view: typing a two-panel script updated the beats live with every token colour. A line
+    before PANEL was flagged. The comment survived Cards ⇄ Code. One undo per pause (4 → 3 → 4).
+  - Knife: a 14° Shift cut was saved at exactly 15°.
+  - The readout, drawn offscreen, gave "37°", "27°" (leftward), green "0° level · 15° steps",
+    and nothing for a too-short cut.
+- **Not seen on screen:** the hidden pane doesn't run animation frames and Chrome was
+  disconnected, so the live readout over the canvas wasn't screenshotted.

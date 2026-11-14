@@ -14,6 +14,8 @@ import { openPageTemplates } from '../pagetemplates';
 import { applyPageTemplate } from '../../geom/pagetemplates';
 import { resample, pathLength } from '../../engine/core/quickshape';
 import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../geom/cutshape';
+import { snapCutEnd } from '../../geom/cutangle';
+import { drawCutAngle } from '../cutangleoverlay';
 import { panelPlacement } from '../panelplacement';
 
 type Side = 'n' | 's' | 'e' | 'w';
@@ -63,6 +65,9 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   let trail: Pt[] | null = null;
   let straight = false;
   let heldStraight = false;
+  /** The last straight cut's snap, for the angle readout. */
+  let snapped = false;
+  let shiftSteps = false;
   /** Auto Shape: the shape a held knife stroke snapped to, and where the pen was then. */
   let held: { cut: CutShape; grab: Pt } | null = null;
   let holdTimer = 0;
@@ -177,6 +182,9 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     } else if (valid) preview = { page: styled, panels: reflow ? derivePanels(styled) : ctx.panels() };
     ctx.request();
   }
+
+  const drawAngle = (g: CanvasRenderingContext2D, s: number, a: Pt, b: Pt, isSnapped: boolean) =>
+    drawCutAngle(g, s, s / ctx.scale(), a, b, { snapped: isSnapped, steps: shiftSteps, page, minLen: 18 / ctx.scale() });
 
   const cutMode = (): CutMode => (variantOf(mode, 'knife') === 'across' ? 'across' : 'panel');
   /** The moved panel a knife stroke is drawn over (topmost), if any: that panel is cut in place. */
@@ -385,6 +393,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         straight = e.shiftKey;
         heldStraight = false;
         held = null;
+        snapped = false;
+        shiftSteps = false;
         sel = panelIndexAt(p);
         return;
       }
@@ -412,11 +422,23 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       }
       if (trail && held) {
         trail = adjustCut(held.cut, held.grab, p, ctx.scale()).pts;
+        if (held.cut.kind === 'line' && trail.length === 2) {
+          const sn = snapCutEnd(trail[0]!, trail[1]!, e.shiftKey ? 15 : 0);
+          trail = [trail[0]!, sn.end];
+          snapped = sn.snapped;
+          shiftSteps = e.shiftKey;
+        }
         return;
       }
       if (trail) {
         straight = e.shiftKey || heldStraight;
-        if (straight) trail = [trail[0]!, p];
+        if (straight) {
+          // straight cuts click to level, upright and diagonals; Shift steps by 15°
+          const sn = snapCutEnd(trail[0]!, p, e.shiftKey ? 15 : 0);
+          trail = [trail[0]!, sn.end];
+          snapped = sn.snapped;
+          shiftSteps = e.shiftKey;
+        }
         else if (Math.hypot(p.x - trail[trail.length - 1]!.x, p.y - trail[trail.length - 1]!.y) > 2.2 / ctx.scale()) {
           trail.push(p);
           holdToStraight();
@@ -468,10 +490,12 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       if (trail) {
-        const snapped = held;
+        const shaped = held;
         held = null;
-        const isStraight = snapped ? snapped.cut.kind === 'line' : straight || heldStraight || e.shiftKey;
-        const points = snapped ? adjustCut(snapped.cut, snapped.grab, p, ctx.scale()).pts : isStraight ? [trail[0]!, p] : [...trail, p];
+        const isStraight = shaped ? shaped.cut.kind === 'line' : straight || heldStraight || e.shiftKey;
+        // a straight cut ends where its snapped preview ends
+        const points = shaped && shaped.cut.kind !== 'line' ? adjustCut(shaped.cut, shaped.grab, p, ctx.scale()).pts
+          : isStraight ? [trail[0]!, trail.length === 2 ? trail[1]! : snapCutEnd(trail[0]!, p, e.shiftKey ? 15 : 0).end] : [...trail, p];
         const { plan, gridGutter, placed } = knifePreview(points, isStraight);
         trail = null;
         sel = null; // reading-order indices shift when panels split
@@ -588,6 +612,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         g.beginPath();
         stroke.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s)));
         g.stroke();
+        drawAngle(g, s, trail[0]!, trail.at(-1)!, trail.length === 2 && snapped);
       }
       g.restore();
     },

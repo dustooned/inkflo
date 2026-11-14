@@ -795,3 +795,38 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .mark-option[aria-pressed="true"] { border-color: var(--accent); }
 .mark-pick summary { cursor: pointer; font-size: 12px; color: var(--text-soft); }
 .mark-corners { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* Script as code: a highlighted layer under a transparent textarea, legend alongside */
+.script-code { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 18px; max-width: 1080px; margin: 0 auto; align-items: start; }
+.script-code-main { display: grid; gap: 10px; min-width: 0; }
+.script-code-editor { position: relative; min-height: 420px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); overflow: hidden; }
+.script-code-editor > pre, .script-code-input {
+  margin: 0; padding: 12px 14px 12px 46px; font: 13px/1.6 var(--mono); tab-size: 2;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; letter-spacing: 0;
+}
+.script-code-shade { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: var(--text); }
+.script-code-input { position: relative; display: block; width: 100%; min-height: 420px; height: 60vh; resize: vertical; border: 0; outline: 0; background: transparent; color: transparent; caret-color: var(--text); }
+.script-code-input::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
+.script-code-shade .cl { position: relative; min-height: 1.6em; }
+.script-code-shade .cl.bad { background: color-mix(in srgb, var(--spot-red) 12%, transparent); }
+.script-code-shade .ln { position: absolute; left: -38px; width: 28px; text-align: right; color: var(--text-faint); }
+.t-panel { color: var(--acc-layout); font-weight: 700; }
+.t-desc { color: var(--text-soft); font-style: italic; }
+.t-speaker { color: var(--acc-script); font-weight: 700; }
+.t-manner { color: var(--acc-caption); }
+.t-caption { color: var(--acc-print); font-weight: 700; }
+.t-sfx { color: var(--spot-red); font-weight: 700; }
+.t-comment { color: var(--text-faint); }
+.t-error { text-decoration: wavy underline var(--spot-red); }
+.script-code-problems { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; color: var(--spot-red); }
+.script-code-problems button { font: 600 12px var(--mono); color: inherit; text-decoration: underline; padding: 0; }
+.script-legend { position: sticky; top: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); font-size: 12px; }
+.script-legend h4 { margin: 4px 0 6px; font: 650 10px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); }
+.script-legend dl { margin: 0 0 10px; display: grid; gap: 2px; }
+.script-legend dt code { font: 12px var(--mono); color: var(--text); }
+.script-legend dd { margin: 0 0 6px; color: var(--text-soft); }
+.script-code-live { margin: 0 0 8px; padding-left: 0; list-style: none; display: grid; gap: 4px; }
+.script-code-live li { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; padding: 5px 7px; border-radius: 6px; background: var(--surface-2); }
+.script-code-live span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-soft); }
+.script-code-live small { grid-column: 2; color: var(--text-faint); }
+@media (max-width: 900px) { .script-code { grid-template-columns: minmax(0, 1fr); } .script-legend { position: static; } }
