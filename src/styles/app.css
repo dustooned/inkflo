@@ -852,3 +852,31 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .game-contents { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 4px 0 0; font-size: 12px; }
 .game-contents dt code { font: 12px var(--mono); }
 .game-contents dd { margin: 0; color: var(--text-soft); }
+
+/* Asset bins (Draw sidebar) */
+.side-switch { padding-bottom: 0; }
+.side-switch .seg { width: 100%; }
+.side-switch .seg button { flex: 1; }
+.asset-bins { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; min-height: 0; }
+.asset-bins.file-over { outline: 2px dashed var(--acc-draw, var(--accent)); outline-offset: -4px; border-radius: 8px; }
+.bin-head { display: flex; align-items: center; gap: 6px; padding-left: 0; padding-right: 0; }
+.bin-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.bin-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; touch-action: manipulation; }
+.bin-chip small { color: var(--text-faint); font-size: 11px; }
+.bin-chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.bin-chip.on small { color: inherit; opacity: .7; }
+.bin-chip.add { width: 36px; justify-content: center; padding: 0; font-size: 18px; }
+.bin-chip.drop { outline: 2px solid var(--acc-draw, var(--accent)); outline-offset: 2px; transform: scale(1.06); }
+.bin-find { width: 100%; }
+.bin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; overflow-y: auto; max-height: 60vh; padding: 2px; }
+.bin-tile { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-size: 11px; cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: transform .12s, box-shadow .12s; }
+.bin-tile img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: 6px; background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 12px 12px; pointer-events: none; }
+.bin-tile span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.bin-tile:hover { border-color: var(--text-faint); }
+.bin-tile.holding { transition-duration: .28s; transform: scale(.96); }
+.bin-tile.held { transform: scale(1.05); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.bin-tile.dragging { opacity: .35; }
+.bin-empty { grid-column: 1 / -1; text-align: center; padding: 18px 8px; border: 1px dashed var(--line); border-radius: 10px; }
+.bin-ghost { position: fixed; left: 0; top: 0; width: 72px; height: 72px; z-index: 1000; pointer-events: none; border-radius: 10px; background: var(--surface); box-shadow: 0 10px 28px rgba(0,0,0,.35); padding: 4px; opacity: .92; }
+.bin-ghost img { width: 100%; height: 100%; object-fit: contain; }
+.bin-drop, .file-over.stage, .stage.file-over { outline: 3px dashed var(--acc-draw, var(--accent)); outline-offset: -6px; }

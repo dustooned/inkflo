@@ -681,6 +681,10 @@ function book(v: unknown, v1Art?: Obj): Book {
   }
   const lettering = sheet(o.lettering, 'book.lettering');
   if (o.assets !== undefined) b.assets = readBookAssets(o.assets);
+  if (Array.isArray(o.bins)) {
+    const bins = [...new Set(o.bins.filter((x): x is string => typeof x === 'string').map((x) => x.trim().slice(0, 40)).filter(Boolean))].slice(0, 60);
+    if (bins.length) b.bins = bins;
+  }
   if (typeof o.artistMark === 'string' && b.assets?.some((a) => a.key === o.artistMark)) b.artistMark = o.artistMark;
   if (o.fixedGrid !== undefined) b.fixedGrid = modularGrid(o.fixedGrid, 'book.fixedGrid');
   if (lettering) b.lettering = lettering;
@@ -714,7 +718,8 @@ export function readBookAssets(value: unknown): BookAsset[] {
     if (!/^assets\/[a-z0-9]+-[a-z0-9]+\.png$/.test(key) || keys.has(key)) fail(`${path}.key`, 'has an invalid or duplicate image key');
     if (!name.trim() || name.length > 120 || !Number.isInteger(width) || !Number.isInteger(height) || width * height > 16_000_000 || Math.max(width, height) > 8192) fail(path, 'has an invalid name or image dimensions');
     keys.add(key);
-    return { key, name, width, height };
+    const bin = typeof item.bin === 'string' ? item.bin.trim().slice(0, 40) : '';
+    return bin ? { key, name, width, height, bin } : { key, name, width, height };
   });
 }
 

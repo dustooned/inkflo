@@ -449,6 +449,8 @@ export interface BookAsset {
   name: string;
   width: number;
   height: number;
+  /** The bin it is sorted into (absent = Unsorted). */
+  bin?: string;
 }
 
 export interface Book {
@@ -469,6 +471,8 @@ export interface Book {
   /** Exact settings of every brush strokes in this book use, by `<brush id>~<hash>` (draw/brushes.ts). */
   brushes?: Record<string, BrushSettings>;
   assets?: BookAsset[];
+  /** Asset bins in the order shown; a bin can be empty. */
+  bins?: string[];
   /** The creator's mark (signature, monogram, symbol): a key in `assets`, stored once. */
   artistMark?: string;
   pages: Page[];

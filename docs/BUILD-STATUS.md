@@ -1034,3 +1034,35 @@ an iPad pays for on every frame:
   - panel 1's crop was 256 × 316 px;
   - the Yarn and Ink text read correctly.
 - **Not checked:** loading the package in a real Unity, Godot or Unreal project.
+
+## Asset bins, 2026-11-13
+
+- **Data:** `BookAsset.bin` (absent means Unsorted) and `Book.bins` (order, empty bins allowed).
+  Both are validated in `doc/schema.ts`. The pure helpers in `geom/bins.ts` cover list, filter,
+  move, rename (unique names), delete (images go to Unsorted) and reorder.
+- **Draw sidebar:** a **Layers / Bins** switch, remembered per device. The image tool shows the
+  bins under its options. `ui/assetbins.ts` is created once per desk, so scroll position and drags
+  survive repaints.
+  - Chips: All, each bin with a count, and **+**. Tapping the open bin opens its menu (rename,
+    move left or right, delete). Search appears from 9 images.
+  - Tap a tile to place it in the selected image's panel, or the page.
+  - Mouse and pen drag after 6 px. A finger holds for 280 ms, then drags; moving earlier scrolls
+    the bin. Hold and lift (or right-click) opens the tile menu.
+  - A ghost follows the pointer. Dropping on the stage places the image at that page point
+    (clamped to the page). Dropping on a chip moves it to that bin.
+  - OS files dropped on the bins go into the open bin. Dropped on the page, they're added and
+    placed at the drop point.
+- **Placement:** `imagePlacement().placeAsset(asset, at, reference)` puts the image in the group
+  under the point, maps it through a moved panel's transform, fits it to 70% of the panel and
+  centres it on the drop point. Each placement is one undo step.
+- Checks: `bins.test.ts` (5), including the book-file round-trip. In the built-in pane:
+  - a mouse drag showed the ghost and the stage highlight and placed one layer;
+  - a drop above the page was clamped to y = 0;
+  - a tap placed into the selected panel;
+  - a drag onto Unsorted moved the image, and undo restored it;
+  - a touch swipe made no drag;
+  - touch hold then drag placed the image;
+  - hold and lift opened the menu.
+- **Not checked:** a real finger on an iPad, and an OS file drop (synthetic DataTransfer only in
+  code review). The hidden pane gave the canvas a 300 × 150 default size, so drop accuracy over
+  a laid-out page was not measured on screen.

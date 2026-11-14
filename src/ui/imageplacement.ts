@@ -2,7 +2,7 @@ import { askToReduce } from './reducechoice';
 import { findLayer, newLayer, type BookAsset, type LayerGroup, type PlacedImage, type Pt } from '../doc/model';
 import { mapPanelPoint, panelAt } from '../geom/carve';
 import { invert, type Mat } from '../engine/core/selxform';
-import { groupLabel, insertIndex, panelForGroup } from '../geom/groups';
+import { groupAt, groupLabel, insertIndex, panelForGroup } from '../geom/groups';
 import { fitImage, hitsImage, imageDpi, imagePoint, type PlacementBox } from '../geom/placement';
 import { decodePngInto, makeCanvas } from '../io/canvasops';
 import { IMAGE_ACCEPT, ImportCancelled, readAssetImage } from '../io/bookassets';
@@ -154,6 +154,47 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
     d.showModal();
   }
 
+  /**
+   * Place a book asset straight onto the page (bins: tap or drag and drop). Dropped at a point it
+   * goes in the panel under that point, centred there; otherwise in the selected panel's group, or
+   * the page. One undo step.
+   */
+  async function placeAsset(asset: BookAsset, at: Pt | null, reference = false): Promise<boolean> {
+    const panels = ctx.panels();
+    // a drop just off the page lands at its edge
+    if (at) at = { x: Math.max(0, Math.min(page.widthIn, at.x)), y: Math.max(0, Math.min(page.heightIn, at.y)) };
+    let group = at ? groupAt(page, panels, at) : (contextGroup() ?? page.groups.find((g) => g.kind === 'background')!);
+    if (group.kind !== 'panel' && group.kind !== 'background') group = page.groups.find((g) => g.kind === 'background')!;
+    if (!group.visible || group.locked) { toast(`${group.kind === 'panel' ? 'That panel' : 'The page'} is hidden or locked. Show or unlock it in Layers to place images there.`); return false; }
+    const bytes = await studio.store.getAsset(asset.key);
+    if (!bytes) { toast('This asset’s image is missing.'); return false; }
+    const canvas = makeCanvas(asset.width, asset.height);
+    await decodePngInto(canvas, bytes);
+    if (!ctx.stage.isConnected || studio.book !== ctx.book || !ctx.book.pages.includes(page)) return false;
+    const layer = newLayer(reference ? 'reference' : 'colour');
+    layer.name = asset.name;
+    layer.fillRef = false;
+    const b = box(group);
+    // fit within 70% of the panel so it reads as a placed piece, then centre on the drop point
+    const inset = { x0: b.x0 + (b.x1 - b.x0) * 0.15, y0: b.y0 + (b.y1 - b.y0) * 0.15, x1: b.x1 - (b.x1 - b.x0) * 0.15, y1: b.y1 - (b.y1 - b.y0) * 0.15 };
+    const fitted = fitImage({ x: 0, y: 0, width: 1, height: 1, rotation: 0, pixelWidth: canvas.width, pixelHeight: canvas.height }, inset);
+    const centre = at ? mapPanelPoint(at, inverseForGroup(group)) : null;
+    layer.image = centre ? { ...fitted, x: centre.x, y: centre.y } : fitted;
+    art.planes[layer.id] = canvas;
+    art.planeSizes[layer.id] = { width: canvas.width, height: canvas.height };
+    touchLayer(art, layer.id);
+    const groupId = group.id;
+    studio.editPage(page, 'Place ' + asset.name, ['groups'], (p) => {
+      const g = p.groups.find((item) => item.id === groupId);
+      if (g) g.layers.splice(insertIndex(g, layer.type), 0, layer);
+    });
+    select(layer.id);
+    ctx.chrome();
+    ctx.request();
+    return true;
+  }
+  const contextGroup = () => { const id = selected(); return id ? findLayer(page, id)?.group ?? null : null; };
+
   function options(): HTMLElement {
     const item = get();
     if (!item) return h('div', { class: 'sec' }, h('h4', {}, 'Image placement'),
@@ -223,7 +264,7 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
   }
 
   return {
-    open, options, clipboard,
+    open, options, clipboard, placeAsset,
     start(p: Pt) {
       if (cutting) { cutPoint = p; marquee.down(p, 'freehand'); return; }
       let item = get();
