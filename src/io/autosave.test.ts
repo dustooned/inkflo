@@ -120,6 +120,18 @@ describe('autosave', () => {
     expect(s.store.heads.size).toBe(1);
   });
 
+  it('reports a pending save from the first change until it is written', async () => {
+    const s = setup();
+    s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), true);
+    expect(s.saver.pending).toBe(false);
+    s.draw(s.book.pages[0]!.id, 'ink', 'X');
+    expect(s.saver.pending).toBe(true);
+    await s.saver.flush();
+    await drain(s.saver);
+    expect(s.saver.pending).toBe(false);
+    expect(s.store.heads.size).toBe(1);
+  });
+
   it('keeps an automatic restore point every 10 commands', async () => {
     const s = setup();
     s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), true);

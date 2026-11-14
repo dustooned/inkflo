@@ -515,6 +515,20 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   // ---- tool rail: groups, flyouts, customization
   const toolRail = h('nav', { class: 'rail', 'aria-label': 'Tools' });
+  // a fade at the end that still has tools, when the rail is taller than the screen
+  const railEdges = () => {
+    const more = toolRail.scrollHeight - toolRail.clientHeight;
+    toolRail.classList.toggle('more-below', more > 1 && toolRail.scrollTop < more - 1);
+    toolRail.classList.toggle('more-above', more > 1 && toolRail.scrollTop > 1);
+  };
+  toolRail.addEventListener('scroll', railEdges, { passive: true });
+  let lastRailHeight = 0;
+  new ResizeObserver(() => {
+    railEdges();
+    // a different height: lay the rail out again so More holds exactly what doesn't fit
+    if (Math.abs(toolRail.clientHeight - lastRailHeight) > 1) { lastRailHeight = toolRail.clientHeight; setTimeout(() => renderRail(), 0); }
+  }).observe(toolRail);
+  new MutationObserver(() => setTimeout(railEdges, 0)).observe(toolRail, { childList: true });
   const ctxBar = h('div', { class: 'ctx', role: 'toolbar', 'aria-label': 'Tool settings' });
   // One-row tool bar: a vertical wheel scrolls it sideways, and a fade marks the side with more.
   const ctxEdges = () => {
@@ -528,7 +542,36 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ctxBar.scrollLeft += e.deltaY;
     e.preventDefault();
   }, { passive: false });
-  new ResizeObserver(ctxEdges).observe(ctxBar);
+  // Settings that don't fit go into More ▾ (last ones first), so nothing hides off-screen on iPad.
+  let ctxOverflow: Element[] = [];
+  const ctxMoreBox = h('div', { class: 'ctx-more', role: 'group', 'aria-label': 'More tool settings' });
+  const ctxMore = h('button', { class: 'btn ctx-more-btn', type: 'button', 'aria-haspopup': 'true', title: 'More settings for this tool' }, 'More ▾');
+  ctxMore.addEventListener('click', () => { popover(ctxMore, ctxMoreBox, 'below', 'More tool settings'); });
+  let fitting = false;
+  function fitCtx(): void {
+    if (fitting) return;
+    fitting = true;
+    try {
+      ctxMore.remove();
+      for (const el of ctxOverflow) ctxBar.append(el);
+      ctxOverflow = [];
+      if (!ctxBar.clientWidth || ctxBar.scrollWidth <= ctxBar.clientWidth + 1) { ctxMoreBox.replaceChildren(); return; }
+      ctxBar.append(ctxMore);
+      while (ctxBar.scrollWidth > ctxBar.clientWidth + 1) {
+        const items = [...ctxBar.children].filter((el) => el !== ctxMore && !el.classList.contains('ctx-name'));
+        if (items.length <= 1) break;
+        const last = items[items.length - 1]!;
+        ctxOverflow.unshift(last);
+        last.remove();
+      }
+      ctxMoreBox.replaceChildren(...ctxOverflow);
+    } finally { fitting = false; ctxEdges(); }
+  }
+  let lastCtxWidth = 0;
+  new ResizeObserver(() => {
+    ctxEdges();
+    if (Math.abs(ctxBar.clientWidth - lastCtxWidth) > 1) { lastCtxWidth = ctxBar.clientWidth; setTimeout(fitCtx, 0); }
+  }).observe(ctxBar);
   new MutationObserver(() => requestAnimationFrame(ctxEdges)).observe(ctxBar, { childList: true });
   const insp = h('aside', { class: 'insp', 'aria-label': 'Inspector' });
   const paneHost = h('div', { class: 'pane' });
@@ -732,20 +775,46 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       items.push(more);
     }
     toolRail.replaceChildren(...items, opt);
+    if (!simple && prefs().layout !== 'focus') fitRail(visible, opt);
     toolRail.scrollLeft = scrollLeft;
     toolRail.scrollTop = scrollTop;
+  }
+
+  /** Tools that don't fit the rail's height go into More (the current tool always stays). */
+  function fitRail(visible: Tool[], opt: HTMLElement): void {
+    if (!toolRail.clientHeight || toolRail.scrollHeight <= toolRail.clientHeight + 1) return;
+    const hidden: Tool[] = [];
+    const more = h('button', { class: 'tool rail-more', type: 'button', 'aria-label': 'More tools', 'aria-haspopup': 'menu', title: 'More tools' }, h('span', {}, '⋯'), h('em', {}, 'More'));
+    toolRail.insertBefore(more, opt);
+    const buttons = () => [...toolRail.querySelectorAll<HTMLElement>('.tool:not(.rail-more)')];
+    while (toolRail.scrollHeight > toolRail.clientHeight + 1) {
+      const candidates = buttons().filter((b) => b.getAttribute('aria-pressed') !== 'true');
+      const last = candidates[candidates.length - 1];
+      if (!last || buttons().length <= 3) break;
+      const t = visible[buttons().indexOf(last)];
+      if (t) hidden.unshift(t);
+      last.remove();
+      // no separator left dangling above More
+      while (more.previousElementSibling?.tagName === 'HR') more.previousElementSibling.remove();
+    }
+    if (!hidden.length) { more.remove(); return; }
+    more.addEventListener('click', () => popover(more, h('div', { role: 'menu', 'aria-label': 'More tools' }, hidden.map((t) =>
+      h('button', { class: 'item', type: 'button', role: 'menuitem', onclick: () => { closePopover(); selectTool(t.id); } }, glyphEl(t.label, t.glyph), t.label, t.key ? h('kbd', {}, t.key.toUpperCase()) : null))), 'right', 'More tools'));
   }
 
   function chrome(): void {
     renderRail();
     const t = mode.tools.find((x) => x.id === mode.tool);
     const v = t?.variants?.find((x) => x.id === t.variant);
+    ctxOverflow = [];
+    ctxMoreBox.replaceChildren();
     ctxBar.replaceChildren(h('span', { class: 'ctx-name' }, v ? `${t!.label} · ${v.label}` : t?.label ?? DESK_META[stage].label));
     mode.ctx(ctxBar);
     const options = Array.from(ctxBar.children).slice(1).some((el) => !el.matches('.hint, .document-option'));
     ctxBar.classList.toggle('no-options', !options);
     screen.classList.toggle('has-options', options);
     if (options && mode.resetOptions && screen.matches('.focus, .simple')) ctxBar.append(h('button', { class: 'btn', type: 'button', onclick: mode.resetOptions }, 'Reset'));
+    fitCtx();
     actions.refresh();
     insp.replaceChildren();
     mode.inspector(insp);
@@ -862,6 +931,28 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       item('Export files…', 'Images, PDF, comic archive, book file', () => openExport(studio, 'files')),
       item('Export for drawing…', 'Layered PSD of page ' + (idx + 1) + ' for another app', exportForDrawing)), 'below', 'Export');
   });
+  // Secondary view buttons; on narrow screens (iPad portrait) they fold into one View menu so
+  // the bar never pushes Export off-screen.
+  const headerSpread = spreadButton(studio, page, stage, go);
+  const headerDisplay = displayButton(true, composition);
+  const headerSimple = stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null;
+  const headerFocus = layoutBtn('⤢', 'Focus layout');
+  const barExtras = [headerSpread, headerDisplay,
+    h('button', { class: 'icon', type: 'button', 'aria-label': 'Manual', title: 'Manual: ' + DESK_META[stage].label + ' desk', onclick: () => openManual(stage) }, '?'),
+    ...(headerSimple ? [headerSimple] : []), headerFocus];
+  for (const b of barExtras) b.classList.add('bar-extra');
+  doneBtn.classList.add('bar-done');
+  const viewMenu = h('button', { class: 'btn bar-view', type: 'button', 'aria-haspopup': 'menu', title: 'Spread preview, display, focus layout and the manual' }, 'View ▾');
+  viewMenu.addEventListener('click', () => {
+    const item = (label: string, run: () => void) => h('button', { class: 'item', type: 'button', role: 'menuitem', onclick: () => { close(); run(); } }, label);
+    const close = popover(viewMenu, h('div', { class: 'chrome-menu', role: 'menu', 'aria-label': 'View' },
+      item(headerSpread.getAttribute('aria-label') ?? 'Spread preview', () => headerSpread.click()),
+      item('Display settings…', () => displayMenu(viewMenu, { layout: true, composition, shell: true })),
+      item('Focus layout', () => toggleLayout()),
+      ...(headerSimple ? [item(prefs().layout === 'simple' ? 'Studio layout' : 'Simple layout', () => headerSimple.click())] : []),
+      item('Manual: ' + DESK_META[stage].label + ' desk', () => openManual(stage)),
+      ...(doneBtn.offsetWidth === 0 ? [item(page.state[stage] === 2 ? 'Page done ✓ (mark in progress)' : 'Mark page done', () => doneBtn.click())] : [])), 'below', 'View');
+  });
   const deskActions = mode.actions ?? [];
   const primary = stage === 'layout' ? [...deskActions, exportAction, display, inspect] : [...deskActions, display, inspect, exportAction];
   const moreButton = () => actions.querySelector<HTMLButtonElement>('[aria-label="More document actions"]')!;
@@ -897,10 +988,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         h('button', { type: 'button', 'aria-label': 'Previous page', disabled: idx === 0, onclick: () => go(pageHash(idx - 1)) }, '‹'),
         h('button', { type: 'button', class: 'page-jump-trigger', 'aria-label': 'Jump to page', title: 'Jump to page', onclick: jump }, `${idx + 1} / ${book.pages.length} ▾`),
         h('button', { type: 'button', 'aria-label': 'Next page', disabled: idx === book.pages.length - 1, onclick: () => go(pageHash(idx + 1)) }, '›')),
-      save, undoBtn(), redoBtn(), narrowInspector, stage !== 'script' ? viewButton() : null, spreadButton(studio, page, stage, go), displayButton(true, composition),
-      h('button', { class: 'icon', type: 'button', 'aria-label': 'Manual', title: 'Manual: ' + DESK_META[stage].label + ' desk', onclick: () => openManual(stage) }, '?'),
-      stage === 'draw' ? h('button', { class: 'btn simple-toggle', type: 'button', onclick: () => setPrefs({ layout: prefs().layout === 'simple' ? 'studio' : 'simple' }) }, 'Simple / Studio') : null,
-      layoutBtn('⤢', 'Focus layout'), doneBtn,
+      save, undoBtn(), redoBtn(), narrowInspector, stage !== 'script' ? viewButton() : null,
+      ...barExtras, viewMenu, doneBtn,
       exportHeader),
     ctxBar,
     h('div', { class: `work${mode.tools.length ? '' : ' norail'}` }, toolRail, stageEl, insp),

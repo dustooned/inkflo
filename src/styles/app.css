@@ -880,3 +880,42 @@ dialog.exportcenter .content > .seg:first-child { position: sticky; top: -14px; 
 .bin-ghost { position: fixed; left: 0; top: 0; width: 72px; height: 72px; z-index: 1000; pointer-events: none; border-radius: 10px; background: var(--surface); box-shadow: 0 10px 28px rgba(0,0,0,.35); padding: 4px; opacity: .92; }
 .bin-ghost img { width: 100%; height: 100%; object-fit: contain; }
 .bin-drop, .file-over.stage, .stage.file-over { outline: 3px dashed var(--acc-draw, var(--accent)); outline-offset: -6px; }
+
+/* Narrow screens: secondary view buttons fold into View ▾; the crumb gives way first */
+.bar .bar-view { display: none; }
+.bar .crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1100px) {
+  .bar .bar-extra { display: none !important; }
+  .bar .bar-view { display: inline-flex; }
+}
+@media (max-width: 900px) {
+  .bar .crumb a, .bar .crumb b:first-of-type { display: none; }
+}
+
+/* Context bar overflow menu */
+.ctx .ctx-more-btn { flex: none; margin-left: auto; }
+.ctx-more { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; max-width: min(92vw, 420px); max-height: 70vh; overflow: auto; }
+.ctx-more > * { white-space: normal; }
+.ctx-more .seg { align-self: flex-start; }
+.ctx-more .hint { font-size: 12px; color: var(--text-soft); }
+
+/* Tool rail on shorter screens: icons only (tooltips name them), tighter; a fade where it scrolls */
+@media (max-height: 940px) {
+  .rail { gap: 2px; padding: 6px 5px; }
+  .rail .tool { min-height: 40px; padding: 6px 2px; gap: 0; justify-content: center; }
+  .rail .tool em { display: none; }
+  .rail .tool span { font-size: 18px; }
+  .rail hr { margin: 2px auto; }
+}
+.rail.more-below { mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent); }
+.rail.more-above { mask-image: linear-gradient(to top, #000 calc(100% - 28px), transparent); }
+.rail.more-above.more-below { mask-image: linear-gradient(to bottom, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+@media (max-height: 820px) {
+  .rail .tool { min-height: 34px; padding: 4px 2px; }
+  .rail .tool span { font-size: 17px; }
+  .rail .railopt { padding: 5px 0; }
+}
+@media (max-width: 900px) {
+  .bar .crumb { flex: 0 1 auto; }
+  .bar .bar-done { display: none !important; }
+}

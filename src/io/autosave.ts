@@ -114,6 +114,11 @@ export class Autosaver {
     this.onStatus();
   }
 
+  /** True while a change is waiting to be written or is being written. */
+  get pending(): boolean {
+    return this.timer !== null || this.state === 'dirty' || this.state === 'saving';
+  }
+
   /** Call after every command (do, undo, redo). */
   markDirty(): void {
     this.changes += 1;

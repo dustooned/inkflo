@@ -1173,3 +1173,33 @@ an iPad pays for on every frame:
   - the automatic order was tall, top right, bottom right;
   - tapping bottom right, top right, tall set that order and moved each beat with its panel;
   - Automatic order restored both, undo brought the hand order back, and the page was restored.
+
+## UI audit P0 fixes, 2026-11-14
+
+The audit is in `docs/UI-AUDIT.md`. These are its four P0 items:
+
+1. **Top bar never hides Export.** Below 1100 px, Spread preview, Display settings, Manual,
+   Simple/Studio and Focus layout fold into **View ▾** (`.bar-extra` and `.bar-view`). Below
+   900 px, the crumb shrinks and Mark done moves into View.
+2. **Context bar More ▾** (`fitCtx` in `ui/desk.ts`). After a desk renders its bar, trailing
+   items that don't fit move into a More popover; the live elements are moved, so they keep their
+   handlers. The bar refits when its width changes (ResizeObserver, on a timer rather than an
+   animation frame, so it also works in background tabs).
+3. **Tool rail More** (`fitRail`). Studio layout only. Rail tools that don't fit its height go
+   into a "⋯ More" button; the current tool always stays. Choosing a tool there brings it onto
+   the rail. Tools stay 44 px (touch size); below 940 px of height the labels hide (tooltips name
+   them). A fade marks a rail that still scrolls (`.more-above` / `.more-below`).
+4. **No lost edit on reload.** `Autosaver.pending` (a timer is waiting, or the state is dirty or
+   saving). On `beforeunload` with a save pending, the save starts at once and the browser holds
+   the page with its "Leave site?" prompt. Nothing changes when there's no pending save.
+   (`pagehide` and `visibilitychange` already flushed.)
+- Checks: `autosave.test.ts` (8, including `pending` across a save). In the built-in pane, each
+  of the five desks at 1280 × 800, 1024 × 768, 1180 × 820 and 820 × 1180 had:
+  - Export fully on screen;
+  - header and context-bar overflow of 0;
+  - rail overflow of 0. More appears where needed: Layout and Caption context bars; Draw's rail
+    at 800–820 px tall (Select lines, Transform, Position image, Artist mark); Draw's context bar
+    in portrait (Ink colour, Eyedropper, Stroke, Rulers, Show pencil).
+  - Choosing Transform from the rail's More made it active on the rail.
+- **Not checked:** a real iPad (Safari's `beforeunload` support is limited; `pagehide` and
+  `visibilitychange` cover backgrounding there).

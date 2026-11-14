@@ -57,6 +57,13 @@ export class Studio {
     setUserBrushes(readUserBrushes(await store.getSetting('brushes.user.v1')));
     void requestPersistence();
     window.addEventListener('pagehide', () => void s.saver.flush());
+    // a reload or close with a save still pending: start it now and ask the browser to wait
+    window.addEventListener('beforeunload', (e) => {
+      if (!s.saver.pending) return;
+      void s.saver.flush();
+      e.preventDefault();
+      e.returnValue = '';
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') void s.saver.flush();
     });
