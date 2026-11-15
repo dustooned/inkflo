@@ -7,7 +7,7 @@ import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
 import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, renderSeparation, SEPARATION_LABEL, tone, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
-import { DEFAULT_SCROLL_GAP, exportScroll, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
+import { DEFAULT_SCROLL_GAP, exportScroll, exportScrollPng, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
 import { exportWebImage, WEB_WIDTH, webSize } from '../io/webimage';
 import { exportGamePackage, type DialogueFormat } from '../io/gameexport';
@@ -152,16 +152,34 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   // Page-break art: a book image between pages (and optionally after the last), kept for the dialog
   const breakSet = { key: '' as string, fit: 'width' as BreakArt['fit'], end: false };
   const breakImages = new Map<string, ImageBitmap>();
-  async function breakArt(): Promise<BreakArt | null> {
-    if (!breakSet.key) return null;
-    let image = breakImages.get(breakSet.key);
+  async function breakArt({ key, fit, end } = breakSet, cache: Map<string, ImageBitmap> | null = breakImages) {
+    if (!key) return null;
+    let image = cache?.get(key);
     if (!image) {
-      const bytes = await studio.store.getAsset(breakSet.key);
+      const bytes = await studio.store.getAsset(key);
       if (!bytes) return null;
       image = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/png' }));
-      breakImages.set(breakSet.key, image);
+      if (cache) {
+        if (!d.open) { image.close(); return null; }
+        const existing = cache.get(key);
+        if (existing) { image.close(); image = existing; }
+        else cache.set(key, image);
+      }
     }
-    return { image, fit: breakSet.fit, end: breakSet.end };
+    return { image, fit, end };
+  }
+  function downloadScroll(format: 'png' | 'zip'): void {
+    const options = { ...scroll, range: { ...scroll.range } };
+    const artwork = { ...breakSet };
+    const exportComic = format === 'png' ? exportScrollPng : exportScroll;
+    void run(format === 'png' ? 'Long PNG' : 'Vertical scroll', async () => {
+      const art = await breakArt(artwork, null);
+      try {
+        return await exportComic(studio, { ...options, breakArt: art }, (m) => (progress.textContent = m));
+      } finally {
+        art?.image.close();
+      }
+    }, `${name}-scroll.${format}`);
   }
   function scrollTab(): HTMLElement {
     const field = (label: string, value: number, min: number, max: number, apply: (v: number) => void) => {
@@ -211,7 +229,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     return h('div', { class: 'scroll-tab' },
       h('div', { class: 'stack' },
         h('h3', {}, 'Vertical scroll'),
-        h('p', { class: 'note' }, 'Stack pages into one episode. The ZIP includes numbered PNG strips, a responsive index.html, and an episode.json for custom sites.'),
+        h('p', { class: 'note' }, 'Stack the selected pages into one long PNG or download a ZIP with numbered PNG strips and a web reader.'),
         h('div', { class: 'export-app-fields' },
           field('First page', scroll.range.from, 1, book!.pages.length, (v) => (scroll.range.from = v)),
           field('Last page', scroll.range.to, 1, book!.pages.length, (v) => (scroll.range.to = v)),
@@ -222,13 +240,12 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
           }), scroll.background && scroll.background !== '#ffffff' ? color : null),
         h('fieldset', { class: 'break-art' },
           h('legend', {}, 'Page-break art'),
-          h('p', { class: 'note' }, 'A divider, footer or “to be continued” banner drawn in the break after each page. It is written into the same strips as the pages, so it scrolls seamlessly on the web.'),
+          h('p', { class: 'note' }, 'Add a divider, footer or “to be continued” banner in the break after each page.'),
           h('div', { class: 'spread-links' }, h('label', { class: 'field' }, 'Image', artSelect), h('label', { class: 'field' }, 'Add an image', addArt)),
           breakControls),
-        btn('Download scroll package', () => void (async () => {
-          const art = await breakArt();
-          await run('Vertical scroll', () => exportScroll(studio, { ...scroll, range: { ...scroll.range }, breakArt: art }, (m) => (progress.textContent = m)), `${name}-scroll.zip`);
-        })(), true)),
+        h('div', { class: 'spread-links' },
+          btn('Download long PNG', () => downloadScroll('png'), true),
+          btn('Download scroll package', () => downloadScroll('zip')))),
       preview);
   }
   const psd = { mode: 'art' as PsdMode, dpi: book.dpi, from: currentPage, to: currentPage };
