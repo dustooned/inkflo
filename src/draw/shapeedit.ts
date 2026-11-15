@@ -1,17 +1,18 @@
 import type { Pt } from '../doc/model';
-import { constrainShape, sampleProfile, shapeOutline, type Shape } from '../engine/core/quickshape';
+import { constrainShape, sampleProfile, type Shape } from '../engine/core/quickshape';
+import { inkShapeOutline, type InkShape } from './quickcurve';
 import type { StrokePoint } from '../engine/core/stroke';
 import { resizeBox, type ResizeSide } from '../geom/resizebox';
 
 export type EditableShape = Extract<Shape, { kind: 'line' | 'ellipse' | 'rect' }>;
 export type ShapeGrab = { kind: 'move' } | { kind: 'end'; end: 'a' | 'b' } | { kind: 'size'; side: ResizeSide };
 
-export function editableShape(s: Shape): s is EditableShape {
+export function editableShape(s: InkShape): s is EditableShape {
   return s.kind === 'line' || s.kind === 'ellipse' || s.kind === 'rect';
 }
 
-export function shapeStrokePoints(s: Shape, pressure: number[], dpi: number, start = 0): StrokePoint[] {
-  const outline = shapeOutline(s, Math.max(1, dpi / 150));
+export function shapeStrokePoints(s: InkShape, pressure: number[], dpi: number, start = 0): StrokePoint[] {
+  const outline = inkShapeOutline(s, Math.max(1, dpi / 150));
   return outline.map((p, i) => ({ ...p, pressure: sampleProfile(pressure, i / Math.max(1, outline.length - 1)), tiltX: 0, tiltY: 0, t: start + i * 4 }));
 }
 

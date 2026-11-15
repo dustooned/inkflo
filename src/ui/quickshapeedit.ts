@@ -1,33 +1,42 @@
 import { findLayer, type Pt, type Stroke } from '../doc/model';
 import { adjustShapeHandle, editableShape, shapeHandles, shapeStrokePoints, type EditableShape, type ShapeGrab } from '../draw/shapeedit';
+import { choiceOf, fitInkShape, shapeChoicesFor, shapeName, type InkShape, type InkShapeChoice } from '../draw/quickcurve';
 import { touchLayer } from '../draw/residency';
 import { putPixels, type RasterEngine, type StrokeCommit } from '../engine/brush/raster';
 import type { Command } from '../engine/core/history';
-import { SHAPE_NAMES, type Shape } from '../engine/core/quickshape';
+import type { V } from '../engine/core/quickshape';
 import { unionRect } from '../engine/core/selxform';
 import type { StrokeRecord } from '../engine/core/stroke';
 import { renderVectorLayer } from '../render/vector';
 import type { DeskCtx } from './desk';
-import { h, toast } from './dom';
+import { h, seg, toast } from './dom';
 
 interface LandedShape {
-  shape: Shape;
+  shape: InkShape;
   layerId: string;
   seed: number;
   pressure: number[];
   record: StrokeRecord;
+  /** The hand-drawn stroke (layer pixels), so the shape toggles can fit it again as another shape. */
+  raw?: V[];
   /** Absent for vector layers. Raster can lift only the original stroke's exact pixel delta. */
   original?: Pick<StrokeCommit, 'rect' | 'before'>;
 }
 
+/**
+ * After QuickShape lands: a pill with the shape toggles (Procreate's Edit Shape). Line · Arc ·
+ * Curve · Polyline for an open stroke, Ellipse · Circle · Rectangle · Square · Polygon for a closed
+ * one; each refits the hand-drawn stroke as that shape in one undo step, and you can keep
+ * switching. Lines, ellipses and rectangles also get handles (Edit shape).
+ */
 export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector: (id: string, label: string, strokes: Stroke[]) => void) {
   const { studio, page, art, book: { dpi } } = ctx;
-  let last: (Omit<LandedShape, 'shape'> & { shape: EditableShape; history: Command; revision: number }) | null = null;
+  let last: (LandedShape & { history: Command; revision: number }) | null = null;
   let draft: EditableShape | null = null;
   let round = false;
   let drag: { at: Pt; before: EditableShape; grab: ShapeGrab } | null = null;
   let preview: HTMLCanvasElement | null = null;
-  let rendered: EditableShape | null = null;
+  let rendered: InkShape | null = null;
   let paint: StrokeCommit | null = null;
 
   function clear(): void {
@@ -57,14 +66,14 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
 
   function start(): void {
     const target = current();
-    if (!target || draft) return;
+    if (!target || draft || !editableShape(target.entry.shape)) return;
     draft = target.entry.shape;
     round = draft.kind === 'ellipse' && Math.abs(draft.rx - draft.ry) < 1e-6;
     ctx.chrome();
     ctx.request();
   }
 
-  function sameShape(a: EditableShape, b: EditableShape): boolean {
+  function sameShape(a: InkShape, b: InkShape): boolean {
     return a === b || JSON.stringify(a) === JSON.stringify(b);
   }
 
@@ -72,7 +81,7 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
     return { ...stroke, pts: points.map((p) => ({ x: p.x / dpi, y: p.y / dpi })), pressure: points.map((p) => p.pressure) };
   }
 
-  function render(target: NonNullable<ReturnType<typeof current>>, shape: EditableShape): HTMLCanvasElement | null {
+  function render(target: NonNullable<ReturnType<typeof current>>, shape: InkShape): HTMLCanvasElement | null {
     const { entry, layer, stroke, index } = target;
     if (rendered === shape) return preview;
     const source = art.planes[layer.id];
@@ -108,12 +117,11 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
     ctx.request();
   }
 
-  function apply(): void {
-    const target = current();
-    if (!target || !draft || drag || sameShape(target.entry.shape, draft)) return;
+  /** Replace the landed stroke with `shape` (one undo step) and stay ready for another switch. */
+  function commitShape(target: NonNullable<ReturnType<typeof current>>, shape: InkShape, label: string): boolean {
     const { entry, layer, stroke, index } = target;
-    const next = replacement(stroke, shapeStrokePoints(draft, entry.pressure, dpi, entry.record.points[0]?.t));
-    const label = `Edit ${SHAPE_NAMES[draft.kind].toLowerCase()}`;
+    const next = replacement(stroke, shapeStrokePoints(shape, entry.pressure, dpi, entry.record.points[0]?.t));
+    let original = entry.original;
     if (!entry.original) {
       const strokes = layer.strokes.slice();
       strokes[index] = next;
@@ -121,12 +129,20 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
       editVector(layer.id, label, strokes);
     } else {
       const source = art.planes[layer.id];
-      const canvas = render(target, draft);
-      if (!source || !canvas || !paint) { toast('Move the shape onto the page to apply the edit.'); return; }
+      const canvas = render(target, shape);
+      if (!source || !canvas || !paint) { toast('Move the shape onto the page to change it.'); return false; }
       const region = unionRect(entry.original.rect, paint.rect)!;
       const { x, y, w, h } = region;
       const before = source.getContext('2d')!.getImageData(x, y, w, h);
       const after = canvas.getContext('2d')!.getImageData(x, y, w, h);
+      // the page under the whole region without any version of this stroke, for the next switch
+      const clean = document.createElement('canvas');
+      clean.width = source.width; clean.height = source.height;
+      const cg = clean.getContext('2d', { willReadFrequently: true })!;
+      cg.drawImage(source, 0, 0);
+      putPixels(clean, entry.original.rect, entry.original.before);
+      original = { rect: region, before: cg.getImageData(x, y, w, h) };
+      clean.width = 0;
       const write = (pixels: ImageData, value: Stroke) => {
         const match = findLayer(page, layer.id);
         if (!match || match.layer.strokes[index]?.seed !== entry.seed) return;
@@ -137,6 +153,32 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
       clear();
       studio.run({ label, do: () => write(after, next), undo: () => write(before, stroke) });
     }
+    // keep the toggles live on the new shape
+    const history = studio.history.peekUndo();
+    if (history) last = { ...entry, shape, original, history, revision: art.revs[layer.id] ?? 0 };
+    return true;
+  }
+
+  function apply(): void {
+    const target = current();
+    if (!target || !draft || drag || sameShape(target.entry.shape, draft)) return;
+    const shape = draft;
+    draft = null;
+    commitShape(target, shape, `Edit ${shapeName(shape).toLowerCase()}`);
+    ctx.chrome();
+    ctx.request();
+  }
+
+  /** A shape toggle: fit the hand-drawn stroke again as `choice`. */
+  function switchTo(choice: InkShapeChoice): void {
+    const target = current();
+    if (!target || draft) return;
+    if (!target.entry.raw) { toast('This shape can’t be switched any more. Draw it again to choose another.'); return; }
+    const next = fitInkShape(choice, target.entry.raw);
+    const label = shapeChoicesFor(target.entry.shape).find((c) => c.id === choice)?.label ?? choice;
+    if (!next) { toast(`This stroke can’t make a ${label.toLowerCase()}.`); return; }
+    if (sameShape(next, target.entry.shape)) return;
+    commitShape(target, next, `Make ${label.toLowerCase()}`);
     ctx.chrome();
     ctx.request();
   }
@@ -152,9 +194,10 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
     cancel,
     apply,
     start,
+    switchTo,
     remember(landed: LandedShape) {
       const history = studio.history.peekUndo();
-      if (history && editableShape(landed.shape)) last = { ...landed, shape: landed.shape, history, revision: art.revs[landed.layerId] ?? 0 };
+      if (history) last = { ...landed, raw: landed.raw?.map((q) => ({ x: q.x, y: q.y })), history, revision: art.revs[landed.layerId] ?? 0 };
     },
     active: () => !!current() && !!draft,
     available: () => !!current(),
@@ -180,7 +223,13 @@ export function quickShapeEditor(ctx: DeskCtx, engine: RasterEngine, editVector:
     controls(): HTMLElement[] {
       const target = current();
       if (!target) return [];
-      if (!draft) return [h('button', { class: 'btn', type: 'button', onclick: start }, 'Edit shape')];
+      if (!draft) {
+        const shape = target.entry.shape;
+        return [
+          ...(target.entry.raw ? [seg<InkShapeChoice>(shapeChoicesFor(shape), choiceOf(shape), switchTo, 'Shape')] : []),
+          ...(editableShape(shape) ? [h('button', { class: 'btn', type: 'button', onclick: start }, 'Edit shape')] : []),
+        ];
+      }
       const buttons: HTMLElement[] = [h('button', { class: 'btn primary', type: 'button', disabled: sameShape(target.entry.shape, draft), onclick: apply }, 'Apply shape'),
         h('button', { class: 'btn', type: 'button', onclick: cancel }, 'Cancel')];
       if (draft.kind === 'ellipse') {

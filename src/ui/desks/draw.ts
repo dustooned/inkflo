@@ -3,7 +3,7 @@ import { DEFAULT_BRUSH, entry, PASS_STYLE, withGPenPressure, type BrushEntry, ty
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
 import { smoothStroke } from '../../engine/brush/smoothing';
-import { constrainShape, editShape, pressureProfile, recognizeShape, SHAPE_NAMES, type Shape } from '../../engine/core/quickshape';
+import { constrainInkShape, editInkShape, inkPressureProfile, recognizeInkShape, shapeName, type InkShape } from '../../draw/quickcurve';
 import { shapeStrokePoints } from '../../draw/shapeedit';
 import { brushPicker, brushStudio, warmBrush } from '../brushui';
 import { brushControl, clampToolValue } from '../brushcontrols';
@@ -27,6 +27,7 @@ import type { Panel } from '../../geom/carve';
 import { planeCanvas, touchLayer } from '../../draw/residency';
 import { DabWalker } from '../../engine/brush/dabs';
 import { putPixels, RasterEngine } from '../../engine/brush/raster';
+import { InkRasterEngine } from '../../draw/liveraster';
 import { Smoother } from '../../engine/brush/smoothing';
 import type { StrokePoint, StrokeRecord } from '../../engine/core/stroke';
 import { mapPanelPoint, panelAt } from '../../geom/carve';
@@ -180,7 +181,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   let pickerAnchor: HTMLButtonElement | null = null;
   let dismissPicker: (() => void) | null = null;
   const dpi = book.dpi;
-  const engine = new RasterEngine(art.width, art.height);
+  const engine = new InkRasterEngine(art.width, art.height);
   const shapeEditor = quickShapeEditor(ctx, engine, editVector);
   let shapeTool: string | null = null;
   const shapeActions = h('aside', { class: 'quickshape-actions', 'aria-label': 'QuickShape controls', hidden: true });
@@ -203,7 +204,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     /** Raw points as the pen moved (QuickShape reads these). */
     raw: StrokePoint[];
     holdAt: Pt | null;
-    shape: { original: Shape; shown: Shape; grab: Pt; at: Pt; pressure: number[]; shift: boolean } | null;
+    shape: { original: InkShape; shown: InkShape; grab: Pt; at: Pt; pressure: number[]; shift: boolean } | null;
     /** Vector pen: no dabs; the outline is drawn in the overlay until it lands. */
     vector: boolean;
     inverse: Mat | null;
@@ -603,12 +604,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function snapShape(): void {
     if (!live || live.shape || live.raw.length < 4) return;
-    const shape = recognizeShape(live.raw);
+    const shape = recognizeInkShape(live.raw);
     if (!shape) return;
     const grab = live.raw.at(-1)!;
-    live.shape = { original: shape, shown: shape, grab, at: grab, pressure: pressureProfile(shape, live.raw), shift: false };
+    live.shape = { original: shape, shown: shape, grab, at: grab, pressure: inkPressureProfile(shape, live.raw), shift: false };
     adjustShape(grab, false);
-    toast(`${SHAPE_NAMES[shape.kind]} · drag to adjust · Shift or second finger to constrain`, 1800);
+    toast(`${shapeName(shape)} · drag to adjust · Shift or second finger to constrain`, 1800);
   }
 
   function adjustShape(p: Pt, shift: boolean): void {
@@ -618,8 +619,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     shape.at = p;
     shape.shift = shift;
     const constrain = shift || constrainTouch;
-    const edited = editShape(original, grab, p, constrain);
-    shape.shown = constrain ? constrainShape(edited) : edited;
+    const edited = editInkShape(original, grab, p, constrain);
+    shape.shown = constrain ? constrainInkShape(edited) : edited;
     live.record.points = shapeStrokePoints(shape.shown, pressure, dpi, live.raw[0]!.t);
     repaintLive();
   }
@@ -673,7 +674,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (createdForStroke) studio.history.combine(2, 'Vector line on a new layer');
       if (allowShapeEdit && l.shape) {
         shapeTool = mode.tool;
-        shapeEditor.remember({ shape: l.shape.shown, pressure: l.shape.pressure, layerId: l.layerId, seed: stroke.seed, record: l.record });
+        shapeEditor.remember({ shape: l.shape.shown, pressure: l.shape.pressure, layerId: l.layerId, seed: stroke.seed, record: l.record, raw: l.raw });
       }
       studio.markStage(page, 'draw', 1);
       ctx.chrome();
@@ -714,7 +715,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (createdForStroke) studio.history.combine(2, stroke.erase ? 'Erase' : 'Stroke on a new layer');
     if (allowShapeEdit && l.shape) {
       shapeTool = mode.tool;
-      shapeEditor.remember({ shape: l.shape.shown, pressure: l.shape.pressure, layerId: id, seed: stroke.seed, record: l.record, original: commit });
+      shapeEditor.remember({ shape: l.shape.shown, pressure: l.shape.pressure, layerId: id, seed: stroke.seed, record: l.record, original: commit, raw: l.raw });
     }
     studio.markStage(page, 'draw', 1);
     ctx.chrome();

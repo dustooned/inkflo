@@ -1,0 +1,19 @@
+config_version=5
+
+[application]
+
+config/name="Inkflo Game Export Test"
+run/main_scene="res://reader.tscn"
+config/features=PackedStringArray("4.4", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.087, 0.092, 0.105, 1)

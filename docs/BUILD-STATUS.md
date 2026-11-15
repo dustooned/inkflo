@@ -1028,7 +1028,9 @@ an iPad pays for on every frame:
   - the lettering PNG was 99% transparent;
   - panel 1's crop was 256 × 316 px;
   - the Yarn and Ink text read correctly.
-- **Not checked:** loading the package in a real Unity, Godot or Unreal project.
+- **Godot 4.4.1:** `examples/godot-reader` opened a fresh 1024 px game export of *The Last Train*.
+  Both panel PNGs and their manifest dialogue loaded in reading order.
+- Unity, Unreal, and running the Yarn Spinner or Ink scripts in an engine are still untested.
 
 ## Asset bins, 2026-11-13
 
@@ -1364,3 +1366,51 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
 - Checks: `npx vitest run` 438 passed; `npm run build` passed; checked in the browser on a
   separate test origin (127.0.0.1:5317): the credit shows at the bottom right of Home and
   `manual/index.html#about` opens on the new section. Not checked on an iPad.
+
+## QuickShape curves and shape toggles; vendored files restored, 2026-11-14
+
+- **Bug:** an open stroke that bent but wasn't a clean circular arc (an S, a wave, a flowing line)
+  fell through 2Dope's recogniser to **polyline**: straight segments with corners, which looks
+  blocky. Arcs, polylines and polygons also had no edit controls at all.
+- **Curve** (`draw/quickcurve.ts`, inkflo's code): `recognizeInkShape` runs the vendored
+  recogniser unchanged. It keeps every shape except an open polyline without real corners, which
+  becomes `{ kind: 'curve', pts }`.
+  - A real corner (`sharpCorners`) is a turn of more than 55° within ±4% of the stroke at a
+    simplified point.
+  - The curve's points come from simplifying the stroke (2.5% of its size, ≤ 14 points), drawn as
+    a centripetal Catmull–Rom spline (no loops or overshoot).
+  - `inkShapeOutline`, `editInkShape` (start fixed, the rest follows the pen in proportion),
+    `constrainInkShape` and `inkPressureProfile` (a curve borrows the polyline of its outline)
+    wrap the vendored functions. Draw, `shapeStrokePoints` and the editor use them.
+- **Shape toggles** (`ui/quickshapeedit.ts`): every landed shape is remembered with the
+  hand-drawn stroke.
+  - The floating QuickShape pill shows Line · Arc · Curve · Polyline (open strokes) or
+    Ellipse · Circle · Rectangle · Square · Polygon (closed). Each tap refits the original stroke
+    (`fitInkShape`) and replaces it as one undo step; the toggles stay live on the new shape.
+  - On raster layers, each switch stores the page under the union region with no version of the
+    stroke, so chained switches leave nothing behind.
+  - Edit shape handles stay for lines, ellipses and rectangles.
+- **Vendored files restored.** `docs/2DOPE-REUSE-INVENTORY.md` keeps 2Dope files unchanged
+  except for the provenance header, with inkflo changes living in inkflo's code.
+  - The art-readiness commit (77cde12) had edited `engine/brush/raster.ts` for the pixel-brush
+    preview. It is back to the original, and the fix now lives in `draw/liveraster.ts`
+    (`InkRasterEngine.displaySource` reports the brush as smooth during the live preview only;
+    `commit` still hardens).
+  - Draw uses `InkRasterEngine`. Every file with the vendored header now matches the first commit
+    (checked with `git diff c6aa5e3`). The `quickshape.ts` edits made while starting this work
+    were reverted before committing.
+- Checks: `draw/quickcurve.test.ts` (6):
+  - an S-curve and a clear wave snap to a curve whose outline turns at most 12° between steps and
+    stays within 10 px of the stroke;
+  - a zig-zag stays a polyline;
+  - lines, arcs and ellipses are unchanged;
+  - a barely-wavy stroke (30 px over 600) is still a line, and the Curve toggle brings it back
+    within 8 px;
+  - the toggle sets and choices; holding bends a curve with its start fixed.
+  All 444 tests pass. In the built-in pane with real pen events:
+  - an S-curve held at its end snapped to Curve (sharpest bend between points 1.1°);
+  - the pill showed Line · Arc · Curve · Polyline;
+  - Polyline made 96° corners and Curve made it smooth again, each as one undo step, and undo
+    walked back through them.
+- **Note:** the vendored line test treats a stroke within 7% of straight as a line. Gentle waves
+  therefore snap to Line first; the Curve toggle is one tap away.
