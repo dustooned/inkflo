@@ -19,6 +19,7 @@ const PREVIEW_W = 200;
 const PREVIEW_H = 44;
 const previews = new Map<string, string>();
 let previewEngine: RasterEngine | null = null;
+let importingBrush = false;
 
 /** An S-curve with a pressure swell, as a real brush would draw it. */
 function sampleStroke(w: number, hgt: number): StrokePoint[] {
@@ -82,39 +83,50 @@ export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass,
   }
   const order: BrushGroup[] = pass === 'pencil' ? ['pencil', 'mine', 'ink', 'paint', 'texture', '2dope'] : ['ink', 'mine', 'paint', 'texture', 'pencil', '2dope'];
   const list = h('div', { class: 'brushlist' });
+  const pending = new Map<Element, () => void>();
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      observer.unobserve(entry.target);
+      pending.get(entry.target)?.();
+      pending.delete(entry.target);
+    }
+  }, { root: list });
   for (const g of order) {
     const items = groups.get(g);
     if (!items?.length) continue;
     list.append(h('h4', {}, GROUP_LABEL[g]));
     for (const e of items) {
+      const image = h('img', { alt: '', width: PREVIEW_W / 2, height: PREVIEW_H / 2 });
+      pending.set(image, () => {
+        void warmBrush(e.settings).then(() => { if (image.isConnected) image.src = previewUrl(e); });
+      });
+      observer.observe(image);
       list.append(h('button', {
         type: 'button', class: 'brushitem', 'aria-pressed': String(e.id === current), title: e.note,
         onclick: () => { closePopover(); onPick(e); },
-      }, h('span', { class: 'bname' }, e.name, h('small', {}, e.note)), brushPreview(e)));
+      }, h('span', { class: 'bname' }, e.name, h('small', {}, e.note)), image));
     }
   }
   const cur = allBrushes().find((e) => e.id === current);
   popover(anchor, h('div', { style: 'width:300px' }, list,
     h('div', { class: 'sep' }),
-    vector ? null : h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); void importBrushes(studio, onPick); } }, h('span', {}, '↓'), 'Import brush…'),
-    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); anchor.focus(); if (cur) brushStudio(studio, cur, onPick, vector, anchor); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes');
+    vector ? null : h('button', { type: 'button', class: 'item', disabled: importingBrush, onclick: () => { closePopover(); void importBrushes(studio, onPick); } }, h('span', {}, '↓'), 'Import brush…'),
+    h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); anchor.focus(); if (cur) brushStudio(studio, cur, onPick, vector, anchor); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes', () => observer.disconnect());
 }
 
 export async function warmBrush(b: BrushSettings): Promise<void> {
   await Promise.all([b.tipImage && loadTip(b.tipImage), b.grainImage && loadGrain(b.grainImage)]);
 }
 
-function brushPreview(e: BrushEntry): HTMLImageElement {
-  const image = h('img', { alt: '', width: PREVIEW_W / 2, height: PREVIEW_H / 2 });
-  if (e.settings.tipImage || e.settings.grainImage) void warmBrush(e.settings).then(() => { if (image.isConnected) image.src = previewUrl(e); });
-  else image.src = previewUrl(e);
-  return image;
-}
-
 async function importBrushes(studio: Studio, onPick: (e: BrushEntry) => void): Promise<void> {
-  const file = await pickFile('.abr,.sut,.png,.jpg,.jpeg,.webp');
-  if (!file) return;
+  if (importingBrush) return;
+  importingBrush = true;
+  const status = h('div', { class: 'toast', role: 'status' }, 'Importing brushes…');
   try {
+    const file = await pickFile('.brush,.brushset,.abr,.sut,.png,.jpg,.jpeg,.webp');
+    if (!file) return;
+    document.body.append(status);
     const { entries, skipped, note } = await importBrushFile(file);
     if (!entries.length) throw new Error('This file contains no compatible brush tips.');
     await warmBrush(entries[0]!.settings);
@@ -122,6 +134,7 @@ async function importBrushes(studio: Studio, onPick: (e: BrushEntry) => void): P
     onPick(entries[0]!);
     toast(`Imported ${entries.length} ${entries.length === 1 ? 'brush' : 'brushes'} into My brushes.${skipped ? ` ${skipped} skipped.` : ''}${note ? ` ${note}` : ''}`, 6000);
   } catch (error) { toast(error instanceof Error ? error.message : 'Could not import this brush file.', 6500); }
+  finally { status.remove(); importingBrush = false; }
 }
 
 // ---------------------------------------------------------------------------------------------

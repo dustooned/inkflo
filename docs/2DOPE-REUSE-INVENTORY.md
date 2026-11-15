@@ -36,7 +36,7 @@ Legend: **LIFT** copy as is (no or sibling-only imports) · **CLUSTER** lift tog
 | `core/pen.ts` | 216 | none | no | LIFT | Pen input handling (check scope when copying). |
 | `core/quickshape.ts` | 677 | none | no | LIFT | Hold-to-snap line/arc/ellipse. Self-contained, has tests. |
 | `core/brushlib.ts` | 154 | brush, vectorstyle | no | ADAPT | Preset store; replace presets with the 10 in BRUSH-AND-INK §4. |
-| `io/brushimport.ts` | 744 | brush, zip | no | REFERENCE | Native brush import. **Clean-room risk:** it reads third-party brush formats. Do not ship under inkflo's rule 4 without a licence review. |
+| `io/brushimport.ts` | 744 | brush, zip | no | ADAPT (plist only) | Inkflo's `io/brushplist.ts` adapts 2Dope's own format reader at `2c8ae1f`. `io/procreatebrush.ts` maps settings into Inkflo's brush model and reads user-selected archives through BSD-licensed zip.js. Reference brush and paper files are external to the app. |
 | `io/brushstore.ts` | 44 | none | no | LIFT | User brush persistence. |
 
 **Gap, not in 2Dope:** panel-polygon clipped ink, the Pencil pass (blue, never exported), and

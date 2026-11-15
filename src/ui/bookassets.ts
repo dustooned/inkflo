@@ -4,6 +4,7 @@ import type { Studio } from '../app/studio';
 import type { Book, BookAsset } from '../doc/model';
 import { parseBookFile } from '../doc/schema';
 import { exportAssets, IMAGE_ACCEPT, importAssets, prepareAsset } from '../io/bookassets';
+import { makePaperAsset, PAPER_PRESETS } from '../io/paperassets';
 import { download, h, slug } from './dom';
 
 export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => void): void {
@@ -18,6 +19,15 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
   const imageInput = h('input', { type: 'file', accept: IMAGE_ACCEPT, multiple: true, 'aria-label': 'Add asset images' });
   const packInput = h('input', { type: 'file', accept: '.inkassets,.zip', 'aria-label': 'Import asset pack' });
   const other = h('select', { 'aria-label': 'Copy from book' }, h('option', { value: '' }, 'Choose another book'));
+  const paperPreset = h('select', { 'aria-label': 'Paper preset' }, PAPER_PRESETS.map(({ id, label }) => h('option', { value: id }, label)));
+  const addPaper = h('button', { class: 'btn', type: 'button', onclick: () => void task(async () => {
+    const preset = PAPER_PRESETS.find(({ id }) => id === paperPreset.value)!;
+    const page = book.pages.find(({ id }) => id === book.lastPageId) ?? book.pages[0]!;
+    const { asset, bytes } = await makePaperAsset(preset, page);
+    ensureOpen();
+    const count = await studio.addAssets([asset], new Map([[asset.key, bytes]]));
+    return count ? `Added ${asset.name} to this book.` : `${asset.name} is already in this book.`;
+  }) }, 'Add paper');
   const copy = h('button', { class: 'btn', type: 'button', disabled: true, onclick: () => void task(async () => {
     const head = await studio.store.getHead(other.value);
     if (!head) throw new Error('That book is unavailable.');
@@ -42,16 +52,22 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
     h('header', {}, h('h2', {}, 'Book assets'), h('p', { class: 'note' }, book.title)),
     h('div', { class: 'content' },
       h('div', { class: 'asset-actions' }, h('label', { class: 'field' }, 'Add images', imageInput), h('label', { class: 'field' }, 'Import asset pack', packInput)),
+      h('div', { class: 'asset-actions' }, h('label', { class: 'field' }, 'Paper preset', paperPreset), addPaper),
       h('div', { class: 'asset-actions' }, other, copy, pack), status, grid),
     h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Done')));
   async function task(run: () => Promise<string>): Promise<void> {
     if (busy || studio.book !== book) return;
     busy = true;
-    imageInput.disabled = packInput.disabled = copy.disabled = pack.disabled = true;
+    imageInput.disabled = packInput.disabled = copy.disabled = pack.disabled = paperPreset.disabled = addPaper.disabled = true;
     status.textContent = 'Working…';
     try { status.textContent = await run(); }
     catch (error) { status.textContent = error instanceof Error ? error.message : 'The asset operation failed.'; }
-    finally { busy = false; imageInput.disabled = packInput.disabled = false; copy.disabled = !other.value; if (dialog.open) render(); }
+    finally {
+      busy = false;
+      imageInput.disabled = packInput.disabled = paperPreset.disabled = addPaper.disabled = false;
+      copy.disabled = !other.value;
+      if (dialog.open) render();
+    }
   }
   function render(): void {
     const id = ++revision;

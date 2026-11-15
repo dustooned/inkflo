@@ -110,6 +110,10 @@ export function fromAbr(abr: Abr, name: string): { entries: BrushEntry[]; skippe
 export async function importBrushFile(file: File): Promise<BrushImport> {
   const ext = /\.([^.]+)$/.exec(file.name)?.[1]?.toLowerCase();
   const name = file.name.replace(/\.[^.]+$/, '');
+  if (ext === 'brush' || ext === 'brushset') {
+    const { importProcreate } = await import('./procreatebrush');
+    return importProcreate(file);
+  }
   if (file.size > LIMIT) throw new Error('Choose a brush file under 64 MB.');
   if (ext === 'abr') {
     const { readAbr } = await import('ag-psd');

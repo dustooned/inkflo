@@ -1,4 +1,5 @@
 // Vendored from 2Dope src/brush/raster.ts @ 707f793. Do not edit in place; see docs/2DOPE-REUSE-INVENTORY.md.
+// The image-tip resolution update is synchronized with 2Dope's 2026-11-15 brush-import patch.
 import { anySelected, maskCanvas } from './clip';
 import { symmetryCopies } from '../core/adjust';
 import type { StrokeRecord } from '../core/stroke';
@@ -89,7 +90,8 @@ export function loadTip(url: string): Promise<void> {
     img.onload = () => {
       // Inspect the source without transparent letterboxing: an opaque rectangular grayscale
       // tip still uses brightness, even though its final square sprite has transparent margins.
-      const scale = Math.min(TIP / img.width, TIP / img.height);
+      const res = Math.min(256, Math.max(TIP, img.width, img.height));
+      const scale = Math.min(res / img.width, res / img.height);
       const c = makeCanvas(Math.max(1, Math.round(img.width * scale)), Math.max(1, Math.round(img.height * scale)));
       const g = ctx2d(c);
       g.drawImage(img, 0, 0, c.width, c.height);
@@ -103,8 +105,8 @@ export function loadTip(url: string): Promise<void> {
         d.data[i + 3] = a;
       }
       g.putImageData(d, 0, 0);
-      const mask = makeCanvas(TIP, TIP);
-      ctx2d(mask).drawImage(c, (TIP - c.width) / 2, (TIP - c.height) / 2);
+      const mask = makeCanvas(res, res);
+      ctx2d(mask).drawImage(c, (res - c.width) / 2, (res - c.height) / 2);
       tipMasks.set(url, mask);
       resolve();
     };
@@ -125,13 +127,13 @@ export function imageTipSprite(url: string, color: string): HTMLCanvasElement | 
   const key = `${id}|${color}`;
   const hit = tipColored.get(key);
   if (hit) return hit;
-  if (tipColored.size > 600) tipColored.clear();
-  const c = makeCanvas(TIP, TIP);
+  if (tipColored.size >= 240) tipColored.clear();
+  const c = makeCanvas(mask.width, mask.height);
   const g = ctx2d(c);
   g.drawImage(mask, 0, 0);
   g.globalCompositeOperation = 'source-in';
   g.fillStyle = color;
-  g.fillRect(0, 0, TIP, TIP);
+  g.fillRect(0, 0, c.width, c.height);
   tipColored.set(key, c);
   return c;
 }

@@ -44,6 +44,7 @@ export function strokeStyle(brushId: string, w: number, pass: LinePass, dpi: num
   const k = dpi / REF_DPI;
   const brush = brushFor(brushId, pass);
   brush.size = w * dpi;
+  if (brush.grainRef !== undefined) brush.grainRef *= k;
   brush.taperStart *= k;
   brush.taperEnd *= k;
   if (!erase) brush.opacity *= PASS_STYLE[pass].opacity;

@@ -17,6 +17,7 @@
     "vitest": "^3.2.7"
   },
   "dependencies": {
+    "@zip.js/zip.js": "^2.25.0",
     "ag-psd": "^34.1.0",
     "sql.js": "^1.16.0"
   }

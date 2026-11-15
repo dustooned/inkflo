@@ -5,6 +5,23 @@ Where the app stands against [BUILD-HANDOFF.md](BUILD-HANDOFF.md). Updated 2026-
 Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-check is at
 `/selfcheck.html`. Checks: `npm test` (291 tests), `npx tsc --noEmit`, `npx vite build`.
 
+## Procreate brush import and paper assets, 2026-11-15
+
+- Draw → Brushes → Import brush now accepts `.brush` and `.brushset` up to 1 GiB.
+  The importer reads one brush's archive and images at a time. Embedded masks keep up to
+  256 px for tips and 512 px for grains. Native pressure curves, taper, grain depth, levels
+  and zoom are mapped where the raster engine has a corresponding setting. Standard round
+  references use equivalent engine tips, and the import notice identifies missing textures.
+- Assets → Paper preset creates reusable, page-shaped comic newsprint, cold press paper,
+  recycled kraft and thin riso textures. The patterns are generated from seeds. Local
+  Phantom Paper, LP Traditionalizer and Super Riso samples informed the reference study.
+- Chromium checks imported 328 presets, including 126 from the 857 MB Watercolor
+  Experience set, and exercised raster previews, saved paper assets and page export.
+  The real Comic Art archive inventory is recorded under REA evidence
+  `ev_346371ec0232b8624e5485119ade16754f634909a094e1165e907eeb1c3933dd`.
+  Physical Apple Pencil input and stroke-by-stroke comparison against Procreate remain
+  unverified.
+
 ## Milestones
 
 | M | State | What works | Not yet |
