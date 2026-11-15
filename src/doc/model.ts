@@ -152,9 +152,26 @@ export interface Stroke {
  * One colour fill, replayable (draw/fillkit.ts). A plain bucket is a seed point, colour and gap
  * closing; the optional fields are the fill family's other kinds and settings.
  */
+/** A colour gradient across a fill's area (the Colour tool's Gradient). Colours are hex or `transparent`. */
+export interface FillGradient {
+  kind: 'linear' | 'radial';
+  from: Pt;
+  to: Pt;
+  start: string;
+  end: string;
+  blend?: 'normal' | 'multiply' | 'screen';
+  /** 0–1 (absent = 1). */
+  opacity?: number;
+  /** Which area: enclosed by lines (default), the flat you start on, or a drawn outline. */
+  area?: 'lines' | 'colour' | 'lasso';
+  lasso?: Pt[];
+}
+
 export interface Fill {
   at: Pt;
   color: string;
+  /** A gradient fill: paints a blend across the area instead of one colour. */
+  gradient?: FillGradient;
   /** Gap closing in page units. */
   gap: number;
   /** Line alpha (1–254) at or above which a pixel is a wall; default 24. */

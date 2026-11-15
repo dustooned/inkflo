@@ -10,7 +10,7 @@ import { drawBackdrop } from './backdrop';
 import { drawComposition } from './composition';
 import { spreadButton } from './spread';
 import { openExport } from './exportdialog';
-import { glyphEl, icon } from './icons';
+import { glyphEl, icon, iconFor } from './icons';
 import { openManual } from './manual';
 import { MARK_EVENT } from '../render/marks';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
@@ -736,7 +736,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const label = v ? `${t.label}: ${v.label}` : t.label;
       const b = h('button', { class: 'tool', type: 'button', 'aria-pressed': String(t.id === mode.tool), 'aria-haspopup': t.variants ? 'menu' : null,
         title: `${label}${t.key ? ` (${t.key.toUpperCase()})` : ''}${t.variants ? ' · right-click for options' : ''}` },
-        glyphEl(t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
+        // the chosen variant's own icon when it has one (each eraser shows what it erases)
+        glyphEl(v && iconFor(v.label) ? v.label : t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
       b.setAttribute('aria-label', label);
       b.addEventListener('click', () => {
         if (t.variants && mode.tool === t.id) flyout(t, b);

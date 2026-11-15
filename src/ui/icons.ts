@@ -55,6 +55,15 @@ export const ICONS = {
   smudge: P('M4 15c2.5-3 4.5-3 6.5 0s4 3 6.5 0') + P('M7 9c2.5-3 4.5-3 6.5 0s4 3 6.5 0'),
   eraser: P('M9 19l-4.5-4.5L14 5l6 6-8 8z') + P('M9.5 9.5l6 6M9 19h11'),
   pencil: P('M4 20l1.2-4.2L16 5l3 3L8.2 18.8z') + P('M14 7l3 3M5.2 15.8l3 3'),
+  // erasers: one small eraser block, marked with what it takes away
+  eraseInk: P('M7 14.5L3.5 11 11 3.5l3.5 3.5z') + P('M7.25 7.25l3.5 3.5') + P('M17.5 12.5c-2 2.6-3 4.1-3 5.4a3 3 0 0 0 6 0c0-1.3-1-2.8-3-5.4z').replace('<path', '<path fill="currentColor"'),
+  erasePencil: P('M7 14.5L3.5 11 11 3.5l3.5 3.5z') + P('M7.25 7.25l3.5 3.5') + P('M13 21l.8-2.8 5.4-5.4 2 2-5.4 5.4z') + P('M17.6 14.4l2 2'),
+  eraseVector: P('M7 14.5L3.5 11 11 3.5l3.5 3.5z') + P('M7.25 7.25l3.5 3.5') + P('M13.5 20.5c1.5-5 4-6.5 7-6') + R(12.3, 19.3, 2.4, 2.4, 0.4) + R(19.8, 13.3, 2.4, 2.4, 0.4),
+  eraseTone: P('M7 14.5L3.5 11 11 3.5l3.5 3.5z') + P('M7.25 7.25l3.5 3.5') + DOT(14.5, 15) + DOT(18, 15) + DOT(21, 15) + DOT(14.5, 18.5) + DOT(18, 18.5) + DOT(21, 18.5) + DOT(16.2, 21.5, 1) + DOT(19.5, 21.5, 1),
+  // tone: brush laying dots that thin out behind it
+  paintTone: P('M21 3l-7.5 7.5') + P('M12 9l3 3') + P('M12 9c-2.6.4-4.4 2-5 4.5l-.8 3.3 3.3-.8c2.5-.6 4.1-2.4 4.5-5') + DOT(4, 7, 1.4) + DOT(7.5, 4, 1.2) + DOT(3.5, 11.5, 1.1) + DOT(10.5, 3, 0.9) + DOT(3.2, 15.5, 0.8),
+  // colour gradient: a swatch that darkens across (lines closing up)
+  gradient: R(3.5, 5, 17, 14, 2) + P('M8 5v14M11.5 5v14M14 5v14M16 5v14M17.6 5v14M19 5v14'),
   clone: C(9, 9, 4.5) + C(15, 15, 4.5) + DOT(15, 15),
   vpen: P('M12 3l5 8-5 10-5-10z') + C(12, 11, 1.6) + P('M12 3v6.4'),
   vedit: P('M4 18C8 18 8 6 12 6s4 12 8 12') + R(10.3, 4.3, 3.4, 3.4, 0.5),
@@ -136,8 +145,8 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   // desks
   Script: 'script', Layout: 'layout', Draw: 'draw', Caption: 'caption', Print: 'print',
   // draw tools and variants
-  Brush: 'brush', Smudge: 'smudge', Eraser: 'eraser', 'Erase ink': 'eraser', 'Erase pencil': 'eraser',
-  'Erase vector lines': 'eraser', Pencil: 'pencil', Clone: 'clone', 'Vector pen': 'vpen', 'Edit lines': 'vedit',
+  Brush: 'brush', Smudge: 'smudge', Eraser: 'eraser', 'Erase ink': 'eraseInk', 'Erase pencil': 'erasePencil',
+  'Erase vector lines': 'eraseVector', 'Erase painted tone': 'eraseTone', 'Paint tone': 'paintTone', Gradient: 'gradient', Pencil: 'pencil', Clone: 'clone', 'Vector pen': 'vpen', 'Edit lines': 'vedit',
   'Pull and select': 'vedit', 'Edit points': 'nodes', 'Move line': 'moveLine', Thicken: 'thicken', Thin: 'thin',
   'Comic lines': 'comicLines', 'Focus lines': 'comicLines', 'Speed lines': 'speedLines', Colour: 'fill',
   Bucket: 'fill', 'Drag fill': 'dragFill', 'Enclose and fill': 'enclose', 'Fill leftovers': 'leftovers',

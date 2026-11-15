@@ -1,9 +1,10 @@
 import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
+import { DEFAULT_TONE_SCREEN, openLayerTone } from '../layertone';
 import { DEFAULT_BRUSH, entry, PASS_STYLE, withGPenPressure, type BrushEntry, type GPenPressure } from '../../draw/brushes';
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
 import { smoothStroke } from '../../engine/brush/smoothing';
-import { constrainInkShape, editInkShape, inkPressureProfile, recognizeInkShape, shapeName, type InkShape } from '../../draw/quickcurve';
+import { constrainInkShape, editInkShape, inkPressureProfile, inkShapeOutline, recognizeInkShape, shapeName, type InkShape } from '../../draw/quickcurve';
 import { shapeStrokePoints } from '../../draw/shapeedit';
 import { brushPicker, brushStudio, warmBrush } from '../brushui';
 import { brushControl, clampToolValue } from '../brushcontrols';
@@ -62,6 +63,9 @@ interface InkPrefs {
   vectorStabilize?: number;
   /** How hard the Vector pen thins out points as each line lands (missing = light). */
   vectorPoints?: PointsLevel;
+  /** Paint tone: its own brush and the tone it lays (0–1). */
+  toneBrush?: string;
+  toneDensity?: number;
   gPenPressure?: GPenPressure;
   symmetry?: SymmetryMode;
   sizes: Record<string, number>;
@@ -151,14 +155,23 @@ const state = {
   /** Closure check: open line ends + what a tap would fill. */
   check: false,
 };
-type FillVariant = 'bucket' | 'drag' | 'lasso' | 'leftover' | 'flats';
+type FillVariant = 'bucket' | 'drag' | 'lasso' | 'leftover' | 'flats' | 'gradient';
 const FILL_HINT: Record<FillVariant, string> = {
   bucket: 'Tap an area. Drag sideways before lifting to tighten or loosen what counts as a line.',
   drag: 'Sweep across areas: each one you cross fills.',
   lasso: 'Draw a loop: every closed area inside it fills (hair, lace, crowds).',
   leftover: 'Scrub over specks the fill missed: they take the colour around them.',
   flats: 'Click a panel: every closed area gets its own flat colour, ready to recolour.',
+  gradient: 'Drag across an area: the gradient runs from where you start to where you let go.',
 };
+type GradArea = 'lines' | 'colour' | 'lasso' | 'panel';
+/** Gradient kinds ready to use: the "types" in the inspector. */
+const GRADIENT_TYPES: { name: string; note: string; set: Partial<{ end: string; blend: 'normal' | 'multiply' | 'screen'; opacity: number }> }[] = [
+  { name: 'Fade to clear', note: 'Colour fading out', set: { end: 'transparent', blend: 'normal', opacity: 1 } },
+  { name: 'Two colours', note: 'One colour into another', set: { end: '#3F6C9E', blend: 'normal', opacity: 1 } },
+  { name: 'Shadow', note: 'Darkens the flat, keeps its hue', set: { end: 'transparent', blend: 'multiply', opacity: 0.6 } },
+  { name: 'Light', note: 'Lightens the flat', set: { end: 'transparent', blend: 'screen', opacity: 0.7 } },
+];
 /** The selected layer per page, for the session. */
 const activeLayer = new Map<string, string>();
 const targetByPage = new Map<string, LayerTarget>();
@@ -213,6 +226,20 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   let vdrag: { layerId: string; before: Stroke[]; index: number; grabbed: Stroke; grab: number; from: Pt; moved: boolean; kind: 'pull' | 'move' } | null = null;
   let vbrush: { layerId: string; before: Stroke[]; last: Pt } | null = null;
   let verase: Pt[] | null = null;
+  /** Vector eraser QuickShape: the snapped shape (layer pixels) and where the pen held. */
+  let veraseShape: { shape: InkShape; grab: Pt; hold: Pt | null; timer: number } | null = null;
+  /** True when the held eraser path snapped to a shape. */
+  const veraseSnap = (): boolean => {
+    if (!verase || verase.length < 4 || !veraseShape || veraseShape.hold === null) return false;
+    const shape = recognizeInkShape(verase.map((q) => ({ x: q.x * dpi, y: q.y * dpi })));
+    if (!shape) return false;
+    const last = verase[verase.length - 1]!;
+    veraseShape = { ...veraseShape, shape, grab: { x: last.x * dpi, y: last.y * dpi } };
+    verase = inkShapeOutline(shape, Math.max(1, dpi / 150)).map((q) => ({ x: q.x / dpi, y: q.y / dpi }));
+    toast(`${shapeName(shape)} · drag to adjust`, 1400);
+    ctx.request();
+    return true;
+  };
   /** The selected vector line (Edit lines). */
   let vsel: { layerId: string; index: number } | null = null;
   let selectedNode: number | null = null;
@@ -241,15 +268,18 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   };
 
   const eraseType = (): LayerType => (variantOf(mode, 'eraser') === 'pencil' ? 'pencil' : 'ink');
-  const sizeTool = (): SizedTool | null => (mode.tool === 'vpen' ? 'ink' : mode.tool === 'pencil' || mode.tool === 'ink' || mode.tool === 'eraser' ? mode.tool : null);
+  /** Paint tone, or the eraser on tone: both work on a painted tone layer (shown as dots). */
+  const toneStroke = () => mode.tool === 'tonebrush' || (mode.tool === 'eraser' && variantOf(mode, 'eraser') === 'tone');
+  const toneDensity = () => Math.max(0.05, Math.min(1, ink.toneDensity ?? 0.3));
+  const sizeTool = (): SizedTool | null => (mode.tool === 'vpen' || mode.tool === 'tonebrush' ? 'ink' : mode.tool === 'pencil' || mode.tool === 'ink' || mode.tool === 'eraser' ? mode.tool : null);
   /** The brush slot a tool uses: the vector pen draws with the ink brush (as outlines). */
-  const brushTool = (): LinePass | null => (mode.tool === 'vpen' ? 'ink' : mode.tool === 'pencil' || mode.tool === 'ink' ? mode.tool : null);
+  const brushTool = (): LinePass | null => (mode.tool === 'vpen' || mode.tool === 'tonebrush' ? 'ink' : mode.tool === 'pencil' || mode.tool === 'ink' ? mode.tool : null);
   const vectorErase = () => mode.tool === 'eraser' && variantOf(mode, 'eraser') === 'vector';
   const currentBrush = (t: LinePass): BrushEntry => {
-    const e = entry(mode.tool === 'vpen' ? ink.vectorBrush ?? '2dope-vector-ink' : ink.brush[t]);
+    const e = entry(mode.tool === 'vpen' ? ink.vectorBrush ?? '2dope-vector-ink' : mode.tool === 'tonebrush' ? ink.toneBrush ?? 'maru-pen' : ink.brush[t]);
     return withGPenPressure(e ?? entry(DEFAULT_BRUSH[t])!, ink.gPenPressure ?? 'balanced');
   };
-  const brushKey = (t: SizedTool) => t === 'eraser' ? 'eraser' : (mode.tool === 'vpen' ? 'vector' : t) + ':' + currentBrush(t).id;
+  const brushKey = (t: SizedTool) => t === 'eraser' ? 'eraser' : (mode.tool === 'vpen' ? 'vector' : mode.tool === 'tonebrush' ? 'tone' : t) + ':' + currentBrush(t).id;
   const sizeIn = (t: SizedTool) => {
     const saved = ink.sizes[brushKey(t)];
     const base = t === 'eraser' ? 0.09 : currentBrush(t).w;
@@ -274,6 +304,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   const stabilizeOf = (t: LinePass): number => (mode.tool === 'vpen' ? ink.vectorStabilize : ink.stabilize[t]) ?? currentBrush(t).settings.smoothing;
   function pickBrush(t: LinePass, e: BrushEntry): void {
     if (mode.tool === 'vpen') { ink.vectorBrush = e.id; delete ink.vectorStabilize; }
+    else if (mode.tool === 'tonebrush') ink.toneBrush = e.id;
     else { ink.brush[t] = e.id; delete ink.stabilize[t]; }
     saveInk();
     ctx.chrome();
@@ -440,6 +471,30 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
    * Where the next mark goes. Returns the layer id and whether a layer was just created (so the
    * mark and the new layer combine into one undo step), or a reason it can't draw.
    */
+  /** The painted tone layer in the panel under the pen (made, shown as tone, when painting starts). */
+  function resolveTone(p: Pt, create: boolean): { layerId: string; created: boolean } | string {
+    if (target === 'layer') return resolve(p, 'tone', create);
+    const group = groupAt(page, ctx.panels(), p);
+    if (group.locked || !group.visible) return `${groupLabel(page, ctx.panels(), group)} is ${group.locked ? 'locked' : 'hidden'}.`;
+    const existing = group.layers.find((l) => l.type === 'tone' && !l.screenTone && !l.vector);
+    if (existing) {
+      if (existing.locked) return `“${existing.name}” in ${groupLabel(page, ctx.panels(), group)} is locked.`;
+      if (!existing.visible) return `“${existing.name}” in ${groupLabel(page, ctx.panels(), group)} is hidden.`;
+      return { layerId: existing.id, created: false };
+    }
+    if (!create) return `No painted tone in ${groupLabel(page, ctx.panels(), group)} to erase.`;
+    const layer = newLayer('tone');
+    layer.name = 'Painted tone';
+    layer.fillRef = false;
+    layer.asTone = { ...DEFAULT_TONE_SCREEN };
+    const gid = group.id;
+    studio.editPage(page, 'New tone layer', ['groups'], (pg) => {
+      const g = pg.groups.find((x) => x.id === gid)!;
+      g.layers.splice(insertIndex(g, 'tone'), 0, layer);
+    });
+    return { layerId: layer.id, created: true };
+  }
+
   function resolve(p: Pt, type: LayerType, create: boolean, vector = false): { layerId: string; created: boolean } | string {
     if (target === 'layer') {
       const a = active();
@@ -486,26 +541,37 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function colourControls(fill: boolean): HTMLElement[] {
     const name = fill ? 'Fill colour' : 'Ink colour';
-    const input = h('input', { type: 'color', value: fill ? state.color : ink.color, 'aria-label': name });
+    const hex = (c: string) => (/^#[0-9a-f]{6}$/i.test(c) ? c : '#ffffff');
+    const input = h('input', { type: 'color', value: hex(fill ? state.color : ink.color), 'aria-label': name });
     input.addEventListener('input', () => {
       if (fill) state.color = input.value;
-      else { ink.color = input.value; saveInk(); }
+      else { ink.color = input.value; inkClear = false; saveInk(); ctx.chrome(); }
     });
-    return [h('label', { class: 'mini' }, name, input),
+    // the transparent colour: painting with it erases in the brush's own shape
+    const clearBtn = fill || mode.tool === 'vpen' ? null : h('button', { type: 'button', class: 'swatch-clear', 'aria-pressed': String(inkClear), 'aria-label': 'Transparent colour: paint to erase', title: 'Transparent colour: the brush erases, in its own shape', onclick: () => { inkClear = !inkClear; ctx.chrome(); } });
+    return [h('label', { class: 'mini' }, name, input), ...(clearBtn ? [clearBtn] : []),
       h('button', { type: 'button', class: 'btn', 'aria-pressed': String(pickingColor), onclick: () => { pickingColor = !pickingColor; ctx.chrome(); ctx.request(); } }, pickingColor ? 'Tap the canvas' : 'Eyedropper')];
   }
+  /** Colour gradient settings (session) and the drag / area being drawn. */
+  const grad = { kind: 'linear' as 'linear' | 'radial', start: '#3F6C9E', end: 'transparent', blend: 'normal' as 'normal' | 'multiply' | 'screen', opacity: 1, area: 'lines' as GradArea };
+  let gradDrag: { from: Pt; to: Pt } | null = null;
+  let gradLasso: Pt[] | null = null;
   let t0 = 0;
   let createdForStroke = false;
+  /** The transparent colour is chosen for Brush, Pencil and Paint tone (they erase, CSP-style). */
+  let inkClear = false;
 
   function beginStroke(p: Pt, e: PointerEvent): void {
     const tool = sizeTool()!;
-    const erase = tool === 'eraser';
+    // painting with the transparent colour erases on the tool's own layer, in its brush's shape
+    const clearing = inkClear && tool !== 'eraser' && mode.tool !== 'vpen';
+    const erase = tool === 'eraser' || clearing;
     const vector = mode.tool === 'vpen';
-    const type: LayerType = erase ? eraseType() : tool;
+    const type: LayerType = tool === 'eraser' ? eraseType() : clearing ? (tool as LayerType) : tool;
     const { guide, snapGuide } = prefs();
     const snap = !erase && snapGuide ? nearestGuide(guide, page.widthIn, page.heightIn, p, 8 / ctx.scale()) : undefined;
     if (snap) p = snap.point;
-    const target = resolve(p, type, !erase, vector);
+    const target = toneStroke() ? resolveTone(p, !erase) : resolve(p, type, !erase, vector);
     if (typeof target === 'string') {
       toast(target);
       return;
@@ -518,10 +584,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     p = mapPanelPoint(p, inverse);
     // the brush's own pass (pencil blue / ink black), recorded when it differs from the layer's
     const pass: LinePass = erase ? passForType(layer.type) : currentBrush(tool as LinePass).pass;
-    const brushId = erase ? DEFAULT_BRUSH[pass] : studio.brushId(currentBrush(tool as LinePass));
+    const brushId = clearing ? studio.brushId(currentBrush(tool as LinePass)) : erase ? DEFAULT_BRUSH[pass] : studio.brushId(currentBrush(tool as LinePass));
     const w = sizeIn(tool);
     const opacity = toolOpacity(tool);
-    const color = !erase && pass === 'ink' && ink.color !== PASS_STYLE.ink.color ? ink.color : undefined;
+    // Paint tone lays a grey whose darkness is the tone: 30% tone prints as 30% dots
+    const toneGrey = mode.tool === 'tonebrush' ? '#' + Math.round(255 * (1 - toneDensity())).toString(16).padStart(2, '0').repeat(3) : undefined;
+    const color = toneGrey ?? (!erase && pass === 'ink' && ink.color !== PASS_STYLE.ink.color ? ink.color : undefined);
     const seed = (Date.now() % 1_000_000) * 100 + (seedCounter++ % 100);
     const record: StrokeRecord = { id: `s${seed}`, ...strokeStyle(brushId, w, pass, dpi, erase, opacity, color), seed, points: [] };
     const sym = ink.symmetry;
@@ -576,8 +644,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       }
     }
     if (live.vector) ctx.request();
-    // QuickShape: hold still at the end of a freehand stroke
-    if (ink.quickShape && !live.assist.active && !live.stroke.erase) {
+    // QuickShape: hold still at the end of a freehand stroke (erasers too)
+    if (ink.quickShape && !live.assist.active) {
       const hold = live.holdAt;
       if (!hold || Math.hypot(sp.x - hold.x, sp.y - hold.y) * ctx.scale() / dpi >= 2) {
         live.holdAt = sp;
@@ -830,6 +898,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   function fillDown(p: Pt, e: PointerEvent): void {
     const v = fillVariant();
     if (v === 'flats') { sweep = [p]; return; }
+    if (v === 'gradient') {
+      // Lasso area: draw the area first, then drag the direction inside it
+      if (grad.area === 'lasso' && !gradLasso) { sweep = [p]; return; }
+      gradDrag = { from: p, to: p };
+      return;
+    }
     if (v === 'bucket') {
       const t = fillTarget(p);
       if (!t) return;
@@ -840,6 +914,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   function fillMove(p: Pt, e: PointerEvent): void {
+    if (gradDrag) { gradDrag.to = p; ctx.request(); return; }
     if (pour) {
       const dx = e.clientX - pour.x0;
       if (Math.abs(dx) < 6 && !preview) return;
@@ -861,6 +936,20 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   function fillUp(): void {
+    if (gradDrag) {
+      const d = gradDrag;
+      gradDrag = null;
+      commitGradient(d.from, d.to);
+      ctx.request();
+      return;
+    }
+    if (sweep && fillVariant() === 'gradient') {
+      const path = sweep;
+      sweep = null;
+      if (path.length >= 3) { gradLasso = path; ctx.hint('Area set. Now drag the gradient\u2019s direction inside it.', { timeout: 2600 }); }
+      ctx.request();
+      return;
+    }
     if (pour) {
       const pr = pour;
       pour = null;
@@ -911,6 +1000,64 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     ctx.request();
   }
 
+  /** Lay a colour gradient from `from` to `to` over the chosen area (one undo step). */
+  function commitGradient(from: Pt, to: Pt): void {
+    if (Math.hypot(to.x - from.x, to.y - from.y) * ctx.scale() < 8) { toast('Drag across the area to set the gradient\u2019s direction.'); return; }
+    const t = fillTarget(from);
+    if (!t) return;
+    const at = pointInLayer(from, t.layerId);
+    let area: 'lines' | 'colour' | 'lasso' = grad.area === 'panel' ? 'lasso' : grad.area;
+    let lasso: Pt[] | undefined;
+    if (grad.area === 'lasso') lasso = gradLasso?.map((q) => pointInLayer(q, t.layerId));
+    if (grad.area === 'panel') {
+      const panel = panelAt(ctx.panels(), from);
+      lasso = (panel?.source ?? panel)?.pts.map((q) => ({ ...q }));
+    }
+    if (area === 'lasso' && (!lasso || lasso.length < 3)) { area = 'lines'; lasso = undefined; }
+    const fill: Fill = {
+      ...baseFill(at),
+      color: grad.start === 'transparent' ? grad.end : grad.start,
+      gradient: {
+        kind: grad.kind, from: at, to: pointInLayer(to, t.layerId), start: grad.start, end: grad.end,
+        ...(grad.blend !== 'normal' ? { blend: grad.blend } : {}), ...(grad.opacity < 1 ? { opacity: grad.opacity } : {}),
+        area, ...(lasso ? { lasso } : {}),
+      },
+    };
+    const n = commitFills(t.layerId, [fill], t.created, 'Gradient');
+    if (!n) toast(grad.area === 'colour' ? 'Start the drag on a flat colour (or choose Inside lines).' : 'Nothing to fill there: start inside an area.');
+    if (grad.area === 'lasso') gradLasso = null;
+  }
+
+  const gradShape = () => seg<'linear' | 'radial'>([{ id: 'linear', label: 'Linear' }, { id: 'radial', label: 'Radial' }], grad.kind, (v) => { grad.kind = v; ctx.chrome(); }, 'Gradient shape');
+  const gradAreaSeg = () => seg<GradArea>([{ id: 'lines', label: 'Inside lines' }, { id: 'colour', label: 'Same colour' }, { id: 'lasso', label: 'Lasso' }, { id: 'panel', label: 'Panel' }], grad.area, (v) => { grad.area = v; gradLasso = null; ctx.chrome(); ctx.request(); }, 'Gradient area');
+
+  function gradientControls(): HTMLElement[] {
+    const colour = (label: string, value: string, set: (v: string) => void) => {
+      const input = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(value) ? value : '#ffffff', 'aria-label': label });
+      input.addEventListener('input', () => { set(input.value); });
+      input.addEventListener('change', () => ctx.chrome());
+      const clear = h('button', { type: 'button', class: 'swatch-clear', 'aria-pressed': String(value === 'transparent'), 'aria-label': label + ': transparent', title: label + ': transparent', onclick: () => { set('transparent'); ctx.chrome(); } });
+      return h('span', { class: 'mini' }, label, input, clear);
+    };
+    return [gradShape(), colour('From', grad.start, (v) => (grad.start = v)), colour('To', grad.end, (v) => (grad.end = v)), gradAreaSeg()];
+  }
+
+  function gradientInspector(): HTMLElement {
+    const opacity = slider('Opacity', 5, 100, 5, Math.round(grad.opacity * 100), (v) => `${v}%`, (v) => { grad.opacity = v / 100; });
+    const note = grad.area === 'colour' ? 'Same colour follows the flat you start on, so a shadow stays on the jacket and off the sky.'
+      : grad.area === 'lasso' ? (gradLasso ? 'Area drawn: drag the direction inside it.' : 'Draw the area first, then drag the direction.')
+        : grad.area === 'panel' ? 'Covers the whole panel you start in.' : 'Fills the area the line art encloses, like the bucket.';
+    return h('div', { class: 'sec stack gradient-settings' },
+      h('h4', {}, 'Gradient'),
+      h('div', { class: 'tone-presets', role: 'group', 'aria-label': 'Gradient types' }, GRADIENT_TYPES.map((t) =>
+        h('button', { type: 'button', class: 'btn', title: t.note, onclick: () => { Object.assign(grad, t.set); ctx.chrome(); } }, t.name))),
+      h('div', { class: 'field' }, 'Shape', gradShape()),
+      h('div', { class: 'field' }, 'Area', gradAreaSeg()),
+      h('div', { class: 'field' }, 'Blend', seg<'normal' | 'multiply' | 'screen'>([{ id: 'normal', label: 'Normal' }, { id: 'multiply', label: 'Shadow' }, { id: 'screen', label: 'Light' }], grad.blend, (v) => { grad.blend = v; ctx.chrome(); }, 'Gradient blend')),
+      opacity,
+      h('p', { class: 'note', style: 'margin:0' }, note));
+  }
+
   function autoFlats(p: Pt): void {
     const panel = panelAt(ctx.panels(), p);
     const t = fillTarget(p);
@@ -947,6 +1094,21 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (panel) applyPanelTransform(g, panel, s);
       g.imageSmoothingEnabled = false;
       g.drawImage(preview.img, (preview.x0 / dpi) * s, (preview.y0 / dpi) * s, (preview.img.width / dpi) * s, (preview.img.height / dpi) * s);
+      g.restore();
+    }
+    if (gradLasso && gradLasso.length > 2 && fillVariant() === 'gradient') {
+      g.save();
+      g.strokeStyle = '#2F6F7E'; g.lineWidth = 2; g.setLineDash([6, 4]);
+      g.beginPath(); gradLasso.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s))); g.closePath(); g.stroke();
+      g.restore();
+    }
+    if (gradDrag) {
+      const { from, to } = gradDrag;
+      g.save();
+      g.strokeStyle = '#2F6F7E'; g.fillStyle = '#FFFDF7'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(from.x * s, from.y * s); g.lineTo(to.x * s, to.y * s); g.stroke();
+      if (grad.kind === 'radial') { g.setLineDash([5, 4]); g.beginPath(); g.arc(from.x * s, from.y * s, Math.hypot(to.x - from.x, to.y - from.y) * s, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
+      for (const q of [from, to]) { g.beginPath(); g.arc(q.x * s, q.y * s, 6, 0, Math.PI * 2); g.fill(); g.stroke(); }
       g.restore();
     }
     if (sweep && sweep.length > 1) {
@@ -1290,6 +1452,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         return;
       }
       verase = [p];
+      veraseShape = ink.quickShape ? { shape: { kind: 'line', a: { x: 0, y: 0 }, b: { x: 0, y: 0 } }, grab: { x: 0, y: 0 }, hold: p, timer: 0 } : null;
       return;
     }
     const v = editVariant();
@@ -1346,9 +1509,21 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   function vectorMove(p: Pt): void {
+    if (verase && veraseShape && veraseShape.hold === null) {
+      // snapped: the pen adjusts the shape, as with a brush
+      const shape = editInkShape(veraseShape.shape, veraseShape.grab, { x: p.x * dpi, y: p.y * dpi });
+      verase = inkShapeOutline(shape, Math.max(1, dpi / 150)).map((q) => ({ x: q.x / dpi, y: q.y / dpi }));
+      ctx.request();
+      return;
+    }
     if (verase) {
       const last = verase[verase.length - 1]!;
       if (Math.hypot(p.x - last.x, p.y - last.y) > 0.01) verase.push(p);
+      if (veraseShape && veraseShape.hold && Math.hypot(p.x - veraseShape.hold.x, p.y - veraseShape.hold.y) * ctx.scale() >= 2) {
+        veraseShape.hold = p;
+        clearTimeout(veraseShape.timer);
+        veraseShape.timer = window.setTimeout(() => { if (veraseShape && veraseSnap()) veraseShape.hold = null; }, QUICKSHAPE_MS);
+      }
       ctx.request();
       return;
     }
@@ -1371,6 +1546,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (verase) {
       const path = verase;
       verase = null;
+      if (veraseShape) clearTimeout(veraseShape.timer);
+      veraseShape = null;
       const r = sizeIn('eraser') / 2;
       let n = 0;
       for (const layer of editableVectors()) {
@@ -1413,6 +1590,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   /** Change the selected vector line as one undo step. */
   function cancelVector(): void {
     const edit = vdrag ?? vbrush;
+    if (veraseShape) clearTimeout(veraseShape.timer);
+    veraseShape = null;
     vdrag = vbrush = verase = null;
     if (edit) {
       const layer = findLayer(page, edit.layerId)?.layer;
@@ -1519,6 +1698,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         { id: 'ink', label: 'Erase ink', glyph: '⌫' },
         { id: 'pencil', label: 'Erase pencil', glyph: '⌦' },
         { id: 'vector', label: 'Erase vector lines', glyph: '⌧' },
+        { id: 'tone', label: 'Erase painted tone', glyph: '░' },
       ] },
       { id: 'pencil', label: 'Pencil', glyph: '✏', key: 'p', group: 'paint' },
       { id: 'clone', label: 'Clone', glyph: '⧉', group: 'paint' },
@@ -1540,8 +1720,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         { id: 'lasso', label: 'Enclose and fill', glyph: '◌' },
         { id: 'leftover', label: 'Fill leftovers', glyph: '⁘' },
         { id: 'flats', label: 'Auto flats', glyph: '▦' },
+        { id: 'gradient', label: 'Gradient', glyph: '◧' },
       ] },
       { id: 'tone', label: 'Screentone', glyph: '▦', key: 't', group: 'colour' },
+      { id: 'tonebrush', label: 'Paint tone', glyph: '░', key: 'y', group: 'colour' },
       { id: 'selection', label: 'Select lines', glyph: '⬚', key: 'm', group: 'edit', variants: [...MARQUEE_SHAPES] },
       { id: 'pixels', label: 'Transform', glyph: '↗', key: 'r', group: 'edit', variants: [...MARQUEE_SHAPES] },
       { id: 'image', label: 'Position image', glyph: '▧', group: 'image' },
@@ -1564,7 +1746,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         void warmBrush(cur.settings);
         pick.addEventListener('click', () => brushPicker(pick, studio, bt, cur.id, (e) => pickBrush(bt, e), mode.tool === 'vpen'));
         bar.append(pick, h('button', { class: 'icon', type: 'button', title: 'Brush Studio: edit this brush', 'aria-label': 'Edit brush', onclick: () => brushStudio(studio, cur, (e) => pickBrush(bt, e), mode.tool === 'vpen') }, '✎'));
-        if (hasInkColor) bar.append(...colourControls(false));
+        if (hasInkColor && mode.tool !== 'tonebrush') bar.append(...colourControls(false));
+        // Pencil and Paint tone have no ink colour, but can paint with the transparent colour too
+        else if (mode.tool === 'pencil' || mode.tool === 'tonebrush') bar.append(h('button', { type: 'button', class: 'swatch-clear', 'aria-pressed': String(inkClear), 'aria-label': 'Transparent colour: paint to erase', title: 'Transparent colour: the brush erases, in its own shape', onclick: () => { inkClear = !inkClear; ctx.chrome(); } }));
       }
       showBrushControls(sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null));
       if (pixelBrush()) bar.append(
@@ -1621,7 +1805,18 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         }
         bar.append(h('span', { class: 'hint' }, `Uses ${currentBrush('ink').name} at the ink size.`));
       }
-      if (mode.tool === 'eraser' && target === 'auto') bar.append(seg([{ id: 'ink', label: 'Ink' }, { id: 'pencil', label: 'Pencil' }, { id: 'vector', label: 'Vector' }], variantOf(mode, 'eraser') || 'ink', (v) => ctx.setVariant('eraser', v), 'Erase on'));
+      if (mode.tool === 'eraser' && target === 'auto') bar.append(seg([{ id: 'ink', label: 'Ink' }, { id: 'pencil', label: 'Pencil' }, { id: 'vector', label: 'Vector' }, { id: 'tone', label: 'Tone' }], variantOf(mode, 'eraser') || 'ink', (v) => ctx.setVariant('eraser', v), 'Erase on'));
+      if (mode.tool === 'tonebrush') {
+        bar.append(
+          slider('Tone', 5, 100, 5, Math.round(toneDensity() * 100), (v) => `${v}%`, (v) => { ink.toneDensity = v / 100; }, () => { saveInk(); ctx.chrome(); }),
+          h('button', { class: 'btn', type: 'button', title: 'Dot shape, lines per inch and angle for this panel’s painted tone', onclick: () => {
+            const a = active();
+            const layer = a && a.layer.type === 'tone' && !a.layer.screenTone ? a.layer : page.groups.flatMap((g) => g.layers).find((l) => l.type === 'tone' && !l.screenTone && l.asTone);
+            if (layer) openLayerTone(studio, page, art, layer.id, () => { ctx.chrome(); ctx.request(); });
+            else toast('Paint some tone first; then set its dots here.');
+          } }, 'Dots…'),
+          h('span', { class: 'hint' }, 'Paints true halftone: the tone sets the dots, a soft brush fades them. Erase with Eraser → Tone.'));
+      }
       if (vectorErase()) {
         bar.append(seg<VectorErase>([{ id: 'intersection', label: 'Touched part' }, { id: 'crossing', label: 'To crossings' }, { id: 'whole', label: 'Whole line' }], vstate.erase, (v) => { vstate.erase = v; ctx.chrome(); }, 'Vector erase'),
           h('span', { class: 'hint' }, vstate.erase === 'crossing' ? 'Cleans overshoots: removes the piece up to the nearest crossing lines.' : vstate.erase === 'whole' ? 'Removes every line the eraser touches.' : 'Cuts only where the eraser crosses a line.'));
@@ -1659,12 +1854,14 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       }
       if (mode.tool === 'fill') {
         const swatches = h('div', { class: 'swatches', role: 'group', 'aria-label': 'Fill colour' },
-          PALETTE.map((c) => h('button', { type: 'button', 'aria-label': c, 'aria-pressed': String(c === state.color), style: `background:${c}`, onclick: () => { state.color = c; ctx.chrome(); } })));
+          PALETTE.map((c) => h('button', { type: 'button', 'aria-label': c, 'aria-pressed': String(c === state.color), style: `background:${c}`, onclick: () => { state.color = c; ctx.chrome(); } })),
+          h('button', { type: 'button', class: 'swatch-clear', 'aria-label': 'Transparent: the fill clears its area', title: 'Transparent: the fill clears its area', 'aria-pressed': String(state.color === 'transparent'), onclick: () => { state.color = 'transparent'; ctx.chrome(); } }));
         const fv = fillVariant();
         bar.append(
-          seg<FillVariant>([{ id: 'bucket', label: 'Bucket' }, { id: 'drag', label: 'Drag' }, { id: 'lasso', label: 'Enclose' }, { id: 'leftover', label: 'Leftovers' }, { id: 'flats', label: 'Flats' }], fv, (v) => ctx.setVariant('fill', v), 'Fill kind'),
+          seg<FillVariant>([{ id: 'bucket', label: 'Bucket' }, { id: 'drag', label: 'Drag' }, { id: 'lasso', label: 'Enclose' }, { id: 'leftover', label: 'Leftovers' }, { id: 'flats', label: 'Flats' }, { id: 'gradient', label: 'Gradient' }], fv, (v) => ctx.setVariant('fill', v), 'Fill kind'),
         );
-        if (fv !== 'flats') bar.append(...colourControls(true), swatches);
+        if (fv === 'gradient') bar.append(...gradientControls());
+        else if (fv !== 'flats') bar.append(...colourControls(true), swatches);
         else pickingColor = false;
         bar.append(
           slider('Close gaps', 0, 0.08, 0.005, state.gap, (v) => `${Math.round(v * dpi)}px`, (v) => (state.gap = v), () => ctx.request()),
@@ -1712,6 +1909,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     inspector(el) {
       if (mode.tool === 'mark') { marks.inspector(el); return; }
+      if (mode.tool === 'fill' && fillVariant() === 'gradient') el.append(gradientInspector());
       updateLayerButton(inspectorLayers);
       if (mode.tool === 'image') {
         bins.refresh();
@@ -1855,7 +2053,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'pixels') { pixels.move(p, e); return; }
       if (mode.tool === 'tone') { tone.move(p); return; }
       if (pixelBrush()) { smudge.move(smudgePoint(p, e)); return; }
-      if (pour || sweep) {
+      if (pour || sweep || gradDrag) {
         fillMove(p, e);
         return;
       }
@@ -1890,10 +2088,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         smudge.up(e.type === 'pointercancel');
         return;
       }
-      if (pour || sweep) {
+      if (pour || sweep || gradDrag) {
         if (e.type === 'pointercancel') {
           const created = pour?.created;
-          pour = null; sweep = null; preview = null;
+          pour = null; sweep = null; preview = null; gradDrag = null;
           if (created) studio.undo();
         } else fillUp();
         return;

@@ -7,6 +7,7 @@ import { polygonMask } from '../engine/fill/fill';
 import { renderVectorLayer } from '../render/vector';
 import { adjustPixels } from './adjustment';
 import { cloneSegment } from './clone';
+import { paintGradient } from './gradientfill';
 import { gutterMask } from '../geom/gutters';
 import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
@@ -135,6 +136,7 @@ export interface FillPaint {
  * nothing is painted.
  */
 export function paintFill(kit: FillKit, colour: HTMLCanvasElement, fill: Fill): FillPaint | null {
+  if (fill.gradient) return paintGradient(kit, colour, fill);
   const w = colour.width;
   const g = colour.getContext('2d', { willReadFrequently: true })!;
   const whole = fill.leftover ? g.getImageData(0, 0, w, colour.height).data : undefined;
@@ -144,17 +146,19 @@ export function paintFill(kit: FillKit, colour: HTMLCanvasElement, fill: Fill): 
   const rect = { x: res.x0, y: res.y0, w: res.x1 - res.x0 + 1, h: res.y1 - res.y0 + 1 };
   const before = g.getImageData(rect.x, rect.y, rect.w, rect.h);
   const after = new ImageData(new Uint8ClampedArray(before.data), rect.w, rect.h);
-  const own = hexRgb(fill.color);
+  // the transparent colour (Clip Studio's): the fill clears its area instead of painting it
+  const clear = fill.color === 'transparent';
+  const own = clear ? 0 : hexRgb(fill.color);
   for (let y = 0; y < rect.h; y++) {
     for (let x = 0; x < rect.w; x++) {
       const k = (rect.y + y) * w + rect.x + x;
       if (!res.mask[k]) continue;
-      const c = rgbAt?.get(k) ?? own;
+      const c = clear ? 0 : rgbAt?.get(k) ?? own;
       const i = (y * rect.w + x) * 4;
       after.data[i] = (c >> 16) & 255;
       after.data[i + 1] = (c >> 8) & 255;
       after.data[i + 2] = c & 255;
-      after.data[i + 3] = 255;
+      after.data[i + 3] = clear ? 0 : 255;
     }
   }
   g.putImageData(after, rect.x, rect.y);

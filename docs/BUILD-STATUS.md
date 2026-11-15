@@ -1414,3 +1414,61 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
     walked back through them.
 - **Note:** the vendored line test treats a stroke within 7% of straight as a line. Gentle waves
   therefore snap to Line first; the Curve toggle is one tap away.
+
+## Eraser QuickShape, Paint tone, transparent colour, colour gradients, new icons, 2026-11-15
+
+- **QuickShape on every eraser.** Raster erasers lost their `!erase` block, so they snap like brushes,
+  with the shape toggles. The vector eraser gets the same hold-to-snap on its path
+  (`recognizeInkShape`, then dragging adjusts the snapped shape), and erases along the shape.
+- **Paint tone** (tool `tonebrush`, key Y).
+  - It paints on the panel's painted tone layer: a `tone`-type raster layer with `asTone` and no
+    `screenTone`, created on first use as "Painted tone" with `DEFAULT_TONE_SCREEN`.
+  - The stroke colour is the grey for the chosen Tone % (40% → `#999999`), so Show as tone prints
+    exactly that coverage. A soft brush fades the dots.
+  - It has its own brush (`ink.toneBrush`, default Maru pen) and its own size key (`tone:`).
+  - **Dots…** opens the layer's tone settings. **Eraser → Tone** (new variant) erases the painted tone
+    layer only (never a screentone pattern layer).
+- **Transparent colour** (CSP-style), shown as a checkered swatch with a red slash.
+  - Brush, Pencil and Paint tone erase with it, using their own brush shape, on their own layer
+    (`erase: true` with the current brush id). The Vector pen keeps its ink colour and never
+    clears.
+  - Colour fills with `color: 'transparent'` clear their area (`paintFill` writes alpha 0); they
+    replay in order.
+- **Colour gradients** (Colour → Gradient; `draw/gradientfill.ts`): a fill with
+  `gradient: FillGradient`, so it undoes, saves and replays through `commitFills` / `paintFill`.
+  - Kinds: linear and radial. Colours: hex or transparent; fading to transparent keeps the hue
+    instead of going dark.
+  - Blend: normal, multiply ("Shadow", keeps the flat's hue) or screen ("Light"), plus opacity.
+  - Area:
+    - `lines`: the bucket's area;
+    - `colour`: the flat under the start (same RGBA within 10, 4-connected, inside the panels),
+      falling back to `lines` on empty pixels;
+    - `lasso`: drawn first, then drag;
+    - Panel: stored as `lasso` with the panel outline, so it replays.
+  - The bar has shape, From/To colours (each with a transparent swatch) and area. The inspector
+    has types (Fade to clear, Two colours, Shadow, Light), shape, area, blend, opacity and a
+    plain-word note per area. The schema validates every field.
+  - **Bug found in the browser check and fixed:** pointer move and up only routed to the fill
+    code during a pour or a sweep, so a gradient drag never committed. `gradDrag` is now routed
+    and cleared on cancel.
+- **Icons** (original line art in `ui/icons.ts`): Erase ink (ink drop), Erase pencil, Erase
+  vector lines (curve with nodes), Erase painted tone (dots), Paint tone (brush laying dots) and
+  Gradient. The rail now shows the chosen variant's icon when it has one (`desk.ts` uses `iconFor`
+  on the variant label), so each eraser and fill kind is recognisable at a glance.
+- Checks: `draw/gradientfill.test.ts` (6) covers:
+  - linear and radial position;
+  - a red→blue blend that stays inside its mask;
+  - a fade to transparent that keeps the flat showing at the end;
+  - multiply keeping the hue, and screen lightening;
+  - the same-colour flat stopping at a stripe (and none on empty pixels);
+  - the book-file round trip for gradients and the transparent colour.
+  All 450 tests pass. In the built-in pane:
+  - a held eraser stroke snapped to Line, with the toggles;
+  - Paint tone at 40% made a "Painted tone" layer with Show as tone and grey `#999999`;
+  - the transparent Brush made an erase stroke with its own brush;
+  - a Shadow gradient with Same colour on a red flat went `114,57,48` → `155,70,54` →
+    `198,84,61` (from `200,85,61`), left the empty panel untouched, and was one undo step;
+  - the eraser flyout showed the four new icons.
+- **Not done:** a selection made with the Transform tool isn't used as a gradient area (Lasso
+  draws one instead). A transparent fill isn't reapplied over strokes on "Rebuild from strokes",
+  which replays fills before strokes.

@@ -4,7 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen } from './model';
+import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
 import { TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -486,7 +486,27 @@ function fill(v: unknown, path: string): Fill {
     if (!path2.length) fail(`${path}.leftover.path`, 'is empty');
     f.leftover = { path: path2, r: pos(lo.r, `${path}.leftover.r`) };
   }
+  if (o.gradient !== undefined) f.gradient = fillGradient(o.gradient, `${path}.gradient`);
   return f;
+}
+
+function fillGradient(v: unknown, path: string): FillGradient {
+  const o = obj(v, path);
+  const colour = (c: unknown, p: string) => {
+    const s = str(c, p);
+    if (s !== 'transparent' && !/^#[0-9a-f]{6}$/i.test(s)) fail(p, 'should be a six-digit hex colour or transparent');
+    return s;
+  };
+  const g: FillGradient = { kind: oneOf(o.kind, ['linear', 'radial'] as const, `${path}.kind`), from: pt(o.from, `${path}.from`), to: pt(o.to, `${path}.to`), start: colour(o.start, `${path}.start`), end: colour(o.end, `${path}.end`) };
+  if (o.blend !== undefined) g.blend = oneOf(o.blend, ['normal', 'multiply', 'screen'] as const, `${path}.blend`);
+  if (o.opacity !== undefined) g.opacity = unit(o.opacity, `${path}.opacity`, 1);
+  if (o.area !== undefined) g.area = oneOf(o.area, ['lines', 'colour', 'lasso'] as const, `${path}.area`);
+  if (o.lasso !== undefined) {
+    const l = pts(o.lasso, `${path}.lasso`);
+    if (l.length < 3) fail(`${path}.lasso`, 'needs at least 3 points');
+    g.lasso = l;
+  }
+  return g;
 }
 
 function layout(v: unknown, path: string): PageLayout | undefined {

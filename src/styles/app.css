@@ -1025,3 +1025,10 @@ details > summary:hover { color: var(--text); }
 .tone-stops-head { display: flex; align-items: center; gap: 10px; }
 .tone-stops-head b { font-size: var(--t-sm); }
 .tone-stop { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: var(--r); }
+
+/* The transparent colour swatch (Clip Studio's): a checkerboard with a red slash */
+.swatch-clear { width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); flex: none;
+  background: linear-gradient(135deg, transparent calc(50% - 1px), #c8553d calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    repeating-conic-gradient(#d8d2c4 0 25%, #fffdf7 0 50%) 0 0 / 10px 10px; }
+.swatch-clear[aria-pressed="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .swatch-clear { width: 32px; height: 32px; } }
