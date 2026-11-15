@@ -1472,3 +1472,20 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
 - **Not done:** a selection made with the Transform tool isn't used as a gradient area (Lasso
   draws one instead). A transparent fill isn't reapplied over strokes on "Rebuild from strokes",
   which replays fills before strokes.
+
+## Selection as a gradient area, 2026-11-15
+
+- `rasterSelection` keeps `lastArea()`: the outline of the last Transform-tool selection (page
+  inches). It survives tool changes, and is recorded even when the area holds no painted pixels.
+- The gradient's **Selection** area uses it. It's stored as a `lasso` area, so it replays, and
+  each point is mapped through `pointInLayer` for moved panels. With no selection, a hint says
+  to make one. A dashed outline shows the area while the Gradient is out, and the inspector note
+  says which area is in use.
+- Also fixed:
+  - **Two colours** now sets two different colours (yellow → red). It had set the end to the
+    default start colour, so the gradient looked flat.
+  - An empty Transform selection now says the area stays ready for a gradient, instead of only
+    "No painted pixels".
+- Checks: all 450 tests pass. In the built-in pane, a rectangle selection over empty paper, then
+  Gradient → Selection: blue filled inside the rectangle and nothing outside it, as one undo step
+  ("Gradient"). Two colours gave `240,190,48` → `221,139,55` → `201,89,61`.

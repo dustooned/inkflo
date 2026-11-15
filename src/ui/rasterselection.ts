@@ -24,7 +24,10 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
   const { page, art, studio, book } = ctx;
   const dpi = book.dpi;
   let selected: Selection | null = null;
+  /** The last area selected (page inches), kept after the tool changes: a gradient can use it. */
+  let lastArea: Pt[] | null = null;
   const marquee = createMarquee(ctx, (polygon, from) => {
+    lastArea = polygon.map((p) => ({ ...p }));
     for (const layer of layersAt(from)) {
       const source = art.planes[layer.id];
       if (!source) continue;
@@ -35,7 +38,7 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
       selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, lifted, place };
       break;
     }
-      if (!selected) toast('No painted pixels in this selection.');
+      if (!selected) toast('No painted pixels here to move. The area stays ready for a Colour gradient (Selection).');
   });
   let drag: { grab: SelectionGrab; from: Pt; bounds: Bounds; base: Mat; moved: boolean } | null = null;
   let matrix = IDENTITY_MATRIX;
@@ -132,6 +135,8 @@ export function rasterSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], keep
   }
 
   return {
+    /** The outline of the last selection made with this tool (page inches), or null. */
+    lastArea: () => lastArea,
     down(p: Pt, e: PointerEvent, shape: MarqueeShape) {
       if (marquee.active()) { marquee.down(p, shape); return; }
       const s = current();

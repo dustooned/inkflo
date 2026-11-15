@@ -164,11 +164,11 @@ const FILL_HINT: Record<FillVariant, string> = {
   flats: 'Click a panel: every closed area gets its own flat colour, ready to recolour.',
   gradient: 'Drag across an area: the gradient runs from where you start to where you let go.',
 };
-type GradArea = 'lines' | 'colour' | 'lasso' | 'panel';
+type GradArea = 'lines' | 'colour' | 'lasso' | 'selection' | 'panel';
 /** Gradient kinds ready to use: the "types" in the inspector. */
-const GRADIENT_TYPES: { name: string; note: string; set: Partial<{ end: string; blend: 'normal' | 'multiply' | 'screen'; opacity: number }> }[] = [
+const GRADIENT_TYPES: { name: string; note: string; set: Partial<{ start: string; end: string; blend: 'normal' | 'multiply' | 'screen'; opacity: number }> }[] = [
   { name: 'Fade to clear', note: 'Colour fading out', set: { end: 'transparent', blend: 'normal', opacity: 1 } },
-  { name: 'Two colours', note: 'One colour into another', set: { end: '#3F6C9E', blend: 'normal', opacity: 1 } },
+  { name: 'Two colours', note: 'One colour into another', set: { start: '#F2C230', end: '#C8553D', blend: 'normal', opacity: 1 } },
   { name: 'Shadow', note: 'Darkens the flat, keeps its hue', set: { end: 'transparent', blend: 'multiply', opacity: 0.6 } },
   { name: 'Light', note: 'Lightens the flat', set: { end: 'transparent', blend: 'screen', opacity: 0.7 } },
 ];
@@ -1006,9 +1006,15 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const t = fillTarget(from);
     if (!t) return;
     const at = pointInLayer(from, t.layerId);
-    let area: 'lines' | 'colour' | 'lasso' = grad.area === 'panel' ? 'lasso' : grad.area;
+    let area: 'lines' | 'colour' | 'lasso' = grad.area === 'panel' || grad.area === 'selection' ? 'lasso' : grad.area;
     let lasso: Pt[] | undefined;
     if (grad.area === 'lasso') lasso = gradLasso?.map((q) => pointInLayer(q, t.layerId));
+    if (grad.area === 'selection') {
+      const sel = pixels.lastArea();
+      if (!sel || sel.length < 3) { toast('Select an area with the Transform tool first (or use Lasso).'); return; }
+      area = 'lasso';
+      lasso = sel.map((q) => pointInLayer(q, t.layerId));
+    }
     if (grad.area === 'panel') {
       const panel = panelAt(ctx.panels(), from);
       lasso = (panel?.source ?? panel)?.pts.map((q) => ({ ...q }));
@@ -1029,7 +1035,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   const gradShape = () => seg<'linear' | 'radial'>([{ id: 'linear', label: 'Linear' }, { id: 'radial', label: 'Radial' }], grad.kind, (v) => { grad.kind = v; ctx.chrome(); }, 'Gradient shape');
-  const gradAreaSeg = () => seg<GradArea>([{ id: 'lines', label: 'Inside lines' }, { id: 'colour', label: 'Same colour' }, { id: 'lasso', label: 'Lasso' }, { id: 'panel', label: 'Panel' }], grad.area, (v) => { grad.area = v; gradLasso = null; ctx.chrome(); ctx.request(); }, 'Gradient area');
+  const gradAreaSeg = () => seg<GradArea>([{ id: 'lines', label: 'Inside lines' }, { id: 'colour', label: 'Same colour' }, { id: 'lasso', label: 'Lasso' }, { id: 'selection', label: 'Selection' }, { id: 'panel', label: 'Panel' }], grad.area, (v) => { grad.area = v; gradLasso = null; ctx.chrome(); ctx.request(); }, 'Gradient area');
 
   function gradientControls(): HTMLElement[] {
     const colour = (label: string, value: string, set: (v: string) => void) => {
@@ -1046,6 +1052,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const opacity = slider('Opacity', 5, 100, 5, Math.round(grad.opacity * 100), (v) => `${v}%`, (v) => { grad.opacity = v / 100; });
     const note = grad.area === 'colour' ? 'Same colour follows the flat you start on, so a shadow stays on the jacket and off the sky.'
       : grad.area === 'lasso' ? (gradLasso ? 'Area drawn: drag the direction inside it.' : 'Draw the area first, then drag the direction.')
+        : grad.area === 'selection' ? (pixels.lastArea() ? 'Uses the area you last selected with the Transform tool (dashed outline).' : 'Select an area with the Transform tool first; it stays ready here.')
         : grad.area === 'panel' ? 'Covers the whole panel you start in.' : 'Fills the area the line art encloses, like the bucket.';
     return h('div', { class: 'sec stack gradient-settings' },
       h('h4', {}, 'Gradient'),
@@ -1094,6 +1101,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (panel) applyPanelTransform(g, panel, s);
       g.imageSmoothingEnabled = false;
       g.drawImage(preview.img, (preview.x0 / dpi) * s, (preview.y0 / dpi) * s, (preview.img.width / dpi) * s, (preview.img.height / dpi) * s);
+      g.restore();
+    }
+    const selArea = mode.tool === 'fill' && fillVariant() === 'gradient' && grad.area === 'selection' ? pixels.lastArea() : null;
+    if (selArea && selArea.length > 2) {
+      g.save();
+      g.strokeStyle = '#5eafc1'; g.lineWidth = 2; g.setLineDash([5, 4]);
+      g.beginPath(); selArea.forEach((q, i) => (i ? g.lineTo(q.x * s, q.y * s) : g.moveTo(q.x * s, q.y * s))); g.closePath(); g.stroke();
       g.restore();
     }
     if (gradLasso && gradLasso.length > 2 && fillVariant() === 'gradient') {
