@@ -34,15 +34,16 @@ export function createMarquee(ctx: DeskCtx, finish: (poly: Pt[], from: Pt) => vo
   const clear = () => { if (draft) ctx.studio.drawing = false; draft = null; };
   const complete = (polygon: Pt[], from: Pt) => {
     clear();
-    if (polygon.length >= 3 && polygon.some((p) => Math.abs(p.x - from.x) * ctx.scale() >= 2) &&
-      polygon.some((p) => Math.abs(p.y - from.y) * ctx.scale() >= 2)) finish(polygon, from);
+    const xs = polygon.map((p) => p.x), ys = polygon.map((p) => p.y);
+    const minSize = 2 / ctx.scale();
+    if (polygon.length >= 3 && Math.max(...xs) - Math.min(...xs) >= minSize && Math.max(...ys) - Math.min(...ys) >= minSize) finish(polygon, from);
     ctx.chrome(); ctx.request();
   };
   const closePolygon = () => { if (draft?.shape === 'polygon' && draft.path.length >= 3) complete(draft.path, draft.path[0]!); };
   function edges(): EdgeMap {
     const { page, art } = ctx;
     const scale = Math.min(ctx.book.dpi, 1100 / Math.max(page.widthIn, page.heightIn));
-    const key = JSON.stringify([scale, page.cuts, art.revs, page.groups.map((g) => [g.id, g.anchor, g.mask, g.visible, g.opacity,
+    const key = JSON.stringify([scale, page.widthIn, page.heightIn, page.cuts, page.layout, art.revs, page.groups.map((g) => [g.id, g.anchor, g.mask, g.visible, g.opacity,
       g.layers.map((l) => [l.id, l.type, l.visible, l.opacity, l.overFrame, l.image])])]);
     if (edgeCache?.key === key) return edgeCache.map;
     const canvas = makeCanvas(Math.max(1, Math.round(page.widthIn * scale)), Math.max(1, Math.round(page.heightIn * scale)));
@@ -61,7 +62,7 @@ export function createMarquee(ctx: DeskCtx, finish: (poly: Pt[], from: Pt) => vo
     clear,
     down(p: Pt, shape: MarqueeShape) {
       if (draft?.shape === 'polygon' && shape === 'polygon') {
-        if (draft.path.length >= 3 && distance(p, draft.path[0]!) < 12) closePolygon();
+        if (draft.path.length >= 3 && distance(p, draft.path[0]!) < 16) closePolygon();
         else if (draft.path.length < 2048 && distance(p, draft.path.at(-1)!) > 2) { draft.path.push(p); draft.tip = p; ctx.chrome(); }
         return;
       }

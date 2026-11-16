@@ -36,6 +36,7 @@ import { invert, type Mat } from '../../engine/core/selxform';
 import { nearestGuide } from '../../geom/composition';
 import { prefs } from '../prefs';
 import { groupAt, groupLabel, insertIndex, layerOfType, panelForGroup } from '../../geom/groups';
+import { outlinesOverlap } from '../../geom/selection';
 import { browserPlaneOps } from '../../io/canvasops';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { confirmDialog, h, seg, slider, toast } from '../dom';
@@ -363,6 +364,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
 
   function setTarget(next: LayerTarget): void {
     pixels.clear();
+    selection.clear();
     smudge.clear();
     shapeEditor.clear();
     target = next;
@@ -1403,16 +1405,42 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     return page.groups.filter((g) => g.visible && !g.locked).flatMap((g) => g.layers.filter((l) => l.vector && l.visible && !l.locked)).reverse();
   }
 
-  const selection = vectorSelection(ctx, (p) => {
-    const layers = editableVectors();
-    if (target === 'layer') return layers;
-    const id = groupAt(page, ctx.panels(), p).id;
-    const inContext = (l: Layer) => findLayer(page, l.id)?.group.id === id;
-    return [...layers.filter(inContext), ...layers.filter((l) => !inContext(l))];
-  }, editVector, (id) => layerPlacement(id));
+  /** Start with the pen's group, then look for artwork elsewhere inside the finished outline. */
+  function layersInSelection(outline: Pt[], from: Pt, accepts: (layer: Layer) => boolean): Layer[] {
+    const editable = (layer: Layer) => layer.visible && !layer.locked && layer.opacity > 0 &&
+      (state.showPencil || layer.type !== 'pencil') && accepts(layer);
+    if (target === 'layer') {
+      const a = active();
+      return a && a.group.visible && !a.group.locked && a.group.opacity > 0 && editable(a.layer) ? [a.layer] : [];
+    }
+    const panels = ctx.panels();
+    const first = groupAt(page, panels, from);
+    const groups = [first, ...page.groups.filter((g) => g !== first)];
+    return groups.flatMap((group) => {
+      if (!group.visible || group.locked || group.opacity <= 0) return [];
+      const panel = group.kind === 'panel' ? panelForGroup(panels, group) : null;
+      const inside = !(group.kind === 'panel' && (group.mask || panel?.transform)) ||
+        !!panel && outlinesOverlap(outline, panel.pts);
+      return group.layers.filter((layer) => editable(layer) && (inside || layer.overFrame))
+        .sort((a, b) => Number(b.overFrame) - Number(a.overFrame));
+    });
+  }
 
+  const paintLayer = (l: Layer) => !l.vector && !l.image && !l.screenTone;
+  const selectionHint = (vector: boolean) => {
+    const a = target === 'layer' ? active() : null;
+    if (a?.layer.locked || a?.group.locked) return 'That layer is locked. Unlock it in Layers to select its art.';
+    if (a?.layer.image) return 'Use Position image to move or resize this placed image.';
+    if (a?.layer.screenTone) return 'Open this layer in Screentone to edit its tone areas.';
+    if (a?.layer.vector && !vector) return 'This is a vector layer. Use Select lines to move its strokes.';
+    if (a && !a.layer.vector && vector) return 'This is a paint layer. Use Transform to move the selected pixels.';
+    return vector ? 'No editable vector lines inside the outline. Use Transform for paint.'
+      : 'No editable paint inside the outline. You can still use the area for a Colour gradient.';
+  };
+  const selection = vectorSelection(ctx, (outline, from) => layersInSelection(outline, from, (layer) => !!layer.vector),
+    editVector, layerPlacement, () => selectionHint(true));
   const rasterLayersAt = (p: Pt) => {
-    const allowed = (l: Layer) => l.visible && !l.locked && !l.vector && !l.image && !l.screenTone && (state.showPencil || l.type !== 'pencil');
+    const allowed = (l: Layer) => l.visible && !l.locked && paintLayer(l) && (state.showPencil || l.type !== 'pencil');
     if (target === 'layer') {
       const a = active();
       return a && a.group.visible && !a.group.locked && allowed(a.layer) ? [a.layer] : [];
@@ -1421,7 +1449,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (!group.visible || group.locked) return [];
     return group.layers.filter(allowed).sort((a, b) => Number(b.overFrame) - Number(a.overFrame));
   };
-  const pixels = rasterSelection(ctx, rasterLayersAt, keepResident, (id) => layerPlacement(id));
+  const pixels = rasterSelection(ctx, (outline, from) => layersInSelection(outline, from, paintLayer),
+    keepResident, layerPlacement, () => selectionHint(false));
   const smudge = smudgeTool(ctx, rasterLayersAt, keepResident, (id) => layerPlacement(id));
   let smudgeSize = 18;
   let smudgeStrength = 0.55;
@@ -1749,7 +1778,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' || shapeEditor.active() ? 'move' : ['fill', 'tone', 'lines', 'vedit', 'selection', 'pixels'].includes(mode.tool) ? 'cross' : 'brush'),
     ctx(bar) {
       if (mode.tool !== 'pixels') pixels.clear();
-      if (mode.tool !== 'selection') selection.resetMarquee();
+      if (mode.tool !== 'selection') selection.clear();
       if (mode.tool !== 'tone') tone.clear();
       if (!pixelBrush()) smudge.clear();
       refreshShapeActions();
@@ -1920,7 +1949,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       );
       refreshPicker();
       const show = h('input', { type: 'checkbox', checked: state.showPencil });
-      show.addEventListener('change', () => { state.showPencil = show.checked; if (mode.tool === 'pixels') { pixels.clear(); ctx.chrome(); } ctx.request(); });
+      show.addEventListener('change', () => {
+        state.showPencil = show.checked;
+        if (mode.tool === 'pixels' || mode.tool === 'selection') { pixels.clear(); selection.clear(); ctx.chrome(); }
+        ctx.request();
+      });
       bar.append(h('label', { class: 'mini' }, show, 'Show pencil'));
     },
     inspector(el) {

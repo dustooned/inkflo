@@ -5,6 +5,12 @@ import { boxHandles, resizeBox, type Bounds, type ResizeSide } from '../geom/res
 export type SelectionGrab = { kind: 'move' | 'rotate' } | { kind: 'resize'; side: ResizeSide };
 export const selectionCenter = (b: Bounds): Pt => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
 export const selectionCorners = (a: Pt, b: Pt): Pt[] => [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }];
+/** A small mark still needs room between the centre and corner handles on a touch screen. */
+export function selectionFrame(b: Bounds, scale: number): Bounds {
+  const x = Math.max(0, 28 / scale - (b.x1 - b.x0)) / 2;
+  const y = Math.max(0, 28 / scale - (b.y1 - b.y0)) / 2;
+  return { x0: b.x0 - x, y0: b.y0 - y, x1: b.x1 + x, y1: b.y1 + y };
+}
 const rotationAt = (b: Bounds, scale: number) => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / scale });
 const handles = (b: Bounds, scale: number) => boxHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
 
@@ -45,15 +51,15 @@ export function drawSelectionPath(g: CanvasRenderingContext2D, path: Pt[], scale
 }
 
 /** The shared on-canvas controls for paint and line selection. */
-export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number, rotation = true, radius = 4): void {
+export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale: number, angle?: number, rotation = true, radius = 4, screenScale = scale): void {
   g.strokeRect(b.x0 * scale, b.y0 * scale, (b.x1 - b.x0) * scale, (b.y1 - b.y0) * scale);
   g.setLineDash([]);
   g.fillStyle = '#FFFDF7';
-  const rotate = rotationAt(b, scale);
+  const rotate = rotationAt(b, screenScale);
   if (rotation) {
     g.beginPath(); g.moveTo(rotate.x * scale, b.y0 * scale); g.lineTo(rotate.x * scale, rotate.y * scale); g.stroke();
   }
-  const points = handles(b, scale).map((h) => h.at);
+  const points = handles(b, screenScale).map((h) => h.at);
   if (rotation) points.push(rotate);
   for (const q of points) {
     g.beginPath(); g.arc(q.x * scale, q.y * scale, radius, 0, Math.PI * 2); g.fill(); g.stroke();

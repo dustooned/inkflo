@@ -375,7 +375,10 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     capture(e.pointerId);
     const p = ctx.toPage(e);
     const offPage = p.x < 0 || p.y < 0 || p.x > page.widthIn || p.y > page.heightIn;
-    if (e.pointerType === 'touch' && ((stage === 'draw' && !prefs().fingerDrawing) || (offPage && !(stage === 'layout' && (mode.tool === 'knife' || mode.tool === 'place'))))) {
+    // Lasso outlines and transform handles can extend outside the page. These tools edit existing art.
+    const selectingArt = stage === 'draw' && (mode.tool === 'selection' || mode.tool === 'pixels');
+    const offPageTool = stage === 'layout' && (mode.tool === 'knife' || mode.tool === 'place');
+    if (e.pointerType === 'touch' && !selectingArt && ((stage === 'draw' && !prefs().fingerDrawing) || (offPage && !offPageTool))) {
       boardTouch = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
     } else if (e.pointerType === 'touch') finger = { first: e, last: e, started: false };
     else mode.down?.(p, e);

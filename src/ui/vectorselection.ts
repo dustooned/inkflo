@@ -1,31 +1,20 @@
 import { findLayer, type Layer, type Pt, type Stroke } from '../doc/model';
 import { applyPoint, IDENTITY, matrixFor, overallScale, type XParams } from '../engine/core/selxform';
-import { pointInPoly } from '../geom/carve';
+import { strokeTouchesOutline } from '../geom/selection';
 import type { Bounds } from '../geom/resizebox';
 import { renderVectorLayer } from '../render/vector';
 import type { DeskCtx } from './desk';
 import { h, toast } from './dom';
-import { drawSelectionFrame, grabSelection, selectionCenter, selectionTransform, type SelectionGrab } from './selectiongesture';
+import { drawSelectionFrame, grabSelection, selectionCenter, selectionFrame, selectionTransform, type SelectionGrab } from './selectiongesture';
 import { createMarquee, type MarqueeShape } from './marquee';
 import { toSource, withPlacement, type Placement } from './placement';
-
-function crosses(a: Pt, b: Pt, c: Pt, d: Pt): boolean {
-  const cross = (u: Pt, v: Pt, w: Pt) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
-  return Math.max(a.x, b.x) >= Math.min(c.x, d.x) && Math.max(c.x, d.x) >= Math.min(a.x, b.x) &&
-    Math.max(a.y, b.y) >= Math.min(c.y, d.y) && Math.max(c.y, d.y) >= Math.min(a.y, b.y) &&
-    cross(a, b, c) * cross(a, b, d) <= 0 && cross(c, d, a) * cross(c, d, b) <= 0;
-}
-
-function touches(stroke: Stroke, poly: Pt[]): boolean {
-  return stroke.pts.some((p, i) => pointInPoly(p, poly) || (i > 0 && poly.some((a, j) => crosses(stroke.pts[i - 1]!, p, a, poly[(j + 1) % poly.length]!))));
-}
 
 function boundsOf(strokes: Stroke[], indices: Set<number>): Bounds {
   const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
   for (const i of indices) {
     const st = strokes[i]!;
-    const pad = st.w / 2;
-    for (const p of st.pts) {
+    for (const [j, p] of st.pts.entries()) {
+      const pad = st.w * (st.pw?.[j] ?? 1) / 2;
       b.x0 = Math.min(b.x0, p.x - pad); b.x1 = Math.max(b.x1, p.x + pad);
       b.y0 = Math.min(b.y0, p.y - pad); b.y1 = Math.max(b.y1, p.y + pad);
     }
@@ -35,22 +24,22 @@ function boundsOf(strokes: Stroke[], indices: Set<number>): Bounds {
 
 type Selection = { id: string; source: Stroke[]; indices: Set<number>; place: Placement | null };
 
-export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void,
-  placement: (id: string) => Placement | null = () => null) {
+export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt) => Layer[], commit: (id: string, label: string, strokes: Stroke[]) => void,
+  placement: (id: string) => Placement | null, emptyHint: () => string) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
   const marquee = createMarquee(ctx, (poly, from) => {
-    for (const l of layersAt(from)) {
+    for (const l of layersIn(poly, from)) {
       // strokes on a moved panel are stored where the panel was carved
       const place = placement(l.id);
       const local = poly.map((p) => toSource(place, p));
       const indices = new Set<number>();
-      l.strokes.forEach((stroke, i) => { if (touches(stroke, local)) indices.add(i); });
+      l.strokes.forEach((stroke, i) => { if (strokeTouchesOutline(stroke, local)) indices.add(i); });
       if (!indices.size) continue;
       selected = { id: l.id, source: l.strokes, indices, place };
       break;
     }
-    if (!selected) toast('No vector lines in this selection.');
+    if (!selected) toast(emptyHint());
   });
   let drag: { grab: SelectionGrab; from: Pt; bounds: Bounds; next: Stroke[] | null; angle: number } | null = null;
   let preview: HTMLCanvasElement | null = null;
@@ -59,16 +48,22 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
   function current(): Selection | null {
     if (!selected) return null;
     const match = findLayer(page, selected.id);
-    if (!match || match.layer.strokes !== selected.source || !match.layer.visible || match.layer.locked || !match.group.visible || match.group.locked) return null;
+    if (!match || !match.layer.vector || match.layer.strokes !== selected.source || !match.layer.visible || match.layer.locked ||
+      !match.group.visible || match.group.locked || match.layer.opacity <= 0 || match.group.opacity <= 0) return null;
     return selected;
   }
 
   function stop(): void {
     marquee.clear();
+    if (drag) studio.drawing = false;
     drag = null;
     preview = null;
     rendered = null;
-    studio.drawing = false;
+  }
+
+  function clear(): void {
+    stop();
+    selected = null;
   }
 
   function apply(label: string, strokes: Stroke[]): void {
@@ -95,7 +90,8 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       if (s) {
         const bounds = boundsOf(s.source, s.indices);
         const at = toSource(s.place, p);
-        const grab = grabSelection(bounds, at, ctx.scale(), e.pointerType === 'touch');
+        const scale = ctx.scale() * (s.place?.k ?? 1);
+        const grab = grabSelection(selectionFrame(bounds, scale), at, scale, e.pointerType === 'touch');
         if (grab) {
           drag = { grab, from: at, bounds, next: null, angle: 0 };
           studio.drawing = true;
@@ -113,7 +109,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const d = drag;
       p = toSource(s.place, p);
       const delta = { x: p.x - d.from.x, y: p.y - d.from.y };
-      if (!d.next && Math.hypot(delta.x, delta.y) * ctx.scale() < 2) return;
+      if (!d.next && Math.hypot(delta.x, delta.y) * ctx.scale() * (s.place?.k ?? 1) < 2) return;
       if (Math.hypot(delta.x, delta.y) < 1e-6) { d.next = null; d.angle = 0; return; }
       const xform = selectionTransform(d.grab, d.bounds, d.from, p, e);
       d.angle = xform.rotate;
@@ -122,6 +118,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
     up(p: Pt, e: PointerEvent) {
       if (e.type === 'pointercancel') { stop(); ctx.chrome(); ctx.request(); return; }
       if (drag) {
+        this.move(p, e);
         const next = drag.next;
         const label = drag.grab.kind === 'move' ? 'Move selected lines' : drag.grab.kind === 'rotate' ? 'Rotate selected lines' : 'Resize selected lines';
         stop();
@@ -149,6 +146,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
     closePolygon: marquee.closePolygon,
     resetMarquee: marquee.clear,
     isMarquee: marquee.active,
+    clear,
     cancel(clear = false) {
       const active = marquee.active() || !!drag;
       if (active) stop();
@@ -188,7 +186,7 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
           ctx.request();
         } }, 'Duplicate'),
         h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => { selected = null; ctx.chrome(); ctx.request(); } }, 'Deselect'),
-        h('span', { class: 'hint' }, s ? `${s.indices.size} selected · Shift for precision · Alt to resize from center` : 'Draw around lines on a vector layer')];
+        h('span', { class: 'hint' }, s ? `${s.indices.size} selected on ${findLayer(page, s.id)!.layer.name} · Drag inside to move` : 'Draw around vector ink. For paint and fills, use Transform.')];
     },
     overlay(g: CanvasRenderingContext2D, scale: number) {
       g.save();
@@ -199,7 +197,8 @@ export function vectorSelection(ctx: DeskCtx, layersAt: (p: Pt) => Layer[], comm
       const s = current();
       if (s) {
         const b = boundsOf(drag?.next ?? s.source, s.indices);
-        withPlacement(g, s.place, scale, (sc, k) => drawSelectionFrame(g, b, sc, drag?.grab.kind === 'rotate' ? drag.angle : undefined, true, 4 / k));
+        withPlacement(g, s.place, scale, (sc, k) => drawSelectionFrame(g, selectionFrame(b, sc * k), sc,
+          drag?.grab.kind === 'rotate' ? drag.angle : undefined, true, 4 / k, sc * k));
       }
       g.restore();
     },
