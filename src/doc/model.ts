@@ -344,6 +344,10 @@ export interface Layer {
   moreTones?: ScreenTone[];
   /** Print this painted layer as halftone dots (its pixels stay untouched). */
   asTone?: ToneScreen;
+  /** A tone layer's blend with what is under it. Absent is normal; multiply lets dots shade the colour beneath. */
+  blend?: 'multiply';
+  /** A tone layer shows only where the group's colour layers have paint (CSP's clip to the layer below). */
+  clipToFill?: true;
   image?: PlacedImage;
   /**
    * An outline around everything on the layer (a border effect): white to lift art off a busy

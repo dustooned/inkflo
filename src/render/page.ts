@@ -341,6 +341,39 @@ function makeCanvasLike(w: number, h: number): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * A tone layer: its areas, optionally multiplied over what is under them and optionally kept to the
+ * painted pixels of the group's colour layers (clip to fill). Clipping draws the tone on a page-sized
+ * scratch canvas first, then keeps only where the colour layers have paint.
+ */
+function drawToneLayer(g: CanvasRenderingContext2D, l: Layer, group: LayerGroup, art: PageArt | null, opts: RenderOptions, W: number, H: number, area?: ToneArea): void {
+  const draw = (t: CanvasRenderingContext2D) => tonesOf(l).forEach((tone, n) => drawScreenTone(t, tone, W, H, opts.scale, area, n ? `${l.id}:${n}` : l.id));
+  const w = Math.ceil(W), h = Math.ceil(H);
+  const fills = l.clipToFill && art && !art.parked ? group.layers.filter((x) => x.type === 'colour' && !x.screenTone && x.visible && art.planes[x.id]?.width) : [];
+  const alpha = g.globalAlpha;
+  if (!fills.length || w * h > 40_000_000) {
+    if (l.clipToFill && art && !art.parked && !fills.length) return; // clipped to fills that do not exist: nothing shows
+    if (l.blend === 'multiply') { g.save(); g.globalCompositeOperation = 'multiply'; draw(g); g.restore(); } else draw(g);
+    return;
+  }
+  const scratch = makeCanvasLike(w, h);
+  const sg = scratch.getContext('2d')!;
+  draw(sg);
+  // keep only where the colour layers have paint
+  const paint = makeCanvasLike(w, h);
+  const pg = paint.getContext('2d')!;
+  for (let i = fills.length - 1; i >= 0; i--) drawLayerBitmap(pg, art!.planes[fills[i]!.id]!, W, H, opts.scale, fills[i]!.image);
+  sg.globalCompositeOperation = 'destination-in';
+  sg.drawImage(paint, 0, 0);
+  g.save();
+  g.globalAlpha = alpha;
+  if (l.blend === 'multiply') g.globalCompositeOperation = 'multiply';
+  g.drawImage(scratch, 0, 0, W, H);
+  g.restore();
+  scratch.width = 0;
+  paint.width = 0;
+}
+
 /** Draw a group's layers bottom to top (`which` picks masked or over-frame layers). */
 function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt | null, opts: RenderOptions, W: number, H: number, which: 'all' | 'framed' | 'over', area?: ToneArea): void {
   for (let i = group.layers.length - 1; i >= 0; i--) {
@@ -349,6 +382,7 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
     if (which === 'over' && !l.overFrame) continue;
     if (!shows(l, group, opts)) continue;
     g.globalAlpha = l.opacity * group.opacity;
+    if (l.screenTone) { drawToneLayer(g, l, group, art, opts, W, H, area); continue; }
     tonesOf(l).forEach((t, n) => drawScreenTone(g, t, W, H, opts.scale, area, n ? `${l.id}:${n}` : l.id));
     const live = opts.live?.[l.id];
     const c = live ?? (art && !art.parked ? art.planes[l.id] : null);

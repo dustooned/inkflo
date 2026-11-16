@@ -2,9 +2,11 @@ import { findLayer, MAX_TONES_PER_LAYER, newLayer, setTones, TONE_SHAPES, tonesO
 import { invert } from '../engine/core/selxform';
 import { mapPanelPoint } from '../geom/carve';
 import { groupAt, groupLabel, insertIndex, panelForGroup } from '../geom/groups';
+import { shadeOf } from '../geom/tonecolour';
 import { drawScreenTone } from '../render/tone';
 import type { DeskCtx } from './desk';
 import { h, seg, slider, toast } from './dom';
+import { icon } from './icons';
 import { createMarquee, MARQUEE_SHAPES, marqueeShape, type MarqueeShape } from './marquee';
 
 const PRESETS = [
@@ -39,11 +41,27 @@ export interface BucketQuery {
 }
 export type BucketResult = { region: Pt[] } | { problem: string };
 
-export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selected: () => string | null = () => null, bucketAt?: (q: BucketQuery) => BucketResult) {
+/** What the Tone tool asks the desk for. All optional: a missing one hides its control. */
+export interface ToneHooks {
+  /** Bucket, Lines source: the closed line area around a tap. */
+  bucket?: (q: BucketQuery) => BucketResult;
+  /** Bucket, Fill source: the painted flat around a tap (`at` in the panel's own space). */
+  fillArea?: (q: { at: Pt; group: LayerGroup }) => BucketResult;
+  /** The colour of the flat fill under a point, in page inches. */
+  fillColourAt?: (at: Pt) => string | null;
+  /** The colour showing on the page at a point (for the eyedropper). */
+  pageColourAt?: (at: Pt) => string | null;
+}
+
+export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selected: () => string | null = () => null, hooks: ToneHooks = {}) {
+  const bucketAt = hooks.bucket;
   const { studio, page } = ctx;
   let placement: 'panel' | 'lasso' | 'bucket' = 'panel';
   /** Bucket settings: close gaps up to `gap` inches, spread `grow` inches under the lines. */
-  const bucket = { gap: 0.02, grow: 0.004, referAll: false };
+  const bucket = { gap: 0.02, grow: 0.004, referAll: false, source: 'lines' as 'lines' | 'fill' };
+  /** Dots take a shade of the flat fill under the tap (instead of the colour swatch). */
+  let matchFill = false;
+  let picking = false;
   let fill: 'flat' | 'gradient' = 'flat';
   let start: Pt | null = null;
   let dragTo: Pt | null = null;
@@ -72,13 +90,15 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
     const inPanel = (p: Pt) => mapPanelPoint(p, inverse);
     let stored: Pt[] | undefined = region?.map(inPanel);
     if (viaBucket) {
-      const found = bucketAt?.({ at: inPanel(at), group, gap: bucket.gap, grow: bucket.grow, threshold: 24, referAll: bucket.referAll });
+      const found = bucket.source === 'fill' ? hooks.fillArea?.({ at: inPanel(at), group }) : bucketAt?.({ at: inPanel(at), group, gap: bucket.gap, grow: bucket.grow, threshold: 24, referAll: bucket.referAll });
       if (!found) { toast('The bucket is not available here.'); return; }
       if ('problem' in found) { toast(found.problem); return; }
       stored = found.region; // already in the panel's own space
     }
+    const shaded = matchFill ? hooks.fillColourAt?.(at) : null;
     const tone: ScreenTone = {
       ...draft,
+      ...(shaded ? { color: shadeOf(shaded) } : {}),
       ...(stored ? { region: stored } : {}),
       ...(gradient ? { gradient: { kind: draftGradient.kind, from: inPanel(gradient.from), to: inPanel(gradient.to), stops: draftGradient.stops.map((s) => ({ ...s })) } } : {}),
     };
@@ -237,6 +257,29 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
     dialog.showModal();
   }
 
+  /** The colour swatch: the colour the next tone gets (Match fill overrides it). */
+  function colourSwatch(): HTMLElement {
+    const input = h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(draft.color) ? draft.color : '#191a1f', 'aria-label': 'Tone colour', title: matchFill ? 'Match fill is on: dots take the fill shade' : 'Tone colour' });
+    input.addEventListener('input', () => { draft = { ...draft, color: input.value }; });
+    return h('label', { class: 'mini' }, 'Colour', input);
+  }
+
+  /** Switches for the selected tone layer: recolour, blend and clip to fills. */
+  function layerOptions(layer: Layer | undefined): (HTMLElement | null)[] {
+    if (!layer || !layer.screenTone) return [];
+    const id = layer.id;
+    const change = (label: string, fn: (l: Layer) => void) => {
+      if (layer.locked) { toast('Unlock this tone layer to edit it.'); return; }
+      studio.editPage(page, label, ['groups'], (p) => { const l = findLayer(p, id)?.layer; if (l) fn(l); });
+      ctx.chrome(); ctx.request();
+    };
+    return [
+      h('button', { type: 'button', class: 'btn', title: 'Give every area in this tone layer the colour in the swatch', onclick: () => change('Recolour tone layer', (l) => setTones(l, tonesOf(l).map((t) => ({ ...t, color: draft.color })))) }, 'Recolour layer'),
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(layer.blend === 'multiply'), title: 'Multiply lets the dots shade the colour beneath instead of covering it', onclick: () => change('Tone blend', (l) => { if (l.blend === 'multiply') delete l.blend; else l.blend = 'multiply'; }) }, layer.blend === 'multiply' ? 'Blend: Multiply ✓' : 'Blend: Normal'),
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(!!layer.clipToFill), title: 'Show this tone only where the colour layers have paint', onclick: () => change('Clip tone to fills', (l) => { if (l.clipToFill) delete l.clipToFill; else l.clipToFill = true; }) }, icon('toneClip', 16), layer.clipToFill ? 'Clipped to fills ✓' : 'Clip to fills'),
+    ];
+  }
+
   const gradientLabel = () => {
     const g = GRADIENTS.find((p) => p.kind === draftGradient.kind && JSON.stringify(p.stops) === JSON.stringify(draftGradient.stops));
     return g?.name ?? `${draftGradient.kind === 'radial' ? 'Radial' : 'Linear'} · ${draftGradient.stops.length} stops`;
@@ -258,28 +301,44 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
           { id: 'lasso', label: 'Selection', icon: 'toneLasso', hint: 'Draw around the area to tone' },
           ...(bucketAt ? [{ id: 'bucket' as const, label: 'Bucket', icon: 'toneBucket' as const, hint: 'Tap inside lines to tone that closed area' }] : []),
         ], placement, (v) => { placement = v; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone area') : null,
-        fill === 'flat' && placement === 'bucket' ? h('span', { title: 'Treat breaks in your lines up to this size as closed, so the tone does not leak.' }, slider('Close gaps', 0, 0.08, 0.005, bucket.gap, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.gap = v; })) : null,
-        fill === 'flat' && placement === 'bucket' ? h('span', { title: 'Spread the tone under your lines so no white edge shows.' }, slider('Under lines', 0, 0.02, 0.001, bucket.grow, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.grow = v; })) : null,
-        fill === 'flat' && placement === 'bucket' ? seg([{ id: 'refs', label: 'Reference lines' }, { id: 'all', label: 'All visible' }], bucket.referAll ? 'all' : 'refs', (v) => { bucket.referAll = v === 'all'; ctx.chrome(); }, 'Bucket walls') : null,
+        fill === 'flat' && placement === 'bucket' && hooks.fillArea ? seg<'lines' | 'fill'>([
+          { id: 'lines', label: 'Lines', icon: 'toneBucket', hint: 'Tone the closed area between ink lines' },
+          { id: 'fill', label: 'Fill', icon: 'toneFill', hint: 'Tone exactly the painted flat you tap' },
+        ], bucket.source, (v) => { bucket.source = v; ctx.chrome(); }, 'Bucket source') : null,
+        fill === 'flat' && placement === 'bucket' && bucket.source === 'lines' ? h('span', { title: 'Treat breaks in your lines up to this size as closed, so the tone does not leak.' }, slider('Close gaps', 0, 0.08, 0.005, bucket.gap, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.gap = v; })) : null,
+        fill === 'flat' && placement === 'bucket' && bucket.source === 'lines' ? h('span', { title: 'Spread the tone under your lines so no white edge shows.' }, slider('Under lines', 0, 0.02, 0.001, bucket.grow, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.grow = v; })) : null,
+        fill === 'flat' && placement === 'bucket' && bucket.source === 'lines' ? seg([{ id: 'refs', label: 'Reference lines' }, { id: 'all', label: 'All visible' }], bucket.referAll ? 'all' : 'refs', (v) => { bucket.referAll = v === 'all'; ctx.chrome(); }, 'Bucket walls') : null,
         fill === 'flat' && placement === 'lasso' ? seg([...MARQUEE_SHAPES], shape, (v) => { shape = marqueeShape(v); marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone selection shape') : null,
         ...(fill === 'flat' ? marquee.controls() : []),
         h('button', { type: 'button', class: 'btn', onclick: () => settings() }, `${SHAPE_NAMES[draft.shape]} · ${fill === 'gradient' ? gradientLabel() : Math.round(draft.density * 100) + '%'} ▾`),
+        colourSwatch(),
+        hooks.pageColourAt ? h('button', { type: 'button', class: 'btn', 'aria-pressed': String(picking), title: 'Tap the page to use the colour you tap as the tone colour', onclick: () => { picking = !picking; ctx.chrome(); } }, icon('eyedropper', 16), picking ? 'Tap the page' : 'Eyedropper') : null,
+        hooks.fillColourAt ? h('button', { type: 'button', class: 'btn', 'aria-pressed': String(matchFill), title: 'Dots take a deeper shade of the flat fill under the tap, so a shadow on red stays red', onclick: () => { matchFill = !matchFill; ctx.chrome(); } }, icon('palette', 16), matchFill ? 'Match fill ✓' : 'Match fill') : null,
+        ...layerOptions(selLayer),
         h('button', { type: 'button', class: 'btn', 'aria-pressed': String(startNew), title: 'By default new tone goes into the panel’s tone layer. Press this to start a separate layer for the next tone.', onclick: () => { startNew = !startNew; ctx.chrome(); } }, startNew ? 'Next tone: new layer ✓' : 'New tone layer'),
         areaSel,
         sel ? h('button', { type: 'button', class: 'btn', onclick: () => settings(id, ai) }, sel.gradient ? 'Edit selected gradient' : 'Edit selected tone') : null,
         selLayer && areas.length > 1 ? h('button', { type: 'button', class: 'btn', onclick: () => removeArea(selLayer, ai) }, 'Remove this area') : null,
         h('span', { class: 'hint' }, fill === 'gradient'
           ? (sel?.gradient ? 'Drag in its panel to aim the selected gradient again, or in another panel for a new one.' : 'Drag across a panel: the gradient runs from where you start to where you let go.')
-          : placement === 'panel' ? 'Tap inside a panel to add tone to its tone layer.' : placement === 'bucket' ? 'Tap inside a closed line area to tone just that area.' : 'Draw around the area to shade.'),
+          : picking ? 'Tap the page to pick a colour.' : placement === 'panel' ? 'Tap inside a panel to add tone to its tone layer.' : placement === 'bucket' ? (bucket.source === 'fill' ? 'Tap a painted flat to tone exactly that shape.' : 'Tap inside a closed line area to tone just that area.') : 'Draw around the area to shade.'),
       ];
     },
     clear: marquee.clear,
     hover: marquee.hover,
     closePolygon: marquee.closePolygon,
     isMarquee: marquee.active,
-    down(p: Pt) { if (fill === 'flat' && placement === 'lasso') marquee.down(p, shape); else { start = p; dragTo = null; } },
+    down(p: Pt) { if (picking) { start = p; dragTo = null; } else if (fill === 'flat' && placement === 'lasso') marquee.down(p, shape); else { start = p; dragTo = null; } },
     move(p: Pt) { if (fill === 'gradient' && start) { dragTo = p; ctx.request(); } else marquee.move(p); },
     up(p: Pt, cancelled: boolean) {
+      if (picking) {
+        if (start && !cancelled && Math.hypot(p.x - start.x, p.y - start.y) * ctx.scale() < 12) {
+          const c = hooks.pageColourAt?.(p);
+          if (c) { draft = { ...draft, color: c }; picking = false; ctx.chrome(); } else toast('No colour there.');
+        }
+        start = null; dragTo = null;
+        return;
+      }
       if (fill === 'flat' && placement === 'lasso') marquee.up(p, cancelled);
       else if (start && !cancelled) {
         const far = Math.hypot(p.x - start.x, p.y - start.y) * ctx.scale();

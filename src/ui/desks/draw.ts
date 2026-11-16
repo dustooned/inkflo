@@ -18,6 +18,7 @@ import { markTool } from '../marktool';
 import { moveStrokes, type ClipPayload } from '../../app/clipboard';
 import { screentoneTool, type BucketQuery, type BucketResult } from '../screentone';
 import { simplify as simplifyOutline, traceOutline } from '../../draw/contour';
+import { flatAround } from '../../draw/fillarea';
 import { openAdjustments } from '../adjustments';
 import { openBookAssets } from '../bookassets';
 import { MARQUEE_SHAPES, marqueeShape } from '../marquee';
@@ -343,7 +344,43 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (outline.length < 3) return { problem: 'That area is too small to tone.' };
     return { region: outline.map((p) => ({ x: p.x / dpi, y: p.y / dpi })) };
   }
-  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); }, () => active()?.layer.id ?? null, (q) => bucketTone(q));
+  /** The colour of the flat fill under a point (the colour layers alone), or null where nothing is painted. */
+  function fillColourAt(p: Pt): string | null {
+    if (p.x < 0 || p.y < 0 || p.x >= page.widthIn || p.y >= page.heightIn) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const g = canvas.getContext('2d', { willReadFrequently: true })!;
+    const s = Math.min(dpi, 150);
+    g.translate(-Math.floor(p.x * s), -Math.floor(p.y * s));
+    renderPage(g, page, art, { scale: s, panels: ctx.panels(), frame: false, balloons: false, types: { pencil: false, ink: false, tone: false, reference: false } });
+    const data = g.getImageData(0, 0, 1, 1).data;
+    if (data[3]! < 128) return null;
+    return '#' + Array.from(data.slice(0, 3), (n) => n.toString(16).padStart(2, '0')).join('');
+  }
+
+  /** The Tone Bucket's Fill source: the painted flat around a tap, traced to an outline in panel space. */
+  function bucketFill(q: { at: Pt; group: LayerGroup }): BucketResult {
+    const w = art.width;
+    const hh = art.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = hh;
+    const cg = canvas.getContext('2d', { willReadFrequently: true })!;
+    for (let i = q.group.layers.length - 1; i >= 0; i--) {
+      const l = q.group.layers[i]!;
+      const plane = art.planes[l.id];
+      if (l.type === 'colour' && !l.screenTone && !l.image && l.visible && plane?.width) cg.drawImage(plane, 0, 0);
+    }
+    const data = cg.getImageData(0, 0, w, hh).data;
+    canvas.width = 0;
+    const flat = flatAround(data, w, hh, Math.floor(q.at.x * dpi), Math.floor(q.at.y * dpi));
+    if (!flat || flat.count < 16) return { problem: 'No painted fill there. Tap on a colour, or use the Lines source.' };
+    const outline = simplifyOutline(traceOutline(flat.mask, w, hh, flat), Math.max(0.75, dpi / 400));
+    if (outline.length < 3) return { problem: 'That fill is too small to tone.' };
+    return { region: outline.map((p) => ({ x: p.x / dpi, y: p.y / dpi })) };
+  }
+
+  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); }, () => active()?.layer.id ?? null, { bucket: (q) => bucketTone(q), fillArea: (q) => bucketFill(q), fillColourAt: (p) => fillColourAt(p), pageColourAt: (p) => colourAt(p) });
   const selectImage = (id: string) => {
     activeLayer.set(page.id, id);
     contextGroupId = active()?.group.id ?? null;

@@ -5,6 +5,25 @@ Where the app stands against [BUILD-HANDOFF.md](BUILD-HANDOFF.md). Updated 2026-
 Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-check is at
 `/selfcheck.html`. Checks: `npm test` (291 tests), `npx tsc --noEmit`, `npx vite build`.
 
+## Tone colour, blend and fills, 2026-11-16
+
+- **Colour:** the Tone tool bar has a colour swatch, an **Eyedropper** (tap the page to take its
+  colour) and **Match fill**: the dots take a deeper shade of the flat fill under the tap, so a
+  shadow on red stays red (`geom/tonecolour.ts`). **Recolour layer** gives every area of the
+  selected tone layer the swatch colour.
+- **Blend:** per tone layer, Normal or **Multiply** (`layer.blend`), so dots shade the colour beneath.
+- **Clip to fills:** per tone layer (`layer.clipToFill`), the tone shows only where the group's
+  colour layers have paint, like CSP's clip to the layer below. Drawn on a scratch canvas in the one
+  renderer (`render/page.ts`), so screen, export and thumbnails agree. Skipped above 40 MP.
+- **Bucket source:** Lines (as before) or **Fill**: tap a painted flat and the tone takes exactly
+  that shape (`draw/fillarea.ts`, same outline tracer as the line bucket).
+- Both layer fields are optional in `book.json`; no schema bump, older books open unchanged.
+- **Verified** in the dev app on a test page (then undone): Match fill gave #942414 from a #d9533f
+  fill; Multiply and Clip toggled without errors; Fill-source bucket added a second tone layer in
+  the fill's shape and the panel went deeper red. **Not verified:** clipped tone where the fill is only
+  part of a panel, PSD/2Dope export of blend and clip (they use the one renderer but PSD layers are
+  built separately), the layer-options buttons live only in the Tone tool bar (not in the Layers menu).
+
 ## Tone Bucket and mode icons, 2026-11-16
 
 - **Tone area** now has three modes with their own icons: Panel, Selection and **Bucket**. Flat and

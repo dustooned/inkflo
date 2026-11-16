@@ -316,3 +316,18 @@ describe('panel intent and turn', () => {
     expect(parseBookFile(JSON.stringify(raw)).book.pages[0]!.beats.at(-1)!.intent).toBeUndefined();
   });
 });
+
+describe('tone layer blend and clip', () => {
+  it('round-trips multiply and clip to fills, and ignores other blends', () => {
+    const f = file();
+    const layer = newLayer('tone');
+    layer.screenTone = { shape: 'dot', frequency: 60, density: 0.25, angle: 45, color: '#942414' };
+    layer.blend = 'multiply';
+    layer.clipToFill = true;
+    f.book.pages[0]!.groups[0]!.layers.push(layer);
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    const raw = JSON.parse(stringifyBookFile(f));
+    raw.book.pages[0].groups[0].layers.at(-1).blend = 'screen';
+    expect(parseBookFile(JSON.stringify(raw)).book.pages[0]!.groups[0]!.layers.at(-1)!.blend).toBeUndefined();
+  });
+});

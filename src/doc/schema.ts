@@ -290,6 +290,8 @@ function layer(v: unknown, path: string): Layer {
     fillRef: bool(o.fillRef, `${path}.fillRef`, d.fillRef),
     overFrame: bool(o.overFrame, `${path}.overFrame`, false),
     ...(o.vector === true ? { vector: true } : {}),
+    ...(o.blend === 'multiply' ? { blend: 'multiply' as const } : {}),
+    ...(o.clipToFill === true ? { clipToFill: true as const } : {}),
     ...(o.screenTone !== undefined ? { screenTone: screenTone(o.screenTone, `${path}.screenTone`) } : {}),
     ...(o.screenTone !== undefined && o.moreTones !== undefined && arr(o.moreTones, `${path}.moreTones`).length ? { moreTones: arr(o.moreTones, `${path}.moreTones`).slice(0, MAX_TONES_PER_LAYER - 1).map((x, i) => screenTone(x, `${path}.moreTones[${i}]`)) } : {}),
     ...(o.asTone !== undefined ? { asTone: toneScreen(o.asTone, `${path}.asTone`) } : {}),
