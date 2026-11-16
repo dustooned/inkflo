@@ -275,6 +275,23 @@ describe('carving', () => {
 });
 
 describe('moved panels', () => {
+  it('trims the curved edge at the inset corner of a moved panel', () => {
+    const p = page();
+    p.layout = { ...layoutOf(p), gutter: 0.32 };
+    p.cuts = [{
+      id: 'curved-top', mode: 'across', bounded: true,
+      pts: [{ x: 0, y: 4.8 }, { x: W, y: 3.5 }],
+      handles: [{ x: 2.1, y: 4.0 }, { x: 4.5, y: 3.5 }],
+    }];
+    const x = 3.32;
+    expect(cut(p, [{ x, y: 5 }, { x, y: 9 }], 'panel', true)).not.toBeNull();
+    expect(derivePanels(p)).toHaveLength(3);
+    p.layout.panelTransforms = [{ at: { x: .8, y: .7 }, matrix: [1, 0, 0, 1, .22, .12], order: 1 }];
+    const moved = derivePanels(p).find(({ transform }) => transform)!;
+    expect(moved.bbox.x0).toBeCloseTo(x + .16 + .22, 5);
+    expect(simple(moved.pts)).toBe(true);
+  });
+
   const moved = () => {
     const p = page();
     p.cuts = presetCuts(p, 'rows2');

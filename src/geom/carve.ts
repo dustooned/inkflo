@@ -459,9 +459,7 @@ export function derivePanels(page: Page): Panel[] {
 export function insetPanel(pts: readonly Pt[], d: number, w: number, h: number): Pt[] {
   const n = pts.length;
   if (d <= 0 || n < 3) return pts.map((p) => ({ ...p }));
-  let area = 0;
-  for (let i = 0; i < n; i++) { const a = pts[i]!, b = pts[(i + 1) % n]!; area += a.x * b.y - b.x * a.y; }
-  const inward = area > 0 ? 1 : -1;
+  const inward = area(pts) > 0 ? 1 : -1;
   const eps = 1e-4;
   const onTrim = (a: Pt, b: Pt) => (Math.abs(a.x) < eps && Math.abs(b.x) < eps) || (Math.abs(a.x - w) < eps && Math.abs(b.x - w) < eps)
     || (Math.abs(a.y) < eps && Math.abs(b.y) < eps) || (Math.abs(a.y - h) < eps && Math.abs(b.y - h) < eps);
@@ -471,15 +469,34 @@ export function insetPanel(pts: readonly Pt[], d: number, w: number, h: number):
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const nx = -(b.y - a.y) / len * inward, ny = (b.x - a.x) / len * inward;
     const off = onTrim(a, b) ? 0 : d;
-    return { a: { x: a.x + nx * off, y: a.y + ny * off }, b: { x: b.x + nx * off, y: b.y + ny * off } };
+    return { corner: a, a: { x: a.x + nx * off, y: a.y + ny * off }, b: { x: b.x + nx * off, y: b.y + ny * off } };
   });
-  return pts.map((p, i) => {
-    const l1 = lines[(i - 1 + n) % n]!, l2 = lines[i]!;
-    const r = lineMeet(l1.a, l1.b, l2.a, l2.b);
-    // nearly parallel neighbours (a smooth curve): keep the shifted point, no long miter
-    if (!r || Math.hypot(r.x - p.x, r.y - p.y) > d * 4) return l2.a;
-    return r;
-  });
+  const join = (i: number) => {
+    const prev = lines[(i - 1 + lines.length) % lines.length]!, next = lines[i]!;
+    const at = lineMeet(prev.a, prev.b, next.a, next.b);
+    // Nearly parallel neighbours can produce a long miter.
+    return at && dist(at, next.corner) <= d * 4 ? at : next.a;
+  };
+  const corners = lines.map((_, i) => join(i));
+  // At a curve-to-corner join, the inset can consume several short curve segments.
+  // Skip each consumed segment and join its neighbours so the outline never doubles back there.
+  let i = 0, checked = 0;
+  while (checked < lines.length && lines.length > 3) {
+    const next = (i + 1) % lines.length;
+    const edge = sub(lines[i]!.b, lines[i]!.a);
+    const inset = sub(corners[next]!, corners[i]!);
+    if (edge.x * inset.x + edge.y * inset.y < -1e-9) {
+      lines.splice(i, 1);
+      corners.splice(i, 1);
+      corners[i % lines.length] = join(i % lines.length);
+      i = (i - 1 + lines.length) % lines.length;
+      checked = 0;
+    } else {
+      i = next;
+      checked++;
+    }
+  }
+  return corners;
 }
 
 function lineMeet(a: Pt, b: Pt, c: Pt, e: Pt): Pt | null {
