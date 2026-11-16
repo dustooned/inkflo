@@ -182,3 +182,34 @@ export function creepShift(i: number, paperIn: number): number {
 export function spineWidth(pages: number, ppi = 444): number {
   return Math.round((pages / ppi) * 1000) / 1000;
 }
+
+// ---- custom page sizes
+
+export type SizeUnit = 'in' | 'mm' | 'cm';
+export const SIZE_UNITS: { id: SizeUnit; label: string }[] = [{ id: 'in', label: 'in' }, { id: 'mm', label: 'mm' }, { id: 'cm', label: 'cm' }];
+const PER_INCH: Record<SizeUnit, number> = { in: 1, mm: 25.4, cm: 2.54 };
+
+/** Smallest and largest page side, in inches. */
+export const MIN_SIDE_IN = 1;
+export const MAX_SIDE_IN = 60;
+/** Bitmap limits for a page at the book's dpi (each page keeps full-size layer bitmaps in memory). */
+export const MAX_SIDE_PX = 12_000;
+export const MAX_AREA_PX = 80_000_000;
+
+export const toInches = (v: number, unit: SizeUnit): number => v / PER_INCH[unit];
+/** Value in `unit`, rounded to 2 places (mm, cm) or 3 (in) so typed numbers read back as typed. */
+export const fromInches = (inches: number, unit: SizeUnit): number => {
+  const p = unit === 'in' ? 1000 : 100;
+  return Math.round(inches * PER_INCH[unit] * p) / p;
+};
+
+/** Plain-words reason a page size cannot be used, or null when it is fine. */
+export function sizeProblem(wIn: number, hIn: number, dpi: number): string | null {
+  if (!Number.isFinite(wIn) || !Number.isFinite(hIn) || wIn <= 0 || hIn <= 0) return 'Enter a width and a height.';
+  if (wIn < MIN_SIDE_IN || hIn < MIN_SIDE_IN) return `Each side must be at least ${MIN_SIDE_IN} in (${fromInches(MIN_SIDE_IN, 'mm')} mm).`;
+  if (wIn > MAX_SIDE_IN || hIn > MAX_SIDE_IN) return `Each side can be at most ${MAX_SIDE_IN} in (${fromInches(MAX_SIDE_IN, 'cm')} cm).`;
+  const w = Math.round(wIn * dpi);
+  const h = Math.round(hIn * dpi);
+  if (w > MAX_SIDE_PX || h > MAX_SIDE_PX || w * h > MAX_AREA_PX) return `That is ${w} × ${h} px at ${dpi} dpi, too big to draw on. Make it smaller.`;
+  return null;
+}

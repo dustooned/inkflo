@@ -103,3 +103,21 @@ describe('pdf writer', () => {
     expect(content).toContain('-1 0 0 -1'); // the rotated image
   });
 });
+
+import { fromInches, sizeProblem, toInches } from './printkinds';
+
+describe('custom page sizes', () => {
+  it('converts units both ways without drift', () => {
+    expect(fromInches(toInches(210, 'mm'), 'mm')).toBe(210);
+    expect(fromInches(toInches(29.7, 'cm'), 'cm')).toBe(29.7);
+    expect(fromInches(8.5, 'in')).toBe(8.5);
+  });
+  it('accepts normal sizes and explains the rest', () => {
+    expect(sizeProblem(6.625, 10.1875, 300)).toBeNull();
+    expect(sizeProblem(0, 5, 300)).toMatch(/width and a height/);
+    expect(sizeProblem(0.5, 5, 300)).toMatch(/at least/);
+    expect(sizeProblem(70, 5, 300)).toMatch(/at most/);
+    expect(sizeProblem(50, 50, 300)).toMatch(/too big/);
+    expect(sizeProblem(Number.NaN, 5, 300)).toMatch(/width and a height/);
+  });
+});

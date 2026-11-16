@@ -6,6 +6,7 @@ import { letterBox } from '../../render/caption';
 import type { DeskCtx, DeskMode } from '../desk';
 import { openExport } from '../exportdialog';
 import { confirmDialog, download, h, seg, slug, toast } from '../dom';
+import { sizePicker } from '../sizepicker';
 
 const inch = (v: number) => `${Math.round(v * 1000) / 1000}″`;
 const mmOf = (v: number) => `${Math.round(v * 25.4 * 10) / 10} mm`;
@@ -34,6 +35,26 @@ export function printDesk(ctx: DeskCtx): DeskMode {
       const ok = await confirmDialog('Keep the page size?', `${kind.label} pages are ${size(kind.w, kind.h)}, but this book's pages are ${size(page.widthIn, page.heightIn)} and already have art. Resizing drawn pages isn't built yet, so the bleed, safe area and binding change and the page size stays. Print shops and exports scale to fit.`, 'Use the other settings');
       if (!ok) return;
       studio.setPrint(spec);
+    }
+    ctx.chrome();
+    ctx.request();
+  }
+
+  /** Apply a typed or preset page size. Pages can only change size while nothing is drawn yet. */
+  async function applySize(w: number, h: number, kindId: string | null): Promise<void> {
+    const spec = { ...printOf(book), kind: kindId ?? 'custom' };
+    if (book.pages.every((p) => Math.abs(p.widthIn - w) < 1e-3 && Math.abs(p.heightIn - h) < 1e-3)) {
+      studio.setPrint(spec);
+    } else if (studio.blankArt) {
+      if (!(await confirmDialog(`Make the pages ${size(w, h)}?`, `Nothing is drawn yet, so panels and balloons simply scale to the new page. Undo puts it back.`, 'Resize pages'))) return;
+      studio.setPrint(spec, { w, h });
+      // the desk holds the old page bitmaps: open it again on the new ones
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      toast(`Pages are now ${size(w, h)}.`);
+      return;
+    } else {
+      toast(`This book already has drawing, so its pages stay ${size(page.widthIn, page.heightIn)}. To use ${size(w, h)}, start a new book at that size and bring your pages across.`, 6000);
+      return;
     }
     ctx.chrome();
     ctx.request();
@@ -84,8 +105,15 @@ export function printDesk(ctx: DeskCtx): DeskMode {
       blanks.addEventListener('change', () => set({ blanks: blanks.value as BlankPlace }));
       const rtl = h('input', { type: 'checkbox', checked: spec.rtl });
       rtl.addEventListener('change', () => set({ rtl: rtl.checked }));
+      const sizeBox = sizePicker({ w: page.widthIn, h: page.heightIn, dpi: book.dpi });
       el.append(
         h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Print'), h('div', { class: 'ins-title' }, warns ? `${warns} thing${warns === 1 ? '' : 's'} to fix` : 'Ready to print')),
+        h('div', { class: 'sec stack' }, h('h4', {}, 'Page size'), sizeBox.el,
+          h('button', { class: 'btn', type: 'button', onclick: () => {
+            const v = sizeBox.value();
+            if (v.problem) { toast(v.problem, 5000); return; }
+            void applySize(v.w, v.h, v.kind);
+          } }, 'Apply size')),
         h('div', { class: 'sec stack' }, h('h4', {}, kind ? kind.label : 'Custom print'),
           kind ? h('p', { class: 'note' }, `${size(kind.w, kind.h)}. ${kind.note} Suggested ${kind.dpi} dpi (this book: ${book.dpi}). Sizes are common values: always confirm with your printer.`) : null,
           num('Bleed', spec.bleed, (x) => set({ bleed: x }), 1),

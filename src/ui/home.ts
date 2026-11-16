@@ -8,7 +8,8 @@ import { STAGES } from '../doc/model';
 import { askText, h, pickFile, toast } from './dom';
 import { displayButton } from './popover';
 import { openOfflineDialog } from './offlinedialog';
-import { kindById, specFor } from '../geom/printkinds';
+import { DEFAULT_PRINT, kindById, specFor } from '../geom/printkinds';
+import { sizePicker } from './sizepicker';
 import { DEFAULT_LAYOUT, stripCuts } from '../geom/carve';
 
 /** Home: the library of books on this device. */
@@ -21,11 +22,36 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     urls.push(url);
     return h('img', { src: url, alt: '' });
   };
-  const newBook = async () => {
-    const title = await askText('New book', 'Title', 'Untitled book', 'Create');
-    if (title === null) return;
-    const book = await studio.createBook(title, '');
-    go(`#book/${book.id}`);
+  /** New book: a title and a page size, from a preset or typed in. Opens ready to script. */
+  const newBook = () => {
+    const title = h('input', { value: 'Untitled book', 'aria-label': 'Title', maxlength: 120 });
+    const create = h('button', { class: 'btn primary', type: 'submit' }, 'Create book');
+    const first = kindById('us-comic')!;
+    const sizeBox = sizePicker({ w: first.w, h: first.h, dpi: first.dpi, onChange: (v) => { create.disabled = !!v.problem; } });
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New book')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), h('h4', {}, 'Page size'), sizeBox.el,
+        h('p', { class: 'note' }, 'Pick a preset or type your own. You can change bleed, safe area and binding in Print, and the size too until you start drawing.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), create));
+    const d = h('dialog', { 'aria-label': 'New book' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = sizeBox.value();
+      if (v.problem) return;
+      d.close();
+      const kind = v.kind ? kindById(v.kind) : null;
+      const book = await studio.createBook(title.value.trim() || 'Untitled book', '', (b) => {
+        b.print = kind ? specFor(kind) : { ...DEFAULT_PRINT, kind: 'custom', binding: 'none', bleed: 0.125, safe: 0.25, rtl: false };
+        b.dpi = kind?.dpi ?? 300;
+        b.pages[0]!.widthIn = v.w;
+        b.pages[0]!.heightIn = v.h;
+      });
+      go(`#book/${book.id}`);
+    });
+    document.body.append(d);
+    d.showModal();
+    title.select();
   };
   const importBook = async () => {
     const f = await pickFile('.inkflo,.zip');
