@@ -78,6 +78,12 @@ export const ICONS = {
   enclose: P('M7 6c5-3 12 0 12 6s-6 8-10 7-6-4-5-7').replace('<path', '<path stroke-dasharray="3 2.5"') + DOT(12, 12, 2),
   leftovers: DOT(7, 8) + DOT(12, 6) + DOT(16, 10) + DOT(9, 14) + DOT(15, 16) + DOT(6, 18) + DOT(18, 19),
   flats: R(3.5, 3.5, 17, 17, 1.5) + P('M3.5 11h9v9.5M12.5 11V3.5'),
+  // tone modes: a whole panel, a drawn selection, a bucket that finds the lines
+  tonePanel: R(3.5, 4.5, 17, 15, 1.5) + DOT(8, 9.5) + DOT(12, 9.5) + DOT(16, 9.5) + DOT(8, 14.5) + DOT(12, 14.5) + DOT(16, 14.5),
+  toneLasso: P('M12 4.5c4.7 0 8 2.2 8 5s-3.3 5-8 5c-.9 0-1.7-.1-2.5-.3') + P('M12 4.5c-4.7 0-8 2.2-8 5 0 1.8 1.3 3.3 3.4 4.2') + P('M9.5 14.2c-.8 1.8-.3 3.6 1.2 5.3') + DOT(14, 8.5, 1) + DOT(10, 8.5, 1) + DOT(12, 11.2, 1),
+  toneBucket: P('M5 11l6.5-6.5 7 7-6.5 6.5z') + P('M8 8l7 7') + P('M19.5 14.5c-1.2 1.6-1.8 2.5-1.8 3.3a1.8 1.8 0 0 0 3.6 0c0-.8-.6-1.7-1.8-3.3z').replace('<path', '<path fill="currentColor"') + DOT(8.5, 19, 1) + DOT(12, 19.5, 1) + DOT(15.5, 19, 1),
+  toneFlat: R(3.5, 3.5, 17, 17, 2) + DOT(8, 8) + DOT(12, 8) + DOT(16, 8) + DOT(8, 12) + DOT(12, 12) + DOT(16, 12) + DOT(8, 16) + DOT(12, 16) + DOT(16, 16),
+  toneGradient: R(3.5, 3.5, 17, 17, 2) + DOT(7, 7, 1.7) + DOT(12, 7, 1.3) + DOT(17, 7, 0.9) + DOT(7, 12, 1.4) + DOT(12, 12, 1) + DOT(17, 12, 0.6) + DOT(7, 17, 1) + DOT(12, 17, 0.7) + DOT(17, 17, 0.35),
   screentone: R(3.5, 3.5, 17, 17, 2) + DOT(8, 8) + DOT(12, 8) + DOT(16, 8) + DOT(8, 12) + DOT(12, 12) + DOT(16, 12) + DOT(8, 16) + DOT(12, 16) + DOT(16, 16),
   select: R(4, 4, 16, 16, 1).replace('<rect', '<rect stroke-dasharray="3 2.5"'),
   transform: R(5, 5, 14, 14, 0.5) + R(3, 3, 4, 4, 0.5) + R(17, 3, 4, 4, 0.5) + R(3, 17, 4, 4, 0.5) + R(17, 17, 4, 4, 0.5),

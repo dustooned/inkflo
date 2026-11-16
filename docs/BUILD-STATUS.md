@@ -5,6 +5,22 @@ Where the app stands against [BUILD-HANDOFF.md](BUILD-HANDOFF.md). Updated 2026-
 Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-check is at
 `/selfcheck.html`. Checks: `npm test` (291 tests), `npx tsc --noEmit`, `npx vite build`.
 
+## Tone Bucket and mode icons, 2026-11-16
+
+- **Tone area** now has three modes with their own icons: Panel, Selection and **Bucket**. Flat and
+  Gradient have icons too. Bucket: tap inside a closed line area and just that area is toned.
+- It reads the same walls as the Colour bucket (reference lines, or all visible lines) with the
+  panel borders as outer walls. Controls: **Close gaps**, **Under lines** (spread under the ink so no
+  white edge shows) and the Walls switch. A tap that would fill a whole open panel is refused with a
+  plain message instead.
+- The area is traced to an outline (`draw/contour.ts`: exact pixel-edge trace, then simplified) and
+  stored as the tone's ordinary `region`, so no format change. It is a fixed shape: redrawing the
+  lines later does not move it. Holes inside the area (an eye in a face) are not cut out.
+- `seg()` buttons can take an icon and a hint (`ui/dom.ts`); new icons in `ui/icons.ts`.
+- **Verified** in the dev app: icons show, Bucket mode and its hint, a tap inside a red shape toned
+  just that shape and undid cleanly. **Not verified:** Close gaps and Under lines sliders by eye
+  (they sit in the overflow at narrow widths), PSD/2Dope export of a bucket region, touch.
+
 ## Craft: transitions and the rhythm strip, 2026-11-16
 
 - Craft features #2 and #7 (`docs/research/craft-features.md`). Layout inspector → **Rhythm**:

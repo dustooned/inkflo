@@ -16,13 +16,14 @@ import { smudgeTool } from '../smudgetool';
 import { placementOf, toSource, type Placement } from '../placement';
 import { markTool } from '../marktool';
 import { moveStrokes, type ClipPayload } from '../../app/clipboard';
-import { screentoneTool } from '../screentone';
+import { screentoneTool, type BucketQuery, type BucketResult } from '../screentone';
+import { simplify as simplifyOutline, traceOutline } from '../../draw/contour';
 import { openAdjustments } from '../adjustments';
 import { openBookAssets } from '../bookassets';
 import { MARQUEE_SHAPES, marqueeShape } from '../marquee';
 import { closePopover, popover } from '../popover';
 import type { SymmetryMode } from '../../engine/core/adjust';
-import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, type FillPaint, type LinePass } from '../../draw/replay';
+import { layerKit, paintFill, passForType, rebuildPage, refAlpha, strokeStyle, wallLayers, type FillPaint, type LinePass } from '../../draw/replay';
 import { FILL_THRESHOLD, FillKit, flatColours, openEnds } from '../../draw/fillkit';
 import type { Panel } from '../../geom/carve';
 import { planeCanvas, touchLayer } from '../../draw/residency';
@@ -320,7 +321,29 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     const paint = group?.layers.find((l) => l.visible && !l.locked && !l.vector && !l.image && !l.screenTone && art.planes[l.id]);
     openAdjustments(ctx, target === 'layer' ? active()?.layer.id ?? null : paint?.id ?? null, keepResident);
   }
-  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); }, () => active()?.layer.id ?? null);
+  /** The Tone tool's Bucket: the closed line area around a tap, traced to an outline in panel space. */
+  let toneKitCache: { key: string; panels: Panel[]; kit: FillKit } | null = null;
+  function bucketTone(q: BucketQuery): BucketResult {
+    const panels = ctx.panels();
+    const vis = page.groups.map((g) => `${g.visible ? 1 : 0}${g.layers.map((l) => `${l.id}${l.visible ? 1 : 0}${l.fillRef ? 1 : 0}`).join('')}`).join('|');
+    const key = `${q.group.id}|${Object.entries(art.revs).map(([id, r]) => `${id}:${r}`).join(',')}|${vis}`;
+    let kit: FillKit;
+    if (toneKitCache && toneKitCache.key === key && toneKitCache.panels === panels) kit = toneKitCache.kit;
+    else {
+      kit = new FillKit((refer) => refAlpha(wallLayers(page, q.group, refer).filter((l) => !l.screenTone), art, art.width, art.height), art.width, art.height, dpi, panels.map((p) => p.source ?? p));
+      toneKitCache = { key, panels, kit };
+    }
+    const found = kit.mask({ at: q.at, color: '#000000', gap: q.gap, threshold: q.threshold, ...(q.grow ? { grow: q.grow } : {}), ...(q.referAll ? { refer: 'all' as const } : {}) });
+    if (!found || found.res.count < 16) return { problem: 'No closed area there. Tap in the white between lines, or raise Close gaps.' };
+    const panel = panelForGroup(panels, q.group);
+    const poly = (panel?.source ?? panel)?.pts ?? [];
+    const panelPx = Math.abs(poly.reduce((sum, a, i) => { const b = poly[(i + 1) % poly.length]!; return sum + (a.x * b.y - b.x * a.y); }, 0)) / 2 * dpi * dpi;
+    if (panelPx && found.res.count > panelPx * 0.9) return { problem: 'The lines here are open, so the bucket would fill the whole panel. Raise Close gaps or close the line.' };
+    const outline = simplifyOutline(traceOutline(found.res.mask, art.width, art.height, found.res), Math.max(0.75, dpi / 400));
+    if (outline.length < 3) return { problem: 'That area is too small to tone.' };
+    return { region: outline.map((p) => ({ x: p.x / dpi, y: p.y / dpi })) };
+  }
+  const tone = screentoneTool(ctx, (id) => { activeLayer.set(page.id, id); ctx.chrome(); }, () => active()?.layer.id ?? null, (q) => bucketTone(q));
   const selectImage = (id: string) => {
     activeLayer.set(page.id, id);
     contextGroupId = active()?.group.id ?? null;

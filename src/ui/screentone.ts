@@ -1,4 +1,4 @@
-import { findLayer, MAX_TONES_PER_LAYER, newLayer, setTones, TONE_SHAPES, tonesOf, type Layer, type Pt, type ScreenTone, type ToneGradient } from '../doc/model';
+import { findLayer, MAX_TONES_PER_LAYER, newLayer, setTones, TONE_SHAPES, tonesOf, type Layer, type LayerGroup, type Pt, type ScreenTone, type ToneGradient } from '../doc/model';
 import { invert } from '../engine/core/selxform';
 import { mapPanelPoint } from '../geom/carve';
 import { groupAt, groupLabel, insertIndex, panelForGroup } from '../geom/groups';
@@ -27,9 +27,23 @@ const GRADIENTS: { name: string; kind: ToneGradient['kind']; stops: Stops }[] = 
 ];
 const SHAPE_NAMES: Record<ScreenTone['shape'], string> = { dot: 'Dots', square: 'Squares', diamond: 'Diamonds', line: 'Lines', cross: 'Crosshatch' };
 
-export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selected: () => string | null = () => null) {
+/** What the Bucket asks the desk for: the closed line area around a tap, as an outline in page inches. */
+export interface BucketQuery {
+  /** The tap, in the panel's own (untransformed) space. */
+  at: Pt;
+  group: LayerGroup;
+  gap: number;
+  grow: number;
+  threshold: number;
+  referAll: boolean;
+}
+export type BucketResult = { region: Pt[] } | { problem: string };
+
+export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selected: () => string | null = () => null, bucketAt?: (q: BucketQuery) => BucketResult) {
   const { studio, page } = ctx;
-  let placement: 'panel' | 'lasso' = 'panel';
+  let placement: 'panel' | 'lasso' | 'bucket' = 'panel';
+  /** Bucket settings: close gaps up to `gap` inches, spread `grow` inches under the lines. */
+  const bucket = { gap: 0.02, grow: 0.004, referAll: false };
   let fill: 'flat' | 'gradient' = 'flat';
   let start: Pt | null = null;
   let dragTo: Pt | null = null;
@@ -48,7 +62,7 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
   };
   const describe = (t: ScreenTone, i: number) => `${i + 1} · ${SHAPE_NAMES[t.shape]}${t.gradient ? ' gradient' : ' ' + Math.round(t.density * 100) + '%'}${t.region ? ' (selection)' : ''}`;
 
-  function add(at: Pt, region?: Pt[], gradient?: { from: Pt; to: Pt }): void {
+  function add(at: Pt, region?: Pt[], gradient?: { from: Pt; to: Pt }, viaBucket = false): void {
     const panels = ctx.panels();
     const group = groupAt(page, panels, at);
     if (group.kind !== 'panel') { toast('Start inside the panel you want to tone.'); return; }
@@ -56,9 +70,16 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
     const matrix = panelForGroup(panels, group)?.transform?.matrix;
     const inverse = matrix ? invert(matrix) : null;
     const inPanel = (p: Pt) => mapPanelPoint(p, inverse);
+    let stored: Pt[] | undefined = region?.map(inPanel);
+    if (viaBucket) {
+      const found = bucketAt?.({ at: inPanel(at), group, gap: bucket.gap, grow: bucket.grow, threshold: 24, referAll: bucket.referAll });
+      if (!found) { toast('The bucket is not available here.'); return; }
+      if ('problem' in found) { toast(found.problem); return; }
+      stored = found.region; // already in the panel's own space
+    }
     const tone: ScreenTone = {
       ...draft,
-      ...(region ? { region: region.map(inPanel) } : {}),
+      ...(stored ? { region: stored } : {}),
       ...(gradient ? { gradient: { kind: draftGradient.kind, from: inPanel(gradient.from), to: inPanel(gradient.to), stops: draftGradient.stops.map((s) => ({ ...s })) } } : {}),
     };
     // One tone layer per panel: use the selected tone layer if it is in this panel, else the panel's
@@ -68,7 +89,7 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
     const sel = selId ? active(selId) : null;
     const target = startNew ? undefined : sel && sel.group.id === group.id && usable(sel.layer) ? sel.layer : group.layers.find(usable);
     startNew = false;
-    const label = gradient ? 'Add gradient tone' : 'Add screentone';
+    const label = gradient ? 'Add gradient tone' : viaBucket ? 'Bucket screentone' : 'Add screentone';
     if (target) {
       const id = target.id;
       const at = tonesOf(target).length;
@@ -231,8 +252,15 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
       const areaSel = selLayer && areas.length > 1 ? h('select', { 'aria-label': 'Tone area in this layer' }, areas.map((t, i) => h('option', { value: String(i), selected: i === ai }, describe(t, i)))) : null;
       areaSel?.addEventListener('change', () => { picked = { layer: selLayer!.id, index: Number(areaSel.value) }; ctx.chrome(); });
       return [
-        seg<'flat' | 'gradient'>([{ id: 'flat', label: 'Flat' }, { id: 'gradient', label: 'Gradient' }], fill, (v) => { fill = v; if (v === 'gradient') placement = 'panel'; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone fill'),
-        fill === 'flat' ? seg<'panel' | 'lasso'>([{ id: 'panel', label: 'Panel' }, { id: 'lasso', label: 'Selection' }], placement, (v) => { placement = v; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone area') : null,
+        seg<'flat' | 'gradient'>([{ id: 'flat', label: 'Flat', icon: 'toneFlat', hint: 'One even tone' }, { id: 'gradient', label: 'Gradient', icon: 'toneGradient', hint: 'Tone that fades across a panel' }], fill, (v) => { fill = v; if (v === 'gradient') placement = 'panel'; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone fill'),
+        fill === 'flat' ? seg<'panel' | 'lasso' | 'bucket'>([
+          { id: 'panel', label: 'Panel', icon: 'tonePanel', hint: 'Tap a panel to tone all of it' },
+          { id: 'lasso', label: 'Selection', icon: 'toneLasso', hint: 'Draw around the area to tone' },
+          ...(bucketAt ? [{ id: 'bucket' as const, label: 'Bucket', icon: 'toneBucket' as const, hint: 'Tap inside lines to tone that closed area' }] : []),
+        ], placement, (v) => { placement = v; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone area') : null,
+        fill === 'flat' && placement === 'bucket' ? h('span', { title: 'Treat breaks in your lines up to this size as closed, so the tone does not leak.' }, slider('Close gaps', 0, 0.08, 0.005, bucket.gap, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.gap = v; })) : null,
+        fill === 'flat' && placement === 'bucket' ? h('span', { title: 'Spread the tone under your lines so no white edge shows.' }, slider('Under lines', 0, 0.02, 0.001, bucket.grow, (v) => `${(v * 72).toFixed(1)}pt`, (v) => { bucket.grow = v; })) : null,
+        fill === 'flat' && placement === 'bucket' ? seg([{ id: 'refs', label: 'Reference lines' }, { id: 'all', label: 'All visible' }], bucket.referAll ? 'all' : 'refs', (v) => { bucket.referAll = v === 'all'; ctx.chrome(); }, 'Bucket walls') : null,
         fill === 'flat' && placement === 'lasso' ? seg([...MARQUEE_SHAPES], shape, (v) => { shape = marqueeShape(v); marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone selection shape') : null,
         ...(fill === 'flat' ? marquee.controls() : []),
         h('button', { type: 'button', class: 'btn', onclick: () => settings() }, `${SHAPE_NAMES[draft.shape]} · ${fill === 'gradient' ? gradientLabel() : Math.round(draft.density * 100) + '%'} ▾`),
@@ -242,7 +270,7 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
         selLayer && areas.length > 1 ? h('button', { type: 'button', class: 'btn', onclick: () => removeArea(selLayer, ai) }, 'Remove this area') : null,
         h('span', { class: 'hint' }, fill === 'gradient'
           ? (sel?.gradient ? 'Drag in its panel to aim the selected gradient again, or in another panel for a new one.' : 'Drag across a panel: the gradient runs from where you start to where you let go.')
-          : placement === 'panel' ? 'Tap inside a panel to add tone to its tone layer.' : 'Draw around the area to shade.'),
+          : placement === 'panel' ? 'Tap inside a panel to add tone to its tone layer.' : placement === 'bucket' ? 'Tap inside a closed line area to tone just that area.' : 'Draw around the area to shade.'),
       ];
     },
     clear: marquee.clear,
@@ -258,7 +286,7 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
         if (fill === 'gradient') {
           if (far < 12) toast('Drag across the panel to set the gradient’s direction.');
           else if (!reaim(start, p)) add(start, undefined, { from: start, to: p });
-        } else if (far < 12) add(p);
+        } else if (far < 12) add(p, undefined, undefined, placement === 'bucket');
       }
       start = null;
       dragTo = null;

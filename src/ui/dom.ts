@@ -1,4 +1,5 @@
 /** Tiny DOM helpers: no framework (CLAUDE.md rule 6). */
+import { icon, type IconName } from './icons';
 
 type Attrs = Record<string, string | number | boolean | null | undefined | ((e: Event) => void)>;
 type Child = Node | string | null | undefined | false;
@@ -58,10 +59,10 @@ export function slider(label: string, min: number, max: number, step: number, va
   return h('label', { class: 'mini' }, label, input, out);
 }
 
-export function seg<T extends string>(options: { id: T; label: string }[], value: T, onPick: (v: T) => void, label = ''): HTMLElement {
+export function seg<T extends string>(options: { id: T; label: string; icon?: IconName; hint?: string }[], value: T, onPick: (v: T) => void, label = ''): HTMLElement {
   const el = h('div', { class: 'seg', role: 'group', 'aria-label': label });
   for (const o of options) {
-    el.append(h('button', { type: 'button', 'aria-pressed': String(o.id === value), onclick: () => onPick(o.id) }, o.label));
+    el.append(h('button', { type: 'button', title: o.hint ?? o.label, 'aria-pressed': String(o.id === value), ...(o.icon ? { style: 'display:inline-flex;align-items:center;gap:5px' } : {}), onclick: () => onPick(o.id) }, o.icon ? icon(o.icon, 16) : null, o.label));
   }
   return el;
 }
