@@ -1522,3 +1522,32 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
   the panel.
   - With the order recorded, the stroke stays cleared after replay (`0,0,0,0`).
   - Without it (old data), the stroke returns (`0,0,255,255`), as before.
+
+## Caption tails: curve controls and per-tail settings (2Dope parity), 2026-11-15
+
+- The lettering spec and renderer already supported `CaptionTail.bend` and every per-style
+  setting, but the Caption desk only offered aiming and a join select. Now:
+  - **On the canvas:** each tail has a diamond curve handle at its bend, or halfway along when
+    straight; it's filled when curved, with a dashed guide from base to bend to tip. Drag it to
+    curve the tail ("Bend tail"); two taps within 350 ms straighten it ("Straighten tail").
+    The nearest of tips and diamonds wins.
+  - **Drags keep the curve:** moving the tip moves the bend half as far (`moveTip`). Moving the
+    balloon keeps the tips on the speakers and moves each bend half as far (`followBody`), as
+    in 2Dope.
+  - **Inspector, per tail:**
+    - Curve: Left / Straight / Right (`curveTail`, 28% of the tail's length, perpendicular to
+      the base→tip direction), showing the current side (`curveSide`);
+    - Base width (Spread for bubbles);
+    - Taper and Tip for joined and pointed tails;
+    - Bubbles, Bubble size and Shrink for thought tails;
+    - Zigs, Zig width, Thickness and a Filled bolt for lightning.
+    Ranges come from `TAIL_LIMITS`.
+- `geom/tailbend.ts` is pure: `tailBase` is the outline point facing the tip, plus
+  `bendHandle`, `curveSide`, `curveTail`, `moveTip` and `followBody`.
+- Checks: `geom/tailbend.test.ts` (4), and all tests pass. In the built-in pane with real pointer
+  events:
+  - dragging the diamond curved the tail (bend set, read as Left, one undo step);
+  - the Left button curved it;
+  - moving the balloon 60 pt kept the tip and moved the bend 30 pt;
+  - a double tap straightened it;
+  - the inspector showed Curve, Base width, Taper and Tip.

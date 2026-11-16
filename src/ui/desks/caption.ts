@@ -1,12 +1,13 @@
 import { newId, PT, sheetOf, type Letter, type Pt } from '../../doc/model';
 import { relabelLetters, type ClipPayload } from '../../app/clipboard';
 import { balloonBins, lettersCentre } from '../balloonbins';
+import { bendHandle, curveSide, curveTail, followBody, moveTip, tailBase } from '../../geom/tailbend';
 import { sideChoice } from '../binpanel';
 import { BUNDLED_FONTS } from '../../engine/lettering/fonts';
 import { readBalloon, shapeForText } from '../../engine/lettering/geometry';
 import { resample } from '../../engine/core/quickshape';
 import { applyStyle, captureStyle } from '../../engine/lettering/styles';
-import { LETTER_SIZES, TAIL_JOINS, type BalloonStyle, type CaptionSpec, type LetterSize, type TailJoin } from '../../engine/lettering/spec';
+import { LETTER_SIZES, TAIL_JOINS, TAIL_LIMITS, type BalloonStyle, type CaptionSpec, type CaptionTail, type LetterSize, type TailJoin } from '../../engine/lettering/spec';
 import { panelAt } from '../../geom/carve';
 import { balloonGroup, balloonPaintOrder, captionGroups, firstBalloon } from '../../geom/captiongroup';
 import { applyScriptWording, assignDialoguePanel, assignDialoguePreset, centreIn, characterStyle, clampLetter, dialoguePanel, letterForLine, newLetter, nextPanelLine, omitDialogue, parseLine, readingOrderIssues, reconcileDialogue, scriptRevision, sourceIndex, speakers, syncScriptFromLetter, withCharacterStyle } from '../../geom/lettering';
@@ -21,7 +22,7 @@ import { openStyleSheet } from '../stylesheet';
 import { balloonSwatch } from '../balloonswatch';
 import { typeTool } from '../typetool';
 
-type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
+type Grab = { kind: 'body' } | { kind: 'rotate'; angle: number } | { kind: 'tail'; index: number } | { kind: 'bend'; index: number } | { kind: 'size'; side: ResizeSide; box: Bounds; minimum: Pt };
 
 const KINDS: { id: BalloonStyle; label: string; glyph: string; key: string }[] = [
   { id: 'speech', label: 'Speech balloon', glyph: '💬', key: 'b' },
@@ -381,6 +382,14 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   }
 
   let lastTap: { at: number; id: string; point: Pt } | null = null;
+  /** The last tap on a tail's curve handle (a second tap soon after straightens it). */
+  let lastBendTap: { at: number; id: string; index: number } | null = null;
+  /** Each tail's base on the balloon and its curve handle (page points). */
+  const tailHandles = (l: Letter) => {
+    const ring = outline(l);
+    const centre = { x: l.cap.x, y: l.cap.y };
+    return l.cap.tails.map((t) => { const base = tailBase(ring, centre, t); return { base, bend: bendHandle(base, t) }; });
+  };
   let fineTuneOpen = false;
   const type = typeTool(ctx);
   const mode: DeskMode = {
@@ -521,10 +530,27 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         };
         const bounds = localBox(s);
         const frameBounds = frame(bounds, k);
-        const tail = s.cap.style === 'sfx' ? undefined : s.cap.tails.map((at, index) => ({ index, d: distance(at) })).sort((a, b) => a.d - b.d)[0];
+        const bends = s.cap.style === 'sfx' ? [] : tailHandles(s);
+        const tail = s.cap.style === 'sfx' ? undefined : [
+          ...s.cap.tails.map((at, index) => ({ index, d: distance(at), kind: 'tail' as const })),
+          ...bends.map((hd, index) => ({ index, d: distance(hd.bend), kind: 'bend' as const })),
+        ].sort((a, b) => a.d - b.d)[0];
         const rotateDistance = distance(onPage(rotationAt(frameBounds, k), s));
         const handle = boxHandles(frameBounds).map((side) => ({ side, d: distance(onPage(side.at, s)) })).sort((a, b) => a.d - b.d)[0]!;
         if (tail && tail.d <= Math.min(r, rotateDistance, handle.d)) {
+          if (tail.kind === 'bend') {
+            // a second tap on the curve handle straightens the tail
+            const again = lastBendTap && lastBendTap.id === s.id && lastBendTap.index === tail.index && now - lastBendTap.at < 350;
+            lastBendTap = { at: now, id: s.id, index: tail.index };
+            if (again && s.cap.tails[tail.index]?.bend) {
+              lastBendTap = null;
+              const i = tail.index;
+              edit('Straighten tail', () => { const l = sel(); if (l) l.cap = { ...l.cap, tails: l.cap.tails.map((t, k) => (k === i ? curveTail(bends[i]!.base, t, 0) : t)) }; });
+              return;
+            }
+            drag = { id: s.id, grab: { kind: 'bend', index: tail.index }, ...start() };
+            return;
+          }
           drag = { id: s.id, grab: { kind: 'tail', index: tail.index }, ...start() };
           return;
         }
@@ -582,6 +608,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         // the tails stay on their speakers; the balloon (and its joined balloons) move
         l.cap = { ...o, x: o.x + dx, y: o.y + dy, ...(o.links ? { links: o.links.map((k) => ({ ...k, x: k.x + dx, y: k.y + dy })) } : {}) };
         clampLetter(l, page);
+        // the tips stay on the speakers; curved tails keep their curve
+        l.cap = { ...l.cap, tails: o.tails.map((t) => followBody(t, l.cap.x - o.x, l.cap.y - o.y)) };
         const dxGroup = l.cap.x - o.x, dyGroup = l.cap.y - o.y;
         for (const part of groupOf(l)) {
           if (part.id === l.id) continue;
@@ -592,7 +620,10 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         }
       } else if (drag.grab.kind === 'tail') {
         const i = drag.grab.index;
-        l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, x: t.x + dx, y: t.y + dy } : t)) };
+        l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? moveTip(t, dx, dy) : t)) };
+      } else if (drag.grab.kind === 'bend') {
+        const i = drag.grab.index;
+        l.cap = { ...o, tails: o.tails.map((t, j) => (j === i ? { ...t, bend: [q.x, q.y] as [number, number] } : t)) };
       } else if (drag.grab.kind === 'rotate') {
         const angle = (point: Pt) => Math.atan2(point.y - o.y, point.x - o.x);
         let degrees = drag.grab.angle + (angle(q) - angle(drag.start)) * 180 / Math.PI;
@@ -655,7 +686,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       const d = drag;
       drag = null;
       studio.drawing = false;
-      if (d.moved) commit(d.grab.kind === 'body' ? 'Move balloon' : d.grab.kind === 'tail' ? 'Aim tail' : d.grab.kind === 'rotate' ? 'Rotate lettering' : 'Resize balloon', d.before, d.beforeBeats);
+      if (d.moved) commit(d.grab.kind === 'body' ? 'Move balloon' : d.grab.kind === 'tail' ? 'Aim tail' : d.grab.kind === 'bend' ? 'Bend tail' : d.grab.kind === 'rotate' ? 'Rotate lettering' : 'Resize balloon', d.before, d.beforeBeats);
       lastTap = !d.moved && d.grab.kind === 'body' ? { at: performance.now(), id: d.id, point: p } : null;
       ctx.chrome();
     },
@@ -731,7 +762,26 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           g.beginPath(); g.moveTo(x - 5, y); g.lineTo(x + 5, y); g.moveTo(x, y - 5); g.lineTo(x, y + 5); g.stroke();
         }
         for (const hd of handles) dot(onPage(hd.at, l), '#FFFDF7');
-        if (l.cap.style !== 'sfx') for (const tail of l.cap.tails) dot(tail, '#F2C230');
+        if (l.cap.style !== 'sfx') {
+          tailHandles(l).forEach(({ base, bend }, i) => {
+            const tip = l.cap.tails[i]!;
+            g.save();
+            g.strokeStyle = 'rgba(47,111,126,.55)';
+            g.lineWidth = 1;
+            g.setLineDash([3, 3]);
+            g.beginPath(); g.moveTo(base.x * k, base.y * k); g.lineTo(bend.x * k, bend.y * k); g.lineTo(tip.x * k, tip.y * k); g.stroke();
+            g.setLineDash([]);
+            // the curve handle: a diamond (filled when the tail is curved)
+            g.fillStyle = tip.bend ? '#2F6F7E' : '#FFFDF7';
+            g.strokeStyle = '#191A1F';
+            g.lineWidth = 1.5;
+            g.beginPath();
+            g.moveTo(bend.x * k, bend.y * k - 6); g.lineTo(bend.x * k + 6, bend.y * k); g.lineTo(bend.x * k, bend.y * k + 6); g.lineTo(bend.x * k - 6, bend.y * k); g.closePath();
+            g.fill(); g.stroke();
+            g.restore();
+          });
+          for (const tail of l.cap.tails) dot(tail, '#F2C230');
+        }
         if (l.cap.style !== 'sfx') {
           const p = plusAt(l, k);
           dot(p, '#FFFDF7');
@@ -976,11 +1026,26 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
         ...c.tails.map((t, i) => {
           const join = h('select', { 'aria-label': `Tail ${i + 1} kind` }, TAIL_JOINS.filter((j) => j !== 'none').map((j) => h('option', { value: j, selected: j === t.join }, JOIN_LABEL[j])));
           join.addEventListener('change', () => editCap('Tail kind', (x) => ({ ...x, tails: x.tails.map((y, k) => (k === i ? { ...y, join: join.value as TailJoin } : y)) })));
-          return h('div', { style: 'display:flex;gap:6px;align-items:center' }, h('span', { class: 'hint' }, `Tail ${i + 1}`), join,
-            h('button', { class: 'btn', type: 'button', 'aria-label': `Remove tail ${i + 1}`, onclick: () => editCap('Remove tail', (x) => ({ ...x, tails: x.tails.filter((_, k) => k !== i) })) }, '✕'));
+          const base = tailHandles(l)[i]!.base;
+          const side = curveSide(base, t);
+          const setTail = (v: (y: CaptionTail) => CaptionTail) => (x: CaptionSpec) => ({ ...x, tails: x.tails.map((y, k) => (k === i ? v(y) : y)) });
+          const lim = (key: keyof typeof TAIL_LIMITS) => TAIL_LIMITS[key];
+          const tailSlider = (label: string, key: keyof typeof TAIL_LIMITS, step: number) =>
+            slider(label, lim(key)[0], lim(key)[1], step, (t[key] as number | undefined) ?? lim(key)[2], (x, v) => setTail((y) => ({ ...y, [key]: v }))(x));
+          const bolt = h('input', { type: 'checkbox', checked: !!t.bolt });
+          bolt.addEventListener('change', () => editCap('Lightning bolt', setTail((y) => ({ ...y, bolt: bolt.checked || undefined }))));
+          return h('div', { class: 'tail-row' },
+            h('div', { style: 'display:flex;gap:6px;align-items:center' }, h('span', { class: 'hint' }, `Tail ${i + 1}`), join,
+              h('button', { class: 'btn', type: 'button', 'aria-label': `Remove tail ${i + 1}`, onclick: () => editCap('Remove tail', (x) => ({ ...x, tails: x.tails.filter((_, k) => k !== i) })) }, '✕')),
+            h('div', { class: 'field' }, 'Curve', seg<'-1' | '0' | '1'>([{ id: '-1', label: 'Left' }, { id: '0', label: 'Straight' }, { id: '1', label: 'Right' }], String(side) as '-1' | '0' | '1',
+              (v) => editCap(v === '0' ? 'Straighten tail' : 'Curve tail', setTail((y) => curveTail(base, y, Number(v) as -1 | 0 | 1))), `Tail ${i + 1} curve`)),
+            t.join === 'bubbles' ? slider('Spread', 0.3, 4, 0.05, t.width, (x, v) => setTail((y) => ({ ...y, width: v }))(x)) : slider('Base width', 0.3, 4, 0.05, t.width, (x, v) => setTail((y) => ({ ...y, width: v }))(x)),
+            ...(t.join === 'merged' || t.join === 'seam' ? [tailSlider('Taper', 'taper', 0.05), tailSlider('Tip', 'tip', 0.02)] : []),
+            ...(t.join === 'bubbles' ? [tailSlider('Bubbles', 'count', 1), tailSlider('Bubble size', 'size', 0.05), tailSlider('Shrink', 'shrink', 0.05)] : []),
+            ...(t.join === 'lightning' ? [tailSlider('Zigs', 'zigs', 1), tailSlider('Zig width', 'amp', 0.05), tailSlider('Thickness', 'line', 0.05), h('label', { class: 'mini' }, bolt, 'Filled bolt')] : []));
         }),
         c.tails.length < 4 ? h('button', { class: 'btn', type: 'button', onclick: () => addTail(l) }, '+ Add tail') : null,
-        h('p', { class: 'note' }, 'Drag a yellow dot on the page to aim its tail at the speaker.')));
+        h('p', { class: 'note' }, 'On the page: drag a tail\u2019s yellow dot to aim it at the speaker, its diamond to curve it. Tap the diamond twice to straighten.')));
     }
 
     // Readability
