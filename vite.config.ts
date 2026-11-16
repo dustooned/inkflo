@@ -1,7 +1,9 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import { offlinePlugin } from './scripts/offline-plugin';
 
 export default defineConfig({
+  plugins: [offlinePlugin()],
   // Relative asset paths, so the build works from any folder (static hosting, file://).
   base: './',
   server: {

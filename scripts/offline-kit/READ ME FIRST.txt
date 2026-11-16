@@ -1,0 +1,31 @@
+inkflo, offline copy
+====================
+
+You do NOT need the internet to use this copy.
+
+WINDOWS
+  1. If this is a .zip file, right-click it and choose "Extract All". Do not run it from inside the zip.
+  2. Open the extracted folder and double-click:  Start inkflo (Windows).bat
+  3. If Windows says "Windows protected your PC", click "More info", then "Run anyway".
+  4. A black window opens and your browser opens inkflo. KEEP THE BLACK WINDOW OPEN while you draw.
+  5. When you are finished, save your work (see below), then close the browser and the black window.
+
+MAC
+  1. Double-click the zip to unpack it.
+  2. Right-click "Start inkflo (Mac).command", choose Open, then Open again.
+     (If it says it cannot run: open Terminal, type  chmod +x  then a space, drag the file into
+     the Terminal window, and press Enter. Then try again.)
+  3. Keep the Terminal window open while you draw.
+
+SAVING YOUR WORK (important)
+  inkflo saves inside your browser on this computer, not in the cloud.
+  - Always use the same browser and the same start file, so your books are still there.
+  - Lab computers may wipe the browser when you log off. Before you leave:
+      Open your book > Export > Export files > Backup > Book file (.inkflo)
+    Put that file on a USB stick, OneDrive or Google Drive.
+  - To carry on later (or on another computer): home screen > Import .inkflo.
+
+IF SOMETHING GOES WRONG
+  - "Could not start": inkflo is already open in another window. Close that window and try again.
+  - Blank page: close both windows and start again with the start file.
+  - Your books are missing: you probably used a different browser. Open the browser you used before.

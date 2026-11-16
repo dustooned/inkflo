@@ -10,3 +10,4 @@ coverage/
 
 # local research extracts (copyrighted sources; never commit)
 .rea-work/
+dist-offline

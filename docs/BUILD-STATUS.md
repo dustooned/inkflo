@@ -1586,3 +1586,12 @@ Read every Draw slider for effect, direction, range and wording. Stabilize, Corr
 - Paint tone **Tone** → **Tone density** (keeps its 5% minimum, since 0% paints nothing).
 - Vector **Reach** shows pt, "single point" at 0.
 Not tried in the browser; typecheck and 460 tests pass.
+
+## Offline use (students)
+
+- **Installable offline app (PWA).** scripts/offline-plugin.ts writes dist/sw.js at build time with a precache of every emitted file (versioned by content hash); public/manifest.webmanifest and public/icons/ (made by scripts/make-icons.mjs) make it installable. src/app/offline.ts registers the worker (production builds on https or localhost only) and holds the install prompt; the home screen's **Offline** button (src/ui/offlinedialog.ts) shows Ready status, an Install button and per-device steps.
+- **Offline kit.** 
+pm run build then 
+pm run package:offline writes dist-offline/inkflo-offline.zip: the build plus a Windows launcher (serve.ps1, no install needed), a Mac launcher (**untested**) and a student READ ME FIRST.txt (sources in scripts/offline-kit/). It serves on fixed port 5191 so the browser's saved books stay with the same address.
+- **Student guide:** manual section #offline (Working offline), plus a classroom bullet.
+- **Verified:** in Chrome, the worker cached 38 files, and the app, its Offline dialog and the manual all reloaded with the server stopped. Not yet checked: iPad Safari Add to Home Screen, the Mac launcher, a real lab PC. The built-in browser pane does not run service workers.

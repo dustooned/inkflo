@@ -8,11 +8,13 @@ import { h, toast } from './ui/dom';
 import { renderHome } from './ui/home';
 import { applyTheme } from './ui/prefs';
 import { installAffordances } from './ui/affordances';
+import { registerOffline } from './app/offline';
 
 /** Hash routes: #home, #book/:id, #desk/:book/:page/:desk (no server needed). */
 async function boot(): Promise<void> {
   applyTheme();
   installAffordances();
+  registerOffline();
   const root = document.getElementById('app')!;
   root.replaceChildren(h('p', { style: 'padding:2rem' }, 'Opening your library…'));
   let studio: Studio;
