@@ -303,3 +303,16 @@ describe('beat transitions', () => {
     expect(() => parseBookFile(JSON.stringify(f))).toThrow(/transition/);
   });
 });
+
+describe('panel intent and turn', () => {
+  it('round-trips intent and turn, drops blank prompts, rejects overlong ones', () => {
+    const f = file();
+    f.book.pages[0]!.beats.push({ id: 'bi', desc: '', lines: [], turn: true, intent: { moment: 'She stops', flow: 'Into the stairwell' } });
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    const raw = JSON.parse(stringifyBookFile(f));
+    raw.book.pages[0].beats.at(-1).intent = { moment: '', word: 'x'.repeat(201) };
+    expect(() => parseBookFile(JSON.stringify(raw))).toThrow(/intent.word/);
+    raw.book.pages[0].beats.at(-1).intent = { moment: '' };
+    expect(parseBookFile(JSON.stringify(raw)).book.pages[0]!.beats.at(-1)!.intent).toBeUndefined();
+  });
+});

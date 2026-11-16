@@ -19,6 +19,21 @@ Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-ch
 - **Verified** in the dev app: set and undo on a 4-panel page. **Not verified:** by eye; exports
   and 2Dope do not use transitions yet (motion seeding is #22).
 
+## Craft: panel intent and page-turn marker, 2026-11-16
+
+- Craft features #1 and #9. Select a panel in the Layout inspector: five one-line prompts
+  (moment, frame, image, word, flow) with five dots showing which are answered, and a **Mark as
+  page turn** button. The strip shows ↷ on the turn panel. Only one turn per page; marking
+  another moves it.
+- Stored as optional `beat.intent` and `beat.turn`, so no schema bump. Blank prompts are dropped
+  on load; each is capped at 200 characters.
+- Turn notes (advice only): the turn is not the last panel, or the turn panel has no description,
+  lines or intent written. `geom/craftnotes.ts`, `ui/panelcraft.ts`, tests in `craftnotes.test.ts`
+  and `schema.test.ts`.
+- **Verified** in the dev app: typed a moment, marked the turn, saw ↷ and the note, undid both.
+  **Not verified:** by eye; the Script desk does not show the prompts yet; no "turn lands on a
+  low-information panel" check beyond empty text; exports ignore both.
+
 ## Procreate brush import and paper assets, 2026-11-15
 
 - Draw → Brushes → Import brush now accepts `.brush` and `.brushset` up to 1 GiB.

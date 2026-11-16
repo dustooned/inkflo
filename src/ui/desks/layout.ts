@@ -1,4 +1,5 @@
-import { newId, type Cut, type CutMode, type PageLayout, type Pt } from '../../doc/model';
+import { panelCraftSection } from '../panelcraft';
+import { newId, type Beat, type Cut,type CutMode, type PageLayout, type Pt } from '../../doc/model';
 import { rhythmSection } from '../rhythm';
 import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, type Panel } from '../../geom/carve';
 import { invert } from '../../engine/core/selxform';
@@ -473,6 +474,26 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
           });
           ctx.chrome();
         }));
+        if (sel !== null && sel < ps.length) {
+          const edit = (label: string, fn: (pg: typeof page, b: Beat) => void) => {
+            const i = sel!;
+            studio.editPage(page, label, ['beats'], (pg) => {
+              while (pg.beats.length <= i) pg.beats.push({ id: newId('bt'), desc: '', lines: [] });
+              fn(pg, pg.beats[i]!);
+            });
+            ctx.chrome();
+          };
+          el.append(panelCraftSection(page, ps.length, sel,
+            (key, text) => edit('Edit panel intent', (_pg, b) => {
+              const intent = { ...b.intent };
+              if (text) intent[key] = text; else delete intent[key];
+              if (Object.keys(intent).length) b.intent = intent; else delete b.intent;
+            }),
+            (on) => edit(on ? 'Mark page turn' : 'Clear page turn', (pg, b) => {
+              for (const other of pg.beats) delete other.turn;
+              if (on) b.turn = true;
+            })));
+        }
       }
       const downbeat = downbeatPanel(page, ps);
       const crossing = centreCrossing(page);

@@ -52,9 +52,25 @@ export const TRANSITIONS = [
 export type TransitionId = (typeof TRANSITIONS)[number]['id'];
 export const isTransition = (v: unknown): v is TransitionId => TRANSITIONS.some((t) => t.id === v);
 
+/** The five short prompts for a panel (craft-features #1). Each is one optional line. */
+export const INTENT_KEYS = [
+  { id: 'moment', label: 'Moment', ask: 'What moment is this?' },
+  { id: 'frame', label: 'Frame', ask: 'How is it framed?' },
+  { id: 'image', label: 'Image', ask: 'What is in the picture?' },
+  { id: 'word', label: 'Word', ask: 'What do the words add?' },
+  { id: 'flow', label: 'Flow', ask: 'How does it lead on?' },
+] as const;
+export type IntentKey = (typeof INTENT_KEYS)[number]['id'];
+export type PanelIntent = Partial<Record<IntentKey, string>>;
+export const MAX_INTENT_CHARS = 200;
+
 export interface Beat {
   id: string;
   desc: string;
+  /** Five optional one-line prompts. Absent or empty means skipped. */
+  intent?: PanelIntent;
+  /** This panel is the page turn: the last thing read before the reader turns the page. */
+  turn?: true;
   /** The link from the previous panel to this one. Beats follow panels in reading order. */
   transition?: TransitionId;
   lines: string[];

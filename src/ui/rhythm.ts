@@ -1,4 +1,5 @@
 import { TRANSITIONS, type Page, type TransitionId } from '../doc/model';
+import { turnIndex } from '../geom/craftnotes';
 import { rhythmNote, rhythmOf } from '../geom/rhythm';
 import { h } from './dom';
 
@@ -17,6 +18,7 @@ export function rhythmSection(
   onSet: (index: number, value: TransitionId | null) => void,
 ): HTMLElement {
   const r = rhythmOf(page.beats, panelCount);
+  const turn = turnIndex(page.beats, panelCount);
   const hue = (id: TransitionId) => TRANSITIONS.find((t) => t.id === id)!.hue;
   const strip = h('div', { class: 'rhythm-strip', role: 'group', 'aria-label': 'Rhythm of this page', style: 'display:flex;gap:3px;height:26px' },
     r.segments.map((s) => {
@@ -29,7 +31,7 @@ export function rhythmSection(
         'aria-pressed': String(s.index === selected),
         style: `flex:1;min-width:10px;border-radius:4px;padding:0;cursor:pointer;font-size:11px;color:${t ? '#fff' : 'inherit'};background:${t ? colour(t.hue) : 'transparent'};border:${s.index === selected ? '2px solid currentColor' : '1px dashed currentColor'}`,
         onclick: () => onSelect(s.index),
-      }, String(s.index + 1));
+      }, String(s.index + 1) + (s.index === turn ? '↷' : ''));
     }),
   );
   const note = rhythmNote(r);
