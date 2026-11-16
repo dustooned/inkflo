@@ -1575,3 +1575,14 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
   any value, old pages identical to the old passes, and the code round trip with `curve N`
   choosing the old passes. All 460 tests pass. In the built-in pane the slider stored 0–1 and the
   bend rounding rose evenly.
+
+## Draw settings audit, 2026-11-15
+
+Read every Draw slider for effect, direction, range and wording. Stabilize, Correct, sizes, opacity and tone all move one way; six were unclear and are reworded (stored values unchanged, old pages unaffected):
+- Fill **Threshold** → **Line sensitivity** (percent, higher = fainter lines act as walls; the slider is the inverse of the stored threshold).
+- Fill **Close gaps** and **Grow** show pt, not pixels at the book's dpi.
+- **Stabilize** / **Correct** tooltips say the difference; Correct shows 0% not "off".
+- Lines **Rough** → **Wobble**, with a tooltip.
+- Paint tone **Tone** → **Tone density** (keeps its 5% minimum, since 0% paints nothing).
+- Vector **Reach** shows pt, "single point" at 0.
+Not tried in the browser; typecheck and 460 tests pass.

@@ -1779,8 +1779,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
           const qs = h('input', { type: 'checkbox', checked: ink.quickShape });
           qs.addEventListener('change', () => { ink.quickShape = qs.checked; saveInk(); });
           popover(stroke, h('div', { class: 'stroke-options' },
-            slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { if (mode.tool === 'vpen') ink.vectorStabilize = v; else ink.stabilize[bt] = v; }, saveInk),
-            slider('Correct', 0, 1, 0.05, ink.correct, (v) => (v ? `${Math.round(v * 100)}%` : 'off'), (v) => { ink.correct = v; }, saveInk),
+            h('span', { title: 'Steadies the line while you draw: higher is smoother but trails the pen a little more.' }, slider('Stabilize', 0, 1, 0.05, stabilizeOf(bt), (v) => `${Math.round(v * 100)}%`, (v) => { if (mode.tool === 'vpen') ink.vectorStabilize = v; else ink.stabilize[bt] = v; }, saveInk)),
+            h('span', { title: 'Smooths the whole stroke after you lift the pen, without lag while drawing. 0% leaves it as drawn.' }, slider('Correct', 0, 1, 0.05, ink.correct, (v) => `${Math.round(v * 100)}%`, (v) => { ink.correct = v; }, saveInk)),
             h('label', { class: 'mini', title: 'Hold at the end of a stroke to snap it to a clean shape' }, qs, 'QuickShape')), 'below', 'Stroke settings');
         });
         const ruler = RULERS.find((x) => x.id === ink.ruler.kind)!;
@@ -1808,14 +1808,14 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
           bar.append(
             slider('Lines', 20, 240, 5, ink.focus.count, String, (x) => (ink.focus.count = x), () => saveInk()),
             slider('Clear zone', 0.1, 0.85, 0.05, ink.focus.inner, (x) => `${Math.round(x * 100)}%`, (x) => (ink.focus.inner = x), () => saveInk()),
-            slider('Rough', 0, 1, 0.05, ink.focus.jitter, (x) => `${Math.round(x * 100)}%`, (x) => (ink.focus.jitter = x), () => saveInk()),
+            h('span', { title: 'How uneven the line ends and lengths are: 0% is machine-even, higher looks hand-inked.' }, slider('Wobble', 0, 1, 0.05, ink.focus.jitter, (x) => `${Math.round(x * 100)}%`, (x) => (ink.focus.jitter = x), () => saveInk())),
             h('span', { class: 'hint' }, 'Click the focus point in a panel.'),
           );
         } else {
           bar.append(
             slider('Lines', 8, 120, 1, ink.speed.count, String, (x) => (ink.speed.count = x), () => saveInk()),
             slider('Length', 0.2, 1, 0.05, ink.speed.length, (x) => `${Math.round(x * 100)}%`, (x) => (ink.speed.length = x), () => saveInk()),
-            slider('Rough', 0, 1, 0.05, ink.speed.jitter, (x) => `${Math.round(x * 100)}%`, (x) => (ink.speed.jitter = x), () => saveInk()),
+            h('span', { title: 'How uneven the line ends and lengths are: 0% is machine-even, higher looks hand-inked.' }, slider('Wobble', 0, 1, 0.05, ink.speed.jitter, (x) => `${Math.round(x * 100)}%`, (x) => (ink.speed.jitter = x), () => saveInk())),
             h('span', { class: 'hint' }, `Drag in a panel along the motion (or click: ${ink.speed.angle}°).`),
           );
         }
@@ -1824,7 +1824,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'eraser' && target === 'auto') bar.append(seg([{ id: 'ink', label: 'Ink' }, { id: 'pencil', label: 'Pencil' }, { id: 'vector', label: 'Vector' }, { id: 'tone', label: 'Tone' }], variantOf(mode, 'eraser') || 'ink', (v) => ctx.setVariant('eraser', v), 'Erase on'));
       if (mode.tool === 'tonebrush') {
         bar.append(
-          slider('Tone', 5, 100, 5, Math.round(toneDensity() * 100), (v) => `${v}%`, (v) => { ink.toneDensity = v / 100; }, () => { saveInk(); ctx.chrome(); }),
+          h('span', { title: 'How dark the painted tone is: its share of ink. Same scale as Screentone density.' }, slider('Tone density', 5, 100, 5, Math.round(toneDensity() * 100), (v) => `${v}%`, (v) => { ink.toneDensity = v / 100; }, () => { saveInk(); ctx.chrome(); })),
           h('button', { class: 'btn', type: 'button', title: 'Dot shape, lines per inch and angle for this panel’s painted tone', onclick: () => {
             const a = active();
             const layer = a && a.layer.type === 'tone' && !a.layer.screenTone ? a.layer : page.groups.flatMap((g) => g.layers).find((l) => l.type === 'tone' && !l.screenTone && l.asTone);
@@ -1850,7 +1850,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'vedit') {
         const v = editVariant();
         bar.append(seg<EditVariant>([{ id: 'pull', label: 'Pull' }, { id: 'nodes', label: 'Points' }, { id: 'move', label: 'Move line' }, { id: 'wider', label: 'Thicken' }, { id: 'thinner', label: 'Thin' }], v, (x) => { selectedNode = null; ctx.setVariant('vedit', x); }, 'Edit'));
-        if (v === 'pull') bar.append(slider('Reach', 0, 2, 0.05, vstate.pullR, (x) => (x ? `${x.toFixed(2)}″` : 'one point'), (x) => (vstate.pullR = x)));
+        if (v === 'pull') bar.append(slider('Reach', 0, 2, 0.05, vstate.pullR, (x) => (x ? `${(x * 72).toFixed(0)}pt` : 'single point'), (x) => (vstate.pullR = x)));
         else if (v === 'nodes') bar.append(h('span', { class: 'hint' }, 'Drag a point. Shift-click the line to add one.'),
           h('button', { class: 'btn', type: 'button', disabled: selectedNode === null, onclick: () => { const index = selectedNode; if (index !== null) changeSelected('Delete vector point', (s) => removePoint(s, index)); } }, 'Delete point'));
         else if (v !== 'move') bar.append(slider('Brush', 0.03, 0.5, 0.01, vstate.widthR, (x) => `${(x * 2 * 72).toFixed(0)}pt`, (x) => (vstate.widthR = x)));
@@ -1880,12 +1880,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         else if (fv !== 'flats') bar.append(...colourControls(true), swatches);
         else pickingColor = false;
         bar.append(
-          slider('Close gaps', 0, 0.08, 0.005, state.gap, (v) => `${Math.round(v * dpi)}px`, (v) => (state.gap = v), () => ctx.request()),
-          slider('Threshold', 1, 254, 1, state.threshold, String, (v) => {
-            state.threshold = v;
-            ctx.hint('Gap closing · line threshold ' + v, { timeout: 1800 });
-          }, () => ctx.request()),
-          slider('Grow', -0.02, 0.02, 0.001, state.grow, (v) => `${v > 0 ? '+' : ''}${Math.round(v * dpi)}px`, (v) => (state.grow = v)),
+          h('span', { title: 'Treat breaks in your lines up to this size as closed, so the fill does not leak.' }, slider('Close gaps', 0, 0.08, 0.005, state.gap, (v) => `${(v * 72).toFixed(1)}pt`, (v) => (state.gap = v), () => ctx.request())),
+          h('span', { title: 'How faint a line can be and still stop the fill. Higher: even light pencil acts as a wall. Lower: only solid ink does.' }, slider('Line sensitivity', 1, 254, 1, 255 - state.threshold, (v) => `${Math.round((v / 254) * 100)}%`, (v) => {
+            state.threshold = 255 - v;
+            ctx.hint('Gap closing · line sensitivity ' + Math.round((v / 254) * 100) + '%', { timeout: 1800 });
+          }, () => ctx.request())),
+          h('span', { title: 'Spread the fill under your lines (+) or pull it back from them (−).' }, slider('Grow', -0.02, 0.02, 0.001, state.grow, (v) => `${v > 0 ? '+' : ''}${(v * 72).toFixed(1)}pt`, (v) => (state.grow = v))),
         );
         if (fv === 'leftover') bar.append(slider('Brush', 0.02, 0.25, 0.01, state.leftR, (v) => `${(v * 2 * 72).toFixed(0)}pt`, (v) => (state.leftR = v)));
         bar.append(h('span', { class: 'mini' }, 'Walls',
