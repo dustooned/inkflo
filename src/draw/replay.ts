@@ -171,8 +171,9 @@ export function paintFill(kit: FillKit, colour: HTMLCanvasElement, fill: Fill): 
 
 
 /**
- * Clear one layer's bitmap and redraw it from its data: fills first (from the group's
- * reference lines, which must already be current), then strokes. Bumps the layer's revision.
+ * Clear one layer's bitmap and redraw it from its data: strokes and fills in the order they were
+ * made (fills from before that was recorded go first), with fills reading the group's reference
+ * lines, which must already be current. Bumps the layer's revision.
  */
 export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number, engine: RasterEngine, ops: Pick<PlaneOps, 'newCanvas' | 'resize'>, panels: Panel[] = derivePanels(page)): void {
   if (layer.image) return;
@@ -192,10 +193,19 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
     }
     let firstStroke = 0, firstFill = 0;
     const replayTo = (strokeCount: number, fillCount: number) => {
-      if (kit) for (const f of layer.fills.slice(firstFill, fillCount)) paintFill(kit, canvas, f);
-      const strokes = layer.strokes.slice(firstStroke, strokeCount);
-      if (strokes.length) replayStrokes(strokes, passForType(layer.type), dpi, art.width, art.height, engine, panels, `${page.id}:${layer.id}:${firstStroke}`);
-      firstStroke = strokeCount;
+      const strokesTo = (n: number) => {
+        const to = Math.max(firstStroke, Math.min(n, strokeCount));
+        const strokes = layer.strokes.slice(firstStroke, to);
+        if (strokes.length) replayStrokes(strokes, passForType(layer.type), dpi, art.width, art.height, engine, panels, `${page.id}:${layer.id}:${firstStroke}`);
+        firstStroke = to;
+      };
+      // a fill that knows how many strokes came before it is laid after them (a transparent
+      // clear or a gradient over painted colour); older fills go first, as they always did
+      if (kit) for (const f of layer.fills.slice(firstFill, fillCount)) {
+        if (f.strokes !== undefined) strokesTo(f.strokes);
+        paintFill(kit, canvas, f);
+      }
+      strokesTo(strokeCount);
       firstFill = fillCount;
     };
     for (const edit of layer.pixelTransforms ?? []) {

@@ -70,11 +70,12 @@ describe('colour gradient fills', () => {
     const book = newBook('G');
     const layer = newLayer('colour');
     const gradient: FillGradient = { kind: 'radial', from: { x: 1, y: 1 }, to: { x: 2, y: 2 }, start: '#3f6c9e', end: 'transparent', blend: 'multiply', opacity: 0.6, area: 'lasso', lasso: [{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 3 }] };
-    layer.fills.push({ at: { x: 1, y: 1 }, color: '#3f6c9e', gap: 0, gradient }, { at: { x: 2, y: 2 }, color: 'transparent', gap: 0 });
+    layer.fills.push({ at: { x: 1, y: 1 }, color: '#3f6c9e', gap: 0, gradient }, { at: { x: 2, y: 2 }, color: 'transparent', gap: 0, strokes: 3 });
     book.pages[0]!.groups.find((g) => g.kind === 'background')!.layers.push(layer);
     const f = parseBookFile(stringifyBookFile({ format: FORMAT, schema: SCHEMA, savedBy: 't', book, art: {} }));
     const fills = f.book.pages[0]!.groups.find((g) => g.kind === 'background')!.layers.find((l) => l.id === layer.id)!.fills;
     expect(fills[0]!.gradient).toEqual(gradient);
     expect(fills[1]!.color).toBe('transparent');
+    expect(fills[1]!.strokes).toBe(3); // where the fill falls among the strokes, for rebuilds
   });
 });

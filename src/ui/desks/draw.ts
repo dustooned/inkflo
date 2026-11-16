@@ -826,7 +826,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (created) studio.undo();
       return 0;
     }
-    const kept = done.map((d) => d.fill);
+    // remember where in the layer's strokes each fill falls, so a rebuild lays them in order
+    const strokeCount = findLayer(page, layerId)?.layer.strokes.length ?? 0;
+    const kept = done.map((d) => ({ ...d.fill, strokes: strokeCount }));
     keepResident();
     studio.run(
       {

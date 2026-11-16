@@ -172,6 +172,8 @@ export interface Fill {
   color: string;
   /** A gradient fill: paints a blend across the area instead of one colour. */
   gradient?: FillGradient;
+  /** How many of the layer's strokes came before this fill, so a rebuild keeps the order. */
+  strokes?: number;
   /** Gap closing in page units. */
   gap: number;
   /** Line alpha (1–254) at or above which a pixel is a wall; default 24. */

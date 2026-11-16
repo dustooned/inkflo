@@ -1506,3 +1506,19 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
 - Checks: all 450 tests pass. In the built-in pane, a rectangle selection over empty paper, then
   Gradient → Selection: blue filled inside the rectangle and nothing outside it, as one undo step
   ("Gradient"). Two colours gave `240,190,48` → `221,139,55` → `201,89,61`.
+
+## Rebuild keeps fills and strokes in the order they were made, 2026-11-15
+
+- **Gap closed:** "Rebuild from strokes" (and any replay) painted a layer's fills before its
+  strokes. A fill made after strokes therefore went back underneath them on rebuild: a
+  transparent fill that had cleared painted colour let the strokes reappear, and a gradient made
+  over painted colour went under it.
+- **Fix:** `Fill.strokes` records how many of the layer's strokes came before the fill. It is set
+  in `commitFills` and validated as a whole number. `replayLayer` lays each fill after that many
+  strokes, within the existing pixel-edit segments. Fills without the field go first, exactly as
+  before, so existing books replay unchanged.
+- Checks: the book-file round trip keeps `strokes`, and all tests pass. In the built-in pane,
+  with the real `replayLayer`: red fill, then a blue brush stroke, then a transparent fill over
+  the panel.
+  - With the order recorded, the stroke stays cleared after replay (`0,0,0,0`).
+  - Without it (old data), the stroke returns (`0,0,255,255`), as before.

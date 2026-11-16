@@ -487,6 +487,11 @@ function fill(v: unknown, path: string): Fill {
     f.leftover = { path: path2, r: pos(lo.r, `${path}.leftover.r`) };
   }
   if (o.gradient !== undefined) f.gradient = fillGradient(o.gradient, `${path}.gradient`);
+  if (o.strokes !== undefined) {
+    const n = num(o.strokes, `${path}.strokes`);
+    if (!Number.isInteger(n) || n < 0) fail(`${path}.strokes`, 'should be a whole number of strokes');
+    f.strokes = n;
+  }
   return f;
 }
 
