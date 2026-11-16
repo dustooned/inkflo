@@ -103,7 +103,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
 
   // ---- Print it
 
-  const pr = { mode: 'shop' as PrintMode, paper: 'letter' as Paper, marks: true };
+  const pr = { mode: 'shop' as PrintMode, paper: 'letter' as Paper, marks: true, dpi: book.dpi };
   function printTab(): HTMLElement {
     const spec = printOf(book!);
     const kind = kindById(spec.kind);
@@ -120,6 +120,11 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const settings = h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;align-items:end' });
     if (pr.mode === 'booklet' || pr.mode === 'minizine') settings.append(select('Paper', [['letter', 'Letter'], ['a4', 'A4']], pr.paper, (v) => (pr.paper = v)));
     if (pr.mode === 'shop') settings.append(check('Crop marks', pr.marks, (v) => (pr.marks = v)));
+    const dpiChoices = [...new Set([book!.dpi, 300, 600])].sort((a, b) => a - b);
+    settings.append(select('Resolution', dpiChoices.map((n): [number, string] => [n, n === book!.dpi ? `${n} dpi (book)` : `${n} dpi`]), pr.dpi, (v) => { pr.dpi = v; render(); }));
+    const first = book!.pages[0]!;
+    const pagePx = (first.widthIn + spec.bleed * 2) * pr.dpi * (first.heightIn + spec.bleed * 2) * pr.dpi;
+    const heavy = pr.dpi > 300 && (pr.mode === 'shop' || pr.mode === 'pod') ? `At ${pr.dpi} dpi each page is about ${Math.round(pagePx / 1e6)} megapixels. A long book can run out of memory in the browser; try 300 dpi if it fails.` : '';
     const order = h('div', { class: 'order', 'aria-label': 'Page order' },
       plan.order.map((s) => h('span', { class: `chip${s === null ? ' blank' : ''}`, title: s === null ? 'Blank page, added' : `Page ${s + 1}` }, s === null ? 'blank' : String(s + 1))));
     const file = `${name}-${pr.mode === 'shop' ? 'print' : pr.mode === 'pod' ? 'interior' : pr.mode}.pdf`;
@@ -128,6 +133,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       cards, settings,
       h('div', {}, h('h4', { class: 'label' }, 'Page order'), order),
       plan.message ? h('p', { class: 'warnline' }, plan.message) : null,
+      heavy ? h('p', { class: 'warnline' }, heavy) : null,
       issues.length
         ? h('details', {}, h('summary', {}, issues.length + (issues.length === 1 ? ' page to review' : ' pages to review')),
           ...issues.map(({ page, number, warnings }) => h('section', { class: 'print-review-page' },
