@@ -5,6 +5,20 @@ Where the app stands against [BUILD-HANDOFF.md](BUILD-HANDOFF.md). Updated 2026-
 Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-check is at
 `/selfcheck.html`. Checks: `npm test` (291 tests), `npx tsc --noEmit`, `npx vite build`.
 
+## Craft: transitions and the rhythm strip, 2026-11-16
+
+- Craft features #2 and #7 (`docs/research/craft-features.md`). Layout inspector → **Rhythm**:
+  one segment per panel, coloured by how it follows the previous panel (moment, action, subject,
+  scene, aspect, non sequitur). Click a segment to select a panel; pick a chip to set its
+  transition, click it again to clear. A short note appears for a run of three or more.
+- Stored as optional `beat.transition` (beats follow panels in reading order). Absent means unset,
+  so no schema bump and older books open unchanged. Setting one on a panel with no beat adds blank
+  beats up to it. One undo step per change. Nothing is scored or blocks export.
+- `geom/rhythm.ts` (runs, counts, note), `ui/rhythm.ts` (the section), tests in `rhythm.test.ts`
+  and `schema.test.ts`.
+- **Verified** in the dev app: set and undo on a 4-panel page. **Not verified:** by eye; exports
+  and 2Dope do not use transitions yet (motion seeding is #22).
+
 ## Procreate brush import and paper assets, 2026-11-15
 
 - Draw → Brushes → Import brush now accepts `.brush` and `.brushset` up to 1 GiB.

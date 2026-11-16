@@ -293,3 +293,13 @@ describe('schema 2 → 3: balloons become live captions', () => {
     expect(back.book.pages[0]!.balloons[0]!.speaker).toBe('MAYA');
   });
 });
+
+describe('beat transitions', () => {
+  it('round-trips an optional transition and rejects an unknown one', () => {
+    const f = file();
+    f.book.pages[0]!.beats.push({ id: 'bt', desc: 'Next', lines: [], transition: 'aspect' });
+    expect(parseBookFile(stringifyBookFile(f))).toEqual(f);
+    (f.book.pages[0]!.beats.at(-1) as { transition: string }).transition = 'cut';
+    expect(() => parseBookFile(JSON.stringify(f))).toThrow(/transition/);
+  });
+});

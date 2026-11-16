@@ -1,4 +1,5 @@
-import type { Cut, CutMode, PageLayout, Pt } from '../../doc/model';
+import { newId, type Cut, type CutMode, type PageLayout, type Pt } from '../../doc/model';
+import { rhythmSection } from '../rhythm';
 import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, type Panel } from '../../geom/carve';
 import { invert } from '../../engine/core/selxform';
 import { anchorFor } from '../../geom/groups';
@@ -463,6 +464,16 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       el.append(h('div', { class: 'sec' }, h('label', { class: 'mini' }, edge, 'Outline page edge')));
       const radius = layoutOf(page).cornerRadius ?? 0;
       el.append(h('div', { class: 'sec' }, slider('Round corners', 0, 0.5, 0.01, radius, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ cornerRadius: v }, false), (v) => setLayout({ cornerRadius: v }, true))));
+      if (ps.length) {
+        el.append(rhythmSection(page, ps.length, sel, (i) => { sel = i; ctx.chrome(); ctx.request(); }, (i, value) => {
+          studio.editPage(page, 'Set transition', ['beats'], (pg) => {
+            while (pg.beats.length <= i) pg.beats.push({ id: newId('bt'), desc: '', lines: [] });
+            const b = pg.beats[i]!;
+            if (value) b.transition = value; else delete b.transition;
+          });
+          ctx.chrome();
+        }));
+      }
       const downbeat = downbeatPanel(page, ps);
       const crossing = centreCrossing(page);
       const staggered = crossing ? staggerCentre(page) : undefined;

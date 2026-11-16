@@ -40,9 +40,23 @@ export interface Cut {
   handles?: [Pt, Pt];
 }
 
+/** How a panel follows the one before it (docs/research/craft-features.md #2). Optional; absent = unset. */
+export const TRANSITIONS = [
+  { id: 'moment', label: 'Moment to moment', short: 'Moment', hint: 'A small step in time; holds a beat.', hue: 200 },
+  { id: 'action', label: 'Action to action', short: 'Action', hint: 'One action to the next; the workhorse.', hue: 30 },
+  { id: 'subject', label: 'Subject to subject', short: 'Subject', hint: 'Same scene, different subject.', hue: 140 },
+  { id: 'scene', label: 'Scene to scene', short: 'Scene', hint: 'A jump in place or time.', hue: 285 },
+  { id: 'aspect', label: 'Aspect to aspect', short: 'Aspect', hint: 'Wander the scene; mood and place.', hue: 175 },
+  { id: 'nonSequitur', label: 'Non sequitur', short: 'Non seq.', hint: 'No logical link, used on purpose.', hue: 350 },
+] as const;
+export type TransitionId = (typeof TRANSITIONS)[number]['id'];
+export const isTransition = (v: unknown): v is TransitionId => TRANSITIONS.some((t) => t.id === v);
+
 export interface Beat {
   id: string;
   desc: string;
+  /** The link from the previous panel to this one. Beats follow panels in reading order. */
+  transition?: TransitionId;
   lines: string[];
   dialogue?: DialogueLine[];
   reveal?: { pageId: string; beatId: string };

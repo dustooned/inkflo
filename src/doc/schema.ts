@@ -5,7 +5,7 @@ import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
 import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
-import { MAX_TONES_PER_LAYER, TONE_SHAPES } from './model';
+import { isTransition, MAX_TONES_PER_LAYER, TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
@@ -115,6 +115,10 @@ function cut(v: unknown, path: string): Cut {
 function beat(v: unknown, path: string): Beat {
   const o = obj(v, path);
   const b: Beat = { id: str(o.id, `${path}.id`), desc: str(o.desc, `${path}.desc`), lines: arr(o.lines, `${path}.lines`).map((l, i) => str(l, `${path}.lines[${i}]`)) };
+  if (o.transition !== undefined) {
+    if (!isTransition(o.transition)) fail(`${path}.transition`, 'is not a known transition');
+    b.transition = o.transition;
+  }
   if (o.dialogue !== undefined) {
     b.dialogue = arr(o.dialogue, `${path}.dialogue`).map((v, i) => {
       const key = `${path}.dialogue[${i}]`;
