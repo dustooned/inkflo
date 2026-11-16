@@ -50,6 +50,28 @@ async function drain(saver: Autosaver) {
 }
 
 describe('autosave', () => {
+  it('keeps a duplicated book’s artwork referenced after the source is deleted', async () => {
+    const s = setup();
+    s.book.publication = { series: 'Night Shift', chapter: '2' };
+    const page = s.book.pages[0]!;
+    page.title = 'Arrival';
+    s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), false);
+    s.draw(page.id, 'ink', 'INK');
+    await s.saver.flush();
+    await s.store.putFolder({ id: 'drafts', name: 'Drafts', created: s.clock.now() });
+
+    await s.store.duplicateBook(s.book.id, 'New edition', 'drafts');
+    const copy = (await s.store.listBooks()).find((b) => b.id !== s.book.id)!;
+    const file = parseBookFile((await s.store.getHead(copy.id))!.json);
+    expect(copy).toMatchObject({ title: 'New edition', folder: 'drafts', publication: s.book.publication });
+    expect(file.book.pages[0]!.title).toBe('Arrival');
+    expect(await s.store.getBook(s.book.id)).toMatchObject({ title: 'Night Shift', folder: null });
+    await s.store.deleteBook(s.book.id);
+    const keys = await s.store.assetKeys();
+    expect(keys).toHaveLength(1);
+    expect(unreferencedAssets(keys, await s.store.referencedAssets())).toEqual([]);
+  });
+
   it('saves 400 ms after the last change, and a reopened book has the same pages, cuts and pixels (M0 done-when)', async () => {
     const s = setup();
     s.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: 't', book: s.book, art: {} }), false);

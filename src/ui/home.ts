@@ -184,35 +184,78 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
     h('button', { class: 'card new', type: 'button', onclick: newStrip }, h('div', { class: 'sheet' }, h('span', { class: 'strip-mini', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))), h('h3', {}, 'Comic strip'), h('small', {}, '3 or 4 panels, or stacked')),
     starter);
-  function moveBook(b: BookMeta): void {
+  function bookDestination(b: BookMeta, action: 'move' | 'duplicate'): void {
     const current = folderOf(b) ?? '';
+    const duplicate = action === 'duplicate';
+    const heading = duplicate ? 'Duplicate book' : 'Move to project bin';
     const picker = h('select', { 'aria-label': 'Project bin' },
       h('option', { value: '', selected: !current }, 'Unsorted'),
       folders.map(({ id, name }) => h('option', { value: id, selected: id === current }, name)));
+    const title = h('input', { value: b.title.slice(0, 113).trimEnd() + ' (copy)', maxlength: 120, required: true });
+    const status = h('p', { class: 'note', role: 'status', hidden: true });
+    const cancel = h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel');
+    const submit = h('button', { class: 'btn primary', type: 'submit' }, duplicate ? 'Create copy' : 'Move book');
     const form = h('form', { method: 'dialog' },
-      h('header', {}, h('h2', {}, 'Move to project bin')),
-      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Project bin', picker)),
-      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel'),
-        h('button', { class: 'btn primary', type: 'submit' }, 'Move book')));
-    const dialog = h('dialog', { 'aria-label': 'Move to project bin' }, form);
-    form.addEventListener('submit', (event) => {
+      h('header', {}, h('h2', {}, heading)),
+      h('div', { class: 'content stack' }, duplicate ? h('label', { class: 'field' }, 'Copy title', title) : null,
+        h('label', { class: 'field' }, 'Project bin', picker), status),
+      h('footer', {}, cancel, submit));
+    const dialog = h('dialog', { 'aria-label': heading }, form);
+    let saving = false;
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const next = picker.value;
-      dialog.close();
-      if (next !== current) void studio.store.updateBookMeta(b.id, { folder: next || null }).then(reload, report);
+      if (saving) return;
+      const next = picker.value || null;
+      const copyTitle = title.value.trim();
+      if (duplicate && !copyTitle) {
+        status.textContent = 'Enter a title for the copy.';
+        status.hidden = false;
+        return;
+      }
+      if (!duplicate && next === (current || null)) {
+        dialog.close();
+        return;
+      }
+      saving = true;
+      status.hidden = true;
+      for (const control of [title, picker, cancel, submit]) control.disabled = true;
+      try {
+        if (duplicate) await studio.store.duplicateBook(b.id, copyTitle, next);
+        else await studio.store.updateBookMeta(b.id, { folder: next });
+        dialog.close();
+        const destination = next ?? 'unsorted';
+        if (duplicate) toast(`Created “${copyTitle}”.`);
+        if (duplicate && filter && filter !== destination) go(folderRoute(destination));
+        else reload();
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : String(error);
+        status.hidden = false;
+      } finally {
+        saving = false;
+        for (const control of [title, picker, cancel, submit]) control.disabled = false;
+      }
     });
+    dialog.addEventListener('cancel', (event) => { if (saving) event.preventDefault(); });
     dialog.addEventListener('close', () => dialog.remove());
     document.body.append(dialog);
     dialog.showModal();
+    if (duplicate) title.select();
   }
   const bookCard = (b: BookMeta) => {
     const publication = publicationLabel(b.publication);
     const binName = bin ? '' : folders.find(({ id }) => id === b.folder)?.name ?? '';
-    const actions = h('button', { class: 'icon', type: 'button', title: 'Book actions', 'aria-label': `Actions for ${b.title}`, 'aria-haspopup': 'menu' }, '⋯');
+    const actions = h('button', { class: 'icon library-actions', type: 'button', title: 'Book actions',
+      'aria-label': `Actions for ${b.title}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, '⋯');
     actions.addEventListener('click', () => {
+      if (actions.getAttribute('aria-expanded') === 'true') {
+        closePopover();
+        return;
+      }
+      actions.setAttribute('aria-expanded', 'true');
       const item = (label: string, run: () => void | Promise<void>, danger = false) =>
         h('button', { class: danger ? 'item danger' : 'item', role: 'menuitem', type: 'button', onclick: () => {
           closePopover();
+          actions.focus({ preventScroll: true });
           void Promise.resolve().then(run).catch(report);
         } }, label);
       popover(actions, h('div', { class: 'chrome-menu', role: 'menu' },
@@ -223,7 +266,8 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
           if (studio.saver.state === 'error') throw new Error(studio.saver.error ?? 'The book could not be saved.');
           reload();
         })),
-        item('Move to project bin…', () => moveBook(b)),
+        item('Duplicate…', () => bookDestination(b, 'duplicate')),
+        item('Move to project bin…', () => bookDestination(b, 'move')),
         folderOf(b) ? item('Remove from project bin', async () => {
           await studio.store.updateBookMeta(b.id, { folder: null });
           reload();
@@ -232,7 +276,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
           if (!await confirmDeleteBook(b.title, b.pages)) return;
           await studio.deleteBook(b.id);
           reload();
-        }, true)), 'below', 'Book actions');
+        }, true)), 'below', 'Book actions', () => actions.setAttribute('aria-expanded', 'false'));
     });
     return h('article', { class: 'library-card', 'data-search': [b.title, b.author, publication, binName].join(' ').toLowerCase() },
       h('button', { class: 'card', type: 'button', 'aria-label': `Open ${b.title}`, onclick: () => go(`#book/${b.id}`) },

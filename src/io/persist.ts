@@ -2,8 +2,8 @@
 // projects became books, the card describes a book, and 2Dope's single-project migration is gone
 // (inkflo has no legacy data). Database name `inkflo`, version 1.
 
-import type { Publication, Stage } from '../doc/model';
-import { assetsOf, type BookFile } from '../doc/schema';
+import { newId, type Publication, type Stage } from '../doc/model';
+import { assetsOf, parseBookFile, stringifyBookFile, type BookFile } from '../doc/schema';
 
 /**
  * The library on this device: many books, folders, restore points, and one shared pool of
@@ -69,6 +69,8 @@ export interface Store {
   getHead(id: string): Promise<HeadRecord | null>;
   /** Save a book: new assets, its card, its head and its refs, all-or-nothing. */
   saveHead(meta: BookMeta, head: HeadRecord, assets: Map<string, Uint8Array>, refs: string[]): Promise<void>;
+  /** Copy the saved document into another library entry, sharing its stored asset bytes. */
+  duplicateBook(id: string, title: string, folder: string | null): Promise<void>;
   /** Delete a book with its head, versions and refs (assets are cleaned up later). */
   deleteBook(id: string): Promise<void>;
 
@@ -115,6 +117,20 @@ export function metaFromFile(file: BookFile, base: Partial<BookMeta> = {}): Book
   };
 }
 
+function bookCopy(head: HeadRecord | undefined, source: BookMeta | undefined, title: string, folder: string | null) {
+  if (!head || !source) throw new Error('That book is no longer in the library.');
+  const file = parseBookFile(head.json);
+  const now = Date.now();
+  const id = newId('bk');
+  Object.assign(file.book, { id, title, createdAt: now, updatedAt: now });
+  delete file.book.folderId;
+  return {
+    card: metaFromFile(file, { folder, cover: source.cover }),
+    head: { id, json: stringifyBookFile(file), savedAt: now },
+    refs: [...assetsOf(file)],
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // In memory (tests, and browsers without IndexedDB)
 
@@ -149,6 +165,11 @@ export class MemoryStore implements Store {
     this.books.set(meta.id, { ...meta, folder: folder && this.folders.has(folder) ? folder : null, opened: current?.opened ?? meta.opened });
     this.heads.set(head.id, head);
     this.refs.set(headRef(head.id), refs);
+  }
+  async duplicateBook(id: string, title: string, folder: string | null): Promise<void> {
+    if (folder && !this.folders.has(folder)) throw new Error('That project bin is unavailable.');
+    const copy = bookCopy(this.heads.get(id), this.books.get(id), title, folder);
+    await this.saveHead(copy.card, copy.head, new Map(), copy.refs);
   }
   async deleteBook(id: string) {
     this.books.delete(id);
@@ -291,6 +312,23 @@ export class IdbStore implements Store {
     books.put({ ...meta, folder: validFolder ? folder : null, opened: current?.opened ?? meta.opened });
     tx.objectStore('heads').put(head);
     tx.objectStore('refs').put(refs, headRef(head.id));
+    await done(tx);
+  }
+
+  async duplicateBook(id: string, title: string, folder: string | null): Promise<void> {
+    const tx = this.db.transaction(['books', 'heads', 'refs', 'folders'], 'readwrite');
+    const books = tx.objectStore('books');
+    const heads = tx.objectStore('heads');
+    const [source, head, destination] = await Promise.all([
+      req(books.get(id)) as Promise<BookMeta | undefined>,
+      req(heads.get(id)) as Promise<HeadRecord | undefined>,
+      folder ? req(tx.objectStore('folders').getKey(folder)) : Promise.resolve(null),
+    ]);
+    if (folder && !destination) throw new Error('That project bin is unavailable.');
+    const copy = bookCopy(head, source, title, folder);
+    books.add(copy.card);
+    heads.add(copy.head);
+    tx.objectStore('refs').add(copy.refs, headRef(copy.card.id));
     await done(tx);
   }
 

@@ -40,7 +40,14 @@ input, textarea, select { font: inherit; color: inherit; }
 .library-tools select { max-width: min(66vw, 270px); }
 .library-card { position: relative; min-width: 0; }
 .library-card > .card { width: 100%; overflow-wrap: anywhere; }
-.library-card > .icon { position: absolute; top: 6px; right: 6px; }
+.library-card > .library-actions {
+  position: absolute; top: 8px; right: 8px;
+  width: 38px; height: 38px; border: 2px solid #fff; border-radius: 10px;
+  background: #22252b; color: #fff; box-shadow: 0 1px 4px #0009;
+  font-size: 24px; font-weight: 750; line-height: 1;
+}
+.library-card > .library-actions:is(:hover, [aria-expanded="true"]) { background: #08090b; }
+@media (pointer: coarse) { .library-card > .library-actions { width: 44px; height: 44px; } }
 .publication-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .publication-numbers input { min-width: 0; }
 .export-name { overflow-wrap: anywhere; }
