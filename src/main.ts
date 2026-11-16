@@ -10,7 +10,7 @@ import { applyTheme } from './ui/prefs';
 import { installAffordances } from './ui/affordances';
 import { registerOffline } from './app/offline';
 
-/** Hash routes: #home, #book/:id, #desk/:book/:page/:desk (no server needed). */
+/** Hash routes: #home, #home/:bin, #book/:id, #desk/:book/:page/:desk. */
 async function boot(): Promise<void> {
   applyTheme();
   installAffordances();
@@ -53,7 +53,7 @@ async function boot(): Promise<void> {
         return;
       }
       await studio.close();
-      if (my === seq) await renderHome(root, studio, go);
+      if (my === seq) await renderHome(root, studio, go, parts[0] === 'home' ? parts[1] : undefined);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), 5000);
       if (location.hash !== '#home') location.hash = '#home';

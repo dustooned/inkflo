@@ -81,7 +81,7 @@ export function confirmDialog(title: string, body: string, ok = 'OK'): Promise<b
 }
 
 /** Ask for one line of text in a dialog. Resolves null on cancel. */
-export function askText(title: string, label: string, value: string, ok = 'OK'): Promise<string | null> {
+export function askText(title: string, label: string, value: string, ok = 'OK', allowEmpty = false): Promise<string | null> {
   return new Promise((resolve) => {
     let done = false;
     const finish = (v: string | null) => {
@@ -90,7 +90,7 @@ export function askText(title: string, label: string, value: string, ok = 'OK'):
       d.close();
       resolve(v);
     };
-    const input = h('input', { value, 'aria-label': label, required: true });
+    const input = h('input', { value, 'aria-label': label, required: !allowEmpty });
     const form = h('form', { method: 'dialog' },
       h('header', {}, h('h2', {}, title)),
       h('div', { class: 'content' }, h('label', { class: 'field' }, label, input)),
@@ -99,7 +99,7 @@ export function askText(title: string, label: string, value: string, ok = 'OK'):
         h('button', { class: 'btn primary', type: 'submit' }, ok)));
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      finish(input.value.trim() || value);
+      finish(allowEmpty ? input.value.trim() : input.value.trim() || value);
     });
     const d = h('dialog', {}, form);
     d.addEventListener('close', () => {

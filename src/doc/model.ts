@@ -407,6 +407,7 @@ export interface ModularGrid {
 
 export interface Page {
   id: string;
+  title?: string;
   /** Trim size in inches. */
   widthIn: number;
   heightIn: number;
@@ -511,10 +512,17 @@ export interface SavedBalloon {
   letters: Letter[];
 }
 
+export interface Publication {
+  series?: string;
+  volume?: string;
+  chapter?: string;
+}
+
 export interface Book {
   id: string;
   title: string;
   author: string;
+  publication?: Publication;
   folderId?: string;
   /**
    * Pixels per inch of the layer bitmaps. A page's bitmaps are `round(widthIn * dpi)` ×

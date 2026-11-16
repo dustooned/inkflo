@@ -2,7 +2,7 @@
 // projects became books, the card describes a book, and 2Dope's single-project migration is gone
 // (inkflo has no legacy data). Database name `inkflo`, version 1.
 
-import type { Stage } from '../doc/model';
+import type { Publication, Stage } from '../doc/model';
 import { assetsOf, type BookFile } from '../doc/schema';
 
 /**
@@ -26,6 +26,7 @@ export interface BookMeta {
   id: string;
   title: string;
   author: string;
+  publication?: Publication;
   /** Folder id, or null for the top level. */
   folder: string | null;
   created: number;
@@ -63,8 +64,8 @@ export interface VersionRecord {
 export interface Store {
   listBooks(): Promise<BookMeta[]>;
   getBook(id: string): Promise<BookMeta | null>;
-  /** Update a book's card only (rename, move to a folder, opened time). */
-  putBookMeta(m: BookMeta): Promise<void>;
+  /** Update library-only fields without overwriting document details. */
+  updateBookMeta(id: string, fields: Partial<Pick<BookMeta, 'folder' | 'opened'>>): Promise<void>;
   getHead(id: string): Promise<HeadRecord | null>;
   /** Save a book: new assets, its card, its head and its refs, all-or-nothing. */
   saveHead(meta: BookMeta, head: HeadRecord, assets: Map<string, Uint8Array>, refs: string[]): Promise<void>;
@@ -103,6 +104,7 @@ export function metaFromFile(file: BookFile, base: Partial<BookMeta> = {}): Book
     id: b.id,
     title: b.title,
     author: b.author,
+    ...(b.publication ? { publication: b.publication } : {}),
     folder: base.folder !== undefined ? base.folder : (b.folderId ?? null),
     created: base.created ?? b.createdAt,
     modified: base.modified ?? b.updatedAt,
@@ -131,15 +133,20 @@ export class MemoryStore implements Store {
   async getBook(id: string) {
     return this.books.get(id) ?? null;
   }
-  async putBookMeta(m: BookMeta) {
-    this.books.set(m.id, m);
+  async updateBookMeta(id: string, fields: Partial<Pick<BookMeta, 'folder' | 'opened'>>) {
+    const current = this.books.get(id);
+    if (!current) return;
+    if (fields.folder && !this.folders.has(fields.folder)) throw new Error('That project bin is unavailable.');
+    this.books.set(id, { ...current, ...fields });
   }
   async getHead(id: string) {
     return this.heads.get(id) ?? null;
   }
   async saveHead(meta: BookMeta, head: HeadRecord, assets: Map<string, Uint8Array>, refs: string[]) {
     for (const [k, v] of assets) this.assets.set(k, v);
-    this.books.set(meta.id, meta);
+    const current = this.books.get(meta.id);
+    const folder = current ? current.folder : meta.folder;
+    this.books.set(meta.id, { ...meta, folder: folder && this.folders.has(folder) ? folder : null, opened: current?.opened ?? meta.opened });
     this.heads.set(head.id, head);
     this.refs.set(headRef(head.id), refs);
   }
@@ -254,9 +261,18 @@ export class IdbStore implements Store {
     return ((await req(this.db.transaction('books').objectStore('books').get(id))) as BookMeta | undefined) ?? null;
   }
 
-  async putBookMeta(m: BookMeta): Promise<void> {
-    const tx = this.db.transaction('books', 'readwrite');
-    tx.objectStore('books').put(m);
+  async updateBookMeta(id: string, fields: Partial<Pick<BookMeta, 'folder' | 'opened'>>): Promise<void> {
+    const tx = this.db.transaction(['books', 'folders'], 'readwrite');
+    const books = tx.objectStore('books');
+    const [current, folder] = await Promise.all([
+      req(books.get(id)) as Promise<BookMeta | undefined>,
+      fields.folder ? req(tx.objectStore('folders').get(fields.folder)) : Promise.resolve(null),
+    ]);
+    if (fields.folder && !folder) {
+      await done(tx);
+      throw new Error('That project bin is unavailable.');
+    }
+    if (current) books.put({ ...current, ...fields });
     await done(tx);
   }
 
@@ -265,24 +281,29 @@ export class IdbStore implements Store {
   }
 
   async saveHead(meta: BookMeta, head: HeadRecord, assets: Map<string, Uint8Array>, refs: string[]): Promise<void> {
-    const tx = this.db.transaction(['assets', 'books', 'heads', 'refs'], 'readwrite');
+    const tx = this.db.transaction(['assets', 'books', 'heads', 'refs', 'folders'], 'readwrite');
+    const books = tx.objectStore('books');
+    const current = await req(books.get(meta.id)) as BookMeta | undefined;
+    const folder = current ? current.folder : meta.folder;
+    const validFolder = folder && await req(tx.objectStore('folders').getKey(folder));
     const a = tx.objectStore('assets');
     for (const [k, v] of assets) a.put(v, k);
-    tx.objectStore('books').put(meta);
+    books.put({ ...meta, folder: validFolder ? folder : null, opened: current?.opened ?? meta.opened });
     tx.objectStore('heads').put(head);
     tx.objectStore('refs').put(refs, headRef(head.id));
     await done(tx);
   }
 
   async deleteBook(id: string): Promise<void> {
-    const vs = await this.listVersions(id);
     const tx = this.db.transaction(['books', 'heads', 'refs', 'versions'], 'readwrite');
+    const versions = tx.objectStore('versions');
+    const keys = await req(versions.index('book').getAllKeys(id)) as string[];
     tx.objectStore('books').delete(id);
     tx.objectStore('heads').delete(id);
     tx.objectStore('refs').delete(headRef(id));
-    for (const v of vs) {
-      tx.objectStore('versions').delete(v.id);
-      tx.objectStore('refs').delete(versionRef(v.id));
+    for (const key of keys) {
+      versions.delete(key);
+      tx.objectStore('refs').delete(versionRef(key));
     }
     await done(tx);
   }
@@ -298,10 +319,11 @@ export class IdbStore implements Store {
   }
 
   async deleteFolder(id: string): Promise<void> {
-    const books = await this.listBooks();
     const tx = this.db.transaction(['folders', 'books'], 'readwrite');
+    const books = tx.objectStore('books');
+    const cards = await req(books.getAll()) as BookMeta[];
     tx.objectStore('folders').delete(id);
-    for (const b of books) if (b.folder === id) tx.objectStore('books').put({ ...b, folder: null });
+    for (const b of cards) if (b.folder === id) books.put({ ...b, folder: null });
     await done(tx);
   }
 

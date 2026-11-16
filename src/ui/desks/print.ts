@@ -5,7 +5,8 @@ import { sheetOf } from '../../doc/model';
 import { letterBox } from '../../render/caption';
 import type { DeskCtx, DeskMode } from '../desk';
 import { openExport } from '../exportdialog';
-import { confirmDialog, download, h, seg, slug, toast } from '../dom';
+import { confirmDialog, download, h, seg, toast } from '../dom';
+import { bookFileStem, pageFileStem } from '../../io/publication';
 import { sizePicker } from '../sizepicker';
 
 const inch = (v: number) => `${Math.round(v * 1000) / 1000}″`;
@@ -131,7 +132,7 @@ export function printDesk(ctx: DeskCtx): DeskMode {
           h('button', { class: 'btn', type: 'button', onclick: () => openExport(studio, 'files') }, 'Export files…'),
           h('button', { class: 'btn', type: 'button', onclick: async () => {
             const bytes = await renderPagePng(page, art, book.dpi, sheetOf(book));
-            download(new Blob([bytes as BlobPart], { type: 'image/png' }), `${slug(book.title)}-p${studio.pageNumber(page)}.png`);
+            download(new Blob([bytes as BlobPart], { type: 'image/png' }), `${pageFileStem(page, studio.pageNumber(page), bookFileStem(book))}.png`);
             toast('Page PNG saved to your downloads.');
           } }, `Just this page (PNG, ${book.dpi} dpi)`)),
       );

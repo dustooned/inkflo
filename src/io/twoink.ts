@@ -6,6 +6,7 @@ import { renderPage } from '../render/page';
 import { encodePng, makeCanvas } from './canvasops';
 import type { Progress } from './exports';
 import { pagesIn, type PageRange } from './printexport';
+import { bookFileStem, pageFileStem } from './publication';
 
 export type InkPair = [string, string];
 type Output = 'light' | 'dark' | 'proof';
@@ -106,7 +107,7 @@ export async function exportTwoInks(studio: Studio, inks: InkPair, dpi: number, 
   const sizes: string[] = [];
   for (const page of pages) {
     const n = book.pages.indexOf(page) + 1;
-    const stem = 'page-' + String(n).padStart(3, '0') + '.png';
+    const stem = pageFileStem(page, n, bookFileStem(book));
     progress('Separating page ' + n + '…');
     await new Promise((resolve) => setTimeout(resolve, 0));
     const c = await renderSource(studio, book, page, dpi);
@@ -116,7 +117,7 @@ export async function exportTwoInks(studio: Studio, inks: InkPair, dpi: number, 
     for (const [kind, folder] of [['light', 'plate-1'], ['dark', 'plate-2'], ['proof', 'proof']] as const) {
       recolour(source, target, inks, kind);
       g.putImageData(target, 0, 0);
-      files.push({ name: folder + '/' + stem, data: pngAtDpi(await encodePng(c), dpi) });
+      files.push({ name: `${folder}/${stem}-${folder}.png`, data: pngAtDpi(await encodePng(c), dpi) });
     }
     sizes.push(stem + '  ' + page.widthIn + ' × ' + page.heightIn + ' in  (' + c.width + ' × ' + c.height + ' px)');
     c.width = c.height = 0;

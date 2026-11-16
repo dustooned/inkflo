@@ -30,6 +30,18 @@ describe('game package', () => {
     expect(JSON.parse(JSON.stringify(m))).toEqual(m);
   });
 
+  it('uses publishing details and the page title in game asset paths', () => {
+    const b = book();
+    b.publication = { series: 'Night Shift', volume: '2', chapter: '7a' };
+    b.pages[0]!.title = 'Arrival';
+    const manifest = buildManifest(b, b.pages, 1024, box, []);
+    const pg = manifest.pages[0]!;
+    expect(manifest.publication).toEqual(b.publication);
+    expect(pg.title).toBe('Arrival');
+    expect(pg.images.page).toBe('pages/001/night-shift-vol-2-ch-7a-rooftop-page-001-arrival-page.png');
+    expect(pg.panels[0]!.image).toBe('pages/001/night-shift-vol-2-ch-7a-rooftop-page-001-arrival-panel-01.png');
+  });
+
   it('writes Yarn with one node per page and panel tags', () => {
     const b = book();
     b.pages.push({ ...structuredClone(b.pages[0]!), id: 'p2' });

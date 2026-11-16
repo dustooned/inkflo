@@ -36,6 +36,14 @@ input, textarea, select { font: inherit; color: inherit; }
 .body { flex: 1; overflow: auto; padding: 22px 28px 40px; }
 .rowlabel { margin: 6px 0 14px; font: 650 10px/1 var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--text-faint); }
 .books { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 24px; }
+.library-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 16px; }
+.library-tools select { max-width: min(66vw, 270px); }
+.library-card { position: relative; min-width: 0; }
+.library-card > .card { width: 100%; overflow-wrap: anywhere; }
+.library-card > .icon { position: absolute; top: 6px; right: 6px; }
+.publication-numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.publication-numbers input { min-width: 0; }
+.export-name { overflow-wrap: anywhere; }
 .card { text-align: left; padding: 0; }
 .card .sheet { position: relative; aspect-ratio: 6.625/10.187; background: var(--paper-lift); border-radius: 4px; box-shadow: var(--shadow); overflow: hidden; border: 1px solid var(--line-2); transition: transform .18s; display: grid; place-items: center; width: 100%; padding: 0; color: var(--text-faint); }
 .card .sheet img, .card .sheet canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -55,7 +63,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .home-credit .credit:hover, .home-credit .credit:focus-visible { color: var(--text); text-decoration: underline; }
 @media (max-width: 600px) { .home-credit, .home-credit .credit-line { justify-content: center; } }
 .pages { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-.pagecard .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; }
+.pagecard .foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; margin-top: 7px; }
+.pagecard .page-title { margin-top: 8px; overflow-wrap: anywhere; }
 .pagecard .num { font: 600 11px/1 var(--mono); color: var(--text-soft); }
 .pagecard .acts { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
 .pagecard:hover .acts, .pagecard:focus-within .acts { opacity: 1; }

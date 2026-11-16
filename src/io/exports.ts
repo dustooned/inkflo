@@ -1,5 +1,6 @@
 import type { Studio } from '../app/studio';
 import { PT, sheetOf, type Book, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
+import { bookFileStem, pageFileStem } from './publication';
 import { centreIn } from '../geom/lettering';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
@@ -241,10 +242,16 @@ function xml(s: string): string {
 }
 
 export function comicInfo(book: Book): string {
+  const { series, volume, chapter } = book.publication ?? {};
+  const publication = [
+    series ? `  <Series>${xml(series)}</Series>` : '',
+    chapter ? `  <Number>${xml(chapter)}</Number>` : '',
+    volume && /^\d+$/.test(volume) && Number(volume) <= 2147483647 ? `  <Volume>${Number(volume)}</Volume>` : '',
+  ].filter(Boolean);
   return `<?xml version="1.0" encoding="utf-8"?>
 <ComicInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Title>${xml(book.title)}</Title>
-  <Writer>${xml(book.author)}</Writer>
+${[...publication, `  <Writer>${xml(book.author)}</Writer>`].join('\n')}
   <PageCount>${book.pages.length}</PageCount>
   <Notes>Made with inkflo.</Notes>
   <Pages>
@@ -265,6 +272,8 @@ export async function exportCbz(studio: Studio, progress: Progress = () => {}): 
 
 /** Plain page images in a zip. */
 export async function exportPageImages(studio: Studio, progress: Progress = () => {}): Promise<Blob> {
+  const book = studio.book!;
   const pngs = await pagePngs(studio, progress);
-  return new Blob([writeZip(pngs.map((data, i) => ({ name: `page-${pad(i + 1)}.png`, data }))) as BlobPart], { type: 'application/zip' });
+  const stem = bookFileStem(book);
+  return new Blob([writeZip(pngs.map((data, i) => ({ name: `${pageFileStem(book.pages[i]!, i + 1, stem)}.png`, data }))) as BlobPart], { type: 'application/zip' });
 }

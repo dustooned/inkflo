@@ -1,5 +1,6 @@
 import type { Studio } from '../app/studio';
 import { sheetOf, type Book, type LayerType, type Page } from '../doc/model';
+import { bookFileStem, pageFileStem, publicationLabel } from './publication';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { groupLabel } from '../geom/groups';
@@ -138,7 +139,7 @@ export async function exportPrintPdf(studio: Studio, opt: PrintOptions, progress
   const spec = printOf(book);
   const dpi = opt.dpi ?? book.dpi;
   const plan = planPrint(book, opt.mode);
-  const doc = new PdfDoc(browserDeflate, book.title);
+  const doc = new PdfDoc(browserDeflate, book.title, book.author, publicationLabel(book.publication));
   return withPages(studio, async (artOf) => {
     const first = book.pages[0]!;
     const render = async (slot: number | null): Promise<HTMLCanvasElement> => {
@@ -318,13 +319,14 @@ export interface FilesOptions {
   dpi?: number;
 }
 
-/** Page images per separation in a zip: `inks/page-001.png` and so on. */
+/** Individually named page images per separation in a zip. */
 export async function exportPageFiles(studio: Studio, opt: FilesOptions, progress: Progress = () => {}): Promise<Blob> {
   const book = studio.book!;
   const dpi = opt.dpi ?? book.dpi;
   const pages = pagesIn(book, opt.range);
   const files: ZipFile[] = [];
   const bg = opt.format === 'jpg' ? 'white' : opt.background;
+  const stem = bookFileStem(book);
   await withPages(studio, async (artOf) => {
     for (const page of pages) {
       const n = book.pages.indexOf(page) + 1;
@@ -334,7 +336,8 @@ export async function exportPageFiles(studio: Studio, opt: FilesOptions, progres
         const c = await renderSeparation(page, artOf(page), dpi, book, sep, bg, opt.borders);
         tone(c, sep === 'inks' || sep === 'pencils' ? opt.colour : opt.colour === 'hard' ? 'grey' : opt.colour);
         const folder = opt.seps.length > 1 ? `${sep}/` : '';
-        files.push({ name: `${folder}page-${String(n).padStart(3, '0')}.${opt.format}`, data: await encode(c, opt.format) });
+        const suffix = sep === 'all' ? '' : `-${sep}`;
+        files.push({ name: `${folder}${pageFileStem(page, n, stem)}${suffix}.${opt.format}`, data: await encode(c, opt.format) });
       }
     }
   });
@@ -343,7 +346,7 @@ export async function exportPageFiles(studio: Studio, opt: FilesOptions, progres
 
 const safe = (s: string) => s.replace(/[^A-Za-z0-9 _.-]+/g, '').trim().replace(/\s+/g, '-').slice(0, 40) || 'layer';
 
-/** Every layer separately, `page-001/02-panel-2/ink.png`: transparent, page-sized, so they stack. */
+/** Every layer separately: transparent and page-sized, so they stack. */
 export async function exportLayerFiles(studio: Studio, range?: PageRange, progress: Progress = () => {}): Promise<Blob> {
   const book = studio.book!;
   const files: ZipFile[] = [];
@@ -352,7 +355,7 @@ export async function exportLayerFiles(studio: Studio, range?: PageRange, progre
       const n = book.pages.indexOf(page) + 1;
       const art = artOf(page);
       const panels = derivePanels(page);
-      const dir = `page-${String(n).padStart(3, '0')}`;
+      const dir = pageFileStem(page, n, bookFileStem(book));
       // bottom of the stack first, so names sort in stacking order
       const groups = [...page.groups].reverse();
       for (const [gi, group] of groups.entries()) {
@@ -386,7 +389,7 @@ export async function exportLayerFiles(studio: Studio, range?: PageRange, progre
 export async function exportSpreadsPdf(studio: Studio, progress: Progress = () => {}): Promise<Blob> {
   const book = studio.book!;
   const spec = printOf(book);
-  const doc = new PdfDoc(browserDeflate, book.title);
+  const doc = new PdfDoc(browserDeflate, book.title, book.author, publicationLabel(book.publication));
   const dpi = Math.min(book.dpi, 150);
   return withPages(studio, async (artOf) => {
     const first = book.pages[0]!;

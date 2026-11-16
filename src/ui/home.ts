@@ -4,17 +4,39 @@ import { openManual } from './manual';
 export const ABOUT_CREDIT = 'Designed, programmed and developed by Professor T';
 export const LBCC_URL = 'https://www.lbcc.edu/digitalmedia';
 import type { Studio } from '../app/studio';
-import { STAGES } from '../doc/model';
-import { h, pickFile, toast } from './dom';
-import { displayButton } from './popover';
+import { newId, STAGES } from '../doc/model';
+import type { BookMeta } from '../io/persist';
+import { publicationLabel } from '../io/publication';
+import { askText, confirmDialog, h, pickFile, toast } from './dom';
+import { closePopover, displayButton, popover } from './popover';
+import { confirmDeleteBook, openBookDetails } from './bookdetails';
 import { openOfflineDialog } from './offlinedialog';
 import { DEFAULT_PRINT, kindById, specFor } from '../geom/printkinds';
 import { sizePicker } from './sizepicker';
 import { DEFAULT_LAYOUT, stripCuts } from '../geom/carve';
 
 /** Home: the library of books on this device. */
-export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: string) => void): Promise<void> {
-  const books = (await studio.listBooks()).sort((a, b) => b.modified - a.modified);
+export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: string) => void, binId?: string): Promise<void> {
+  const [books, folders] = await Promise.all([studio.listBooks(), studio.store.listFolders()]);
+  const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  folders.sort((a, b) => byName.compare(a.name, b.name));
+  const bin = folders.find((folder) => folder.id === binId);
+  const filter = bin?.id ?? (binId === 'unsorted' ? 'unsorted' : '');
+  const folderOf = (b: BookMeta) => folders.some(({ id }) => id === b.folder) ? b.folder : null;
+  const folderRoute = (id: string) => id ? `#home/${id}` : '#home';
+  const reload = () => go(folderRoute(filter));
+  const report = (error: unknown) => toast(error instanceof Error ? error.message : String(error), 5000);
+  const visible = books.filter((b) => !filter || folderOf(b) === (bin?.id ?? null)).sort((a, b) => {
+    if (bin) {
+      for (const field of ['series', 'volume', 'chapter'] as const) {
+        const x = a.publication?.[field] ?? '';
+        const y = b.publication?.[field] ?? '';
+        const order = Number(!x) - Number(!y) || byName.compare(x, y);
+        if (order) return order;
+      }
+    }
+    return b.modified - a.modified;
+  });
   const urls: string[] = [];
   const cover = (bytes: Uint8Array | null) => {
     if (!bytes) return h('span', { 'aria-hidden': 'true' }, '◰');
@@ -46,7 +68,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         b.dpi = kind?.dpi ?? 300;
         b.pages[0]!.widthIn = v.w;
         b.pages[0]!.heightIn = v.h;
-      });
+      }, bin?.id);
       go(`#book/${book.id}`);
     });
     document.body.append(d);
@@ -57,7 +79,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     const f = await pickFile('.inkflo,.zip');
     if (!f) return;
     try {
-      const meta = await studio.importInkflo(new Uint8Array(await f.arrayBuffer()));
+      const meta = await studio.importInkflo(new Uint8Array(await f.arrayBuffer()), false, bin?.id);
       toast(`Imported “${meta.title}”.`);
       go(`#book/${meta.id}`);
     } catch (e) {
@@ -95,7 +117,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         b.pages[0]!.widthIn = v.w;
         b.pages[0]!.heightIn = v.h;
         b.pages[0]!.layout = { ...DEFAULT_LAYOUT, gutter: 0.6, border: 0, gutterPaper: '#ffffff' };
-      });
+      }, bin?.id);
       go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
     });
     document.body.append(d);
@@ -135,7 +157,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
         pg.heightIn = kind.h;
         pg.layout = { ...DEFAULT_LAYOUT, gutter: 0.18 };
         pg.cuts = stripCuts(pg, layout === '4' ? 4 : 3, stacked);
-      });
+      }, bin?.id);
       go(`#desk/${book.id}/${book.pages[0]!.id}/draw`);
     });
     document.body.append(d);
@@ -147,7 +169,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     try {
       const response = await fetch(import.meta.env.BASE_URL + 'examples/the-last-train.inkflo');
       if (!response.ok) throw new Error('The starter could not be loaded. Try again in a moment.');
-      const meta = await studio.importInkflo(new Uint8Array(await response.arrayBuffer()), true);
+      const meta = await studio.importInkflo(new Uint8Array(await response.arrayBuffer()), true, bin?.id);
       const book = await studio.openBook(meta.id);
       if (starter.isConnected) go('#desk/' + book.id + '/' + book.pages[0]!.id + '/script');
     } catch (e) {
@@ -162,21 +184,95 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
     h('button', { class: 'card new', type: 'button', onclick: newStrip }, h('div', { class: 'sheet' }, h('span', { class: 'strip-mini', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))), h('h3', {}, 'Comic strip'), h('small', {}, '3 or 4 panels, or stacked')),
     starter);
-  const bookCard = (b: (typeof books)[number]) =>
-      h('button', { class: 'card', type: 'button', 'data-title': b.title.toLowerCase(), onclick: () => go(`#book/${b.id}`) },
+  function moveBook(b: BookMeta): void {
+    const current = folderOf(b) ?? '';
+    const picker = h('select', { 'aria-label': 'Project bin' },
+      h('option', { value: '', selected: !current }, 'Unsorted'),
+      folders.map(({ id, name }) => h('option', { value: id, selected: id === current }, name)));
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'Move to project bin')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Project bin', picker)),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel'),
+        h('button', { class: 'btn primary', type: 'submit' }, 'Move book')));
+    const dialog = h('dialog', { 'aria-label': 'Move to project bin' }, form);
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const next = picker.value;
+      dialog.close();
+      if (next !== current) void studio.store.updateBookMeta(b.id, { folder: next || null }).then(reload, report);
+    });
+    dialog.addEventListener('close', () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+  const bookCard = (b: BookMeta) => {
+    const publication = publicationLabel(b.publication);
+    const binName = bin ? '' : folders.find(({ id }) => id === b.folder)?.name ?? '';
+    const actions = h('button', { class: 'icon', type: 'button', title: 'Book actions', 'aria-label': `Actions for ${b.title}`, 'aria-haspopup': 'menu' }, '⋯');
+    actions.addEventListener('click', () => {
+      const item = (label: string, run: () => void | Promise<void>, danger = false) =>
+        h('button', { class: danger ? 'item danger' : 'item', role: 'menuitem', type: 'button', onclick: () => {
+          closePopover();
+          void Promise.resolve().then(run).catch(report);
+        } }, label);
+      popover(actions, h('div', { class: 'chrome-menu', role: 'menu' },
+        item('Rename / edit details…', () => openBookDetails(b, async (details) => {
+          await studio.openBook(b.id);
+          studio.editBookDetails(details);
+          await studio.saver.flush();
+          if (studio.saver.state === 'error') throw new Error(studio.saver.error ?? 'The book could not be saved.');
+          reload();
+        })),
+        item('Move to project bin…', () => moveBook(b)),
+        folderOf(b) ? item('Remove from project bin', async () => {
+          await studio.store.updateBookMeta(b.id, { folder: null });
+          reload();
+        }) : null,
+        item('Delete book…', async () => {
+          if (!await confirmDeleteBook(b.title, b.pages)) return;
+          await studio.deleteBook(b.id);
+          reload();
+        }, true)), 'below', 'Book actions');
+    });
+    return h('article', { class: 'library-card', 'data-search': [b.title, b.author, publication, binName].join(' ').toLowerCase() },
+      h('button', { class: 'card', type: 'button', 'aria-label': `Open ${b.title}`, onclick: () => go(`#book/${b.id}`) },
         h('div', { class: 'sheet' }, cover(b.cover)),
         h('h3', {}, b.title),
+        publication || binName ? h('small', {}, [publication, binName].filter(Boolean).join(' · ')) : null,
         h('small', {}, `${b.pages} page${b.pages === 1 ? '' : 's'} · ${b.lastStage} · ${new Date(b.modified).toLocaleDateString()}`),
-        h('div', { class: 'dots', 'aria-hidden': 'true' }, STAGES.map((s) => h('i', { class: STAGES.indexOf(s) <= STAGES.indexOf(b.lastStage) ? 'done' : '' }))));
-  const grid = h('div', { class: 'books' }, books.map(bookCard));
-  const none = h('p', { class: 'empty', hidden: true }, 'No book matches.');
-  const search = books.length >= 12 ? h('input', { type: 'search', class: 'book-search', placeholder: `Find among ${books.length} books`, 'aria-label': 'Find a book by title' }) : null;
-  search?.addEventListener('input', () => {
+        h('div', { class: 'dots', 'aria-hidden': 'true' }, STAGES.map((s) => h('i', { class: STAGES.indexOf(s) <= STAGES.indexOf(b.lastStage) ? 'done' : '' })))),
+      actions);
+  };
+  const grid = h('div', { class: 'books' }, visible.map(bookCard));
+  const none = h('p', { class: 'empty', hidden: visible.length > 0 || !filter }, filter ? 'No books in this bin.' : 'No book matches.');
+  const search = h('input', { type: 'search', class: 'book-search', placeholder: 'Search title, series or chapter', 'aria-label': 'Search books' });
+  search.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
     let shown = 0;
-    for (const c of grid.children) { const hit = !q || (c as HTMLElement).dataset.title!.includes(q); (c as HTMLElement).hidden = !hit; if (hit) shown++; }
+    for (const c of grid.children) { const hit = !q || (c as HTMLElement).dataset.search!.includes(q); (c as HTMLElement).hidden = !hit; if (hit) shown++; }
+    none.textContent = q ? 'No book matches.' : 'No books in this bin.';
     none.hidden = shown > 0;
   });
+  const selectBin = h('select', { 'aria-label': 'Project bin', onchange: () => go(folderRoute(selectBin.value)) },
+    h('option', { value: '', selected: !filter }, 'All books'),
+    h('option', { value: 'unsorted', selected: filter === 'unsorted' }, 'Unsorted'),
+    folders.map(({ id, name }) => h('option', { value: id, selected: filter === id }, name)));
+  const nameBin = async (existing?: typeof bin) => {
+    const name = (await askText(existing ? 'Rename project bin' : 'New project bin', 'Name', existing?.name ?? '', existing ? 'Rename bin' : 'Create bin'))?.slice(0, 80).trim();
+    if (!name) return;
+    if (folders.some((folder) => folder.id !== existing?.id && byName.compare(folder.name, name) === 0)) throw new Error('A project bin already uses that name.');
+    const folder = existing ? { ...existing, name } : { id: newId('bin'), name, created: Date.now() };
+    await studio.store.putFolder(folder);
+    go(folderRoute(folder.id));
+  };
+  const bins = h('div', { class: 'library-tools' },
+    h('label', { class: 'field' }, 'Project bin', selectBin),
+    h('button', { class: 'btn', type: 'button', onclick: () => void nameBin().catch(report) }, 'New bin'),
+    bin ? h('button', { class: 'btn', type: 'button', onclick: () => void nameBin(bin).catch(report) }, 'Rename bin') : null,
+    bin ? h('button', { class: 'btn', type: 'button', onclick: async () => {
+      if (!await confirmDialog('Delete project bin?', `Books in “${bin.name}” will move to Unsorted.`, 'Delete bin')) return;
+      await studio.store.deleteFolder(bin.id).then(() => go('#home/unsorted'), report);
+    } }, 'Delete bin…') : null);
 
   root.replaceChildren(
     h('div', { class: 'screen' },
@@ -192,7 +288,8 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
       h('main', { class: 'body' },
         h('div', { class: 'rowlabel' }, 'Start something'),
         starts,
-        h('div', { class: 'rowlabel books-head' }, h('span', {}, 'Your books'), search),
+        h('div', { class: 'rowlabel books-head' }, h('span', {}, 'Your books'), books.length ? search : null),
+        bins,
         books.length ? null : h('p', { class: 'empty' }, 'Script a page, carve its panels, draw, letter, then export page images, a comic archive, or a motion comic that opens in 2Dope. Everything stays on this device.'),
         grid, none),
       h('footer', { class: 'home-credit' },

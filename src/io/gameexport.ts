@@ -1,5 +1,5 @@
 import type { Studio } from '../app/studio';
-import { PT, sheetOf, type Book, type Letter, type Page, type Pt } from '../doc/model';
+import { PT, sheetOf, type Book, type Letter, type Page, type Pt, type Publication } from '../doc/model';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { describeTransform } from '../geom/layoutcode';
@@ -11,6 +11,7 @@ import { renderPage } from '../render/page';
 import { encodePng, makeCanvas } from './canvasops';
 import type { Progress } from './exports';
 import { pagesIn, type PageRange } from './printexport';
+import { bookFileStem, pageFileStem } from './publication';
 
 /**
  * Game engine package: a ZIP an engine can load without inkflo.
@@ -61,6 +62,7 @@ export interface GamePanel {
 
 export interface GamePage {
   number: number;
+  title?: string;
   size: { width: number; height: number };
   images: { art: string; lettering: string; page: string };
   panels: GamePanel[];
@@ -72,6 +74,7 @@ export interface GameManifest {
   version: number;
   title: string;
   author: string;
+  publication?: Publication;
   unit: 'px';
   pixelsPerInch: number;
   readingDirection: 'ltr' | 'rtl';
@@ -81,7 +84,12 @@ export interface GameManifest {
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
-const dir = (n: number) => 'pages/' + String(n).padStart(3, '0');
+function imagePrefix(book: Book, page: Page, number: number): string {
+  const dir = 'pages/' + String(number).padStart(3, '0');
+  return book.publication || page.title ? `${dir}/${pageFileStem(page, number, bookFileStem(book))}-` : `${dir}/`;
+}
+
+const panelImage = (prefix: string, index: number) => `${prefix}panel-${String(index + 1).padStart(2, '0')}.png`;
 
 /** Balloon bounds in points (the renderer's measurer in the app; a stand-in in tests). */
 export type LetterBoxOf = (l: Letter, page: Page) => { x0: number; y0: number; x1: number; y1: number };
@@ -91,6 +99,7 @@ export function buildManifest(book: Book, pages: Page[], width: number, boxOf: L
   return {
     format: GAME_FORMAT, version: GAME_VERSION,
     title: book.title, author: book.author, unit: 'px',
+    ...(book.publication ? { publication: book.publication } : {}),
     pixelsPerInch: r4(width / (pages[0]?.widthIn ?? 1)),
     readingDirection: rtl ? 'rtl' : 'ltr',
     dialogue,
@@ -99,11 +108,12 @@ export function buildManifest(book: Book, pages: Page[], width: number, boxOf: L
       const k = width / page.widthIn; // px per inch on this page
       const px = (p: Pt) => ({ x: r1(p.x * k), y: r1(p.y * k) });
       const panels = derivePanels(page);
-      const d = dir(n);
+      const prefix = imagePrefix(book, page, n);
       return {
         number: n,
+        ...(page.title ? { title: page.title } : {}),
         size: { width: Math.round(width), height: Math.round(page.heightIn * k) },
-        images: { art: d + '/art.png', lettering: d + '/lettering.png', page: d + '/page.png' },
+        images: { art: prefix + 'art.png', lettering: prefix + 'lettering.png', page: prefix + 'page.png' },
         panels: panels.map((p): GamePanel => {
           const beat = page.beats[p.index];
           const t = p.transform && p.source ? describeTransform(p.transform, p.source.centroid) : null;
@@ -114,7 +124,7 @@ export function buildManifest(book: Book, pages: Page[], width: number, boxOf: L
             box: { x: r1(p.bbox.x0 * k), y: r1(p.bbox.y0 * k), width: r1((p.bbox.x1 - p.bbox.x0) * k), height: r1((p.bbox.y1 - p.bbox.y0) * k) },
             centre: px(p.centroid),
             moved: t ? { move: { x: r1(t.move.x * k), y: r1(t.move.y * k) }, turn: r1(t.turn), scale: r4(t.scale) } : null,
-            image: `${d}/panel-${String(p.index + 1).padStart(2, '0')}.png`,
+            image: panelImage(prefix, p.index),
             description: beat?.desc ?? '',
             lines: (beat?.lines ?? []).map((line) => { const l = parseLine(line); return { speaker: l.speaker, kind: l.style, text: l.text }; }),
           };
@@ -190,10 +200,8 @@ Made with inkflo. Format \`${m.format}\` version ${m.version}.
 
 - \`manifest.json\`: pages, panels and balloons in **pixels** (origin top-left, y down).
   \`norm\` gives the same shapes as 0–1 fractions of the page.
-- \`pages/NNN/art.png\`: the page without lettering. Show dialogue in your own UI over it.
-- \`pages/NNN/lettering.png\`: balloons and captions alone, on transparent.
-- \`pages/NNN/page.png\`: the finished page.
-- \`pages/NNN/panel-NN.png\`: each panel cut to its shape (transparent outside), sized to the panel's \`box\`.
+- \`pages/NNN/\`: the finished page, art without lettering, transparent lettering, and panel cutouts.
+  Read their relative paths from \`images\` and \`panels[i].image\` in the manifest.
 ${m.dialogue.map((f) => `- \`${f}\`: the script for ${f.endsWith('.yarn') ? 'Yarn Spinner' : 'Ink'}; tags give the panel and the kind of line.`).join('\n')}
 
 Panels are listed in reading order (${m.readingDirection === 'rtl' ? 'right to left' : 'left to right'}). Use \`panels[i].box\`
@@ -209,7 +217,7 @@ var comic = JObject.Parse(json);
 foreach (var page in comic["pages"])
   foreach (var panel in page["panels"]) {
     var box = panel["box"];            // x, y, width, height in pixels
-    var file = (string)panel["image"]; // pages/001/panel-01.png
+    var file = (string)panel["image"]; // relative image path
     // Load the PNG as a Texture2D, make a Sprite, and move a Camera to frame box
   }
 \`\`\`
@@ -253,7 +261,7 @@ export async function exportGamePackage(studio: Studio, o: GameOptions, progress
     const h = Math.round(page.heightIn * k);
     if (width * h > 40_000_000) throw new Error(`Page ${n} would be ${width} × ${h} px, too large for the browser. Choose a smaller width.`);
     const art = studio.ensureArt(page);
-    const d = dir(n);
+    const prefix = imagePrefix(book, page, n);
     const canvas = makeCanvas(width, h);
     const g = canvas.getContext('2d')!;
     try {
@@ -261,17 +269,17 @@ export async function exportGamePackage(studio: Studio, o: GameOptions, progress
       const panels = derivePanels(page);
       // finished page
       renderPage(g, page, art, { scale: k, printOnly: true, sheet, panels });
-      files.push({ name: d + '/page.png', data: await encodePng(canvas) });
+      files.push({ name: prefix + 'page.png', data: await encodePng(canvas) });
       // art without lettering
       g.clearRect(0, 0, width, h);
       renderPage(g, page, art, { scale: k, printOnly: true, sheet, panels, balloons: false });
-      files.push({ name: d + '/art.png', data: await encodePng(canvas) });
+      files.push({ name: prefix + 'art.png', data: await encodePng(canvas) });
       // each panel cut out of the art
-      for (const p of panels) files.push({ name: `${d}/panel-${String(p.index + 1).padStart(2, '0')}.png`, data: await encodePng(cropPanel(canvas, p, k)) });
+      for (const p of panels) files.push({ name: panelImage(prefix, p.index), data: await encodePng(cropPanel(canvas, p, k)) });
       // lettering alone
       g.clearRect(0, 0, width, h);
       renderPage(g, page, art, { scale: k, sheet, panels, frame: false, types: { pencil: false, ink: false, colour: false, tone: false, reference: false } });
-      files.push({ name: d + '/lettering.png', data: await encodePng(canvas) });
+      files.push({ name: prefix + 'lettering.png', data: await encodePng(canvas) });
     } finally {
       studio.residency.unpin(art);
       canvas.width = canvas.height = 0;

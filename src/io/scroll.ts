@@ -1,5 +1,6 @@
 import type { Studio } from '../app/studio';
 import { sheetOf, type Book, type Page } from '../doc/model';
+import { bookFileStem, publicationLabel } from './publication';
 import { crc32, writeZip, type ZipFile } from '../engine/io/zip';
 import { lettersReady } from '../render/fonts';
 import { renderPage } from '../render/page';
@@ -83,7 +84,7 @@ function paintBreak(g: CanvasRenderingContext2D, art: BreakArt | null | undefine
 
 const html = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-export function scrollReader(title: string, author: string, slices: Slice[], background: string | null, width = SCROLL_WIDTH): string {
+export function scrollReader(title: string, author: string, slices: Slice[], background: string | null, width = SCROLL_WIDTH, publication = ''): string {
   const color = background && /^#[0-9a-f]{6}$/i.test(background) ? background : '#ffffff';
   return `<!doctype html>
 <html lang="en">
@@ -95,7 +96,7 @@ export function scrollReader(title: string, author: string, slices: Slice[], bac
 header{max-width:${width}px;margin:auto;padding:24px 20px}h1,p{margin:0}main{max-width:${width}px;margin:auto;background:${color}}
 img{display:block;width:100%;height:auto}
 </style>
-<header><h1>${html(title)}</h1>${author ? `<p>${html(author)}</p>` : ''}</header>
+<header><h1>${html(title)}</h1>${publication ? `<p>${html(publication)}</p>` : ''}${author ? `<p>${html(author)}</p>` : ''}</header>
 <main aria-label="Comic episode">
 ${slices.map((s, i) => `<img src="${html(s.file)}" width="${s.width}" height="${s.height}" alt="${html(s.alt)}"${i > 0 ? ' loading="lazy"' : ''}>`).join('\n')}
 </main>
@@ -184,7 +185,7 @@ async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOp
           b.setTransform(1, 0, 0, 1, 0, -(from + top));
           renderPage(b, page, art, { scale: pageScale, printOnly: true, sheet: sheetOf(book) });
           g.drawImage(band, 0, 0, W, rows, 0, y, W, rows);
-          label ||= 'Comic page ' + number;
+          label ||= page.title ? `Page ${number} · ${page.title}` : 'Comic page ' + number;
           y += rows;
           top += rows;
           if (y === canvas.height) {
@@ -226,9 +227,10 @@ export async function exportScroll(studio: Studio, options: ScrollOptions, progr
   const { info, quality, width } = plan;
   const files: ZipFile[] = [];
   const slices: Slice[] = [];
+  const stem = bookFileStem(book);
   let largest = 0;
   for await (const { canvas, label } of renderScrollStrips(studio, book, options, progress, plan)) {
-    const file = 'images/' + String(slices.length + 1).padStart(4, '0') + '.' + info.ext;
+    const file = `images/${stem}-${String(slices.length + 1).padStart(4, '0')}.${info.ext}`;
     const data = await encodeImage(canvas, info.mime, info.lossy ? quality : undefined);
     largest = Math.max(largest, data.length);
     files.push({ name: file, data });
@@ -236,8 +238,8 @@ export async function exportScroll(studio: Studio, options: ScrollOptions, progr
   }
   const total = files.reduce((sum, f) => sum + f.data.length, 0);
   const encoder = new TextEncoder();
-  files.push({ name: 'index.html', data: encoder.encode(scrollReader(book.title, book.author, slices, plan.background, width)) });
-  files.push({ name: 'episode.json', data: encoder.encode(JSON.stringify({ title: book.title, author: book.author, width, format: info.short, slices }, null, 2)) });
+  files.push({ name: 'index.html', data: encoder.encode(scrollReader(book.title, book.author, slices, plan.background, width, publicationLabel(book.publication))) });
+  files.push({ name: 'episode.json', data: encoder.encode(JSON.stringify({ title: book.title, author: book.author, publication: book.publication, width, format: info.short, slices }, null, 2)) });
   files.push({ name: 'READ ME.txt', data: encoder.encode(scrollReadMe(book.title, slices.length, width, plan.sliceHeight, info.short, total, largest)) });
   progress(`${slices.length} image${slices.length === 1 ? '' : 's'}, ${formatBytes(total)} in all, largest ${formatBytes(largest)}`);
   return new Blob([writeZip(files) as BlobPart], { type: 'application/zip' });
@@ -251,7 +253,7 @@ This package holds your comic episode as ${images} numbered ${format} image${ima
 Total size: ${formatBytes(total)}. Largest image: ${formatBytes(largest)}.
 
 TO PUBLISH
-  1. Upload the images in the images folder, in order (0001 first). Most comic sites want them in this order.
+  1. Upload the images in the images folder, in order by the number at the end of each filename (0001 first).
   2. Or put the whole folder on any web host and share the link to index.html. It is a simple reader page.
   3. Check the upload rules of the site you publish on. Width, height and file size limits differ from site to site.
      If a file is too big, go back to inkflo and choose "Small and fast", or lower the quality.

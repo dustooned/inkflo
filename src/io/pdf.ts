@@ -31,6 +31,13 @@ function pdfText(s: string): string {
   return s.replace(/[\\()]/g, (c) => `\\${c}`).replace(/[^\x20-\x7e]/g, (c) => (c === '—' || c === '–' ? '-' : c === '“' || c === '”' ? '"' : c === '’' ? "'" : c === '×' ? 'x' : c === '″' ? 'in' : '?'));
 }
 
+/** PDF document properties can use UTF-16BE even when the page font cannot. */
+function pdfInfoText(s: string): string {
+  if (/^[\x20-\x7e]*$/.test(s)) return `(${pdfText(s)})`;
+  const units = s.split('').map((c) => c.charCodeAt(0).toString(16).padStart(4, '0'));
+  return `<FEFF${units.join('')}>`;
+}
+
 /** Drawing commands for one page. */
 export class PdfPage {
   private ops: string[] = [];
@@ -80,7 +87,7 @@ export class PdfDoc {
   private imgs: { name: string; w: number; h: number; rgb: Uint8Array; alpha: Uint8Array | null }[] = [];
   private pages: PageRec[] = [];
 
-  constructor(private readonly deflate: Deflate, readonly title = '') {}
+  constructor(private readonly deflate: Deflate, readonly title = '', readonly author = '', readonly subject = '') {}
 
   /**
    * Add an image from RGBA pixels (alpha kept as a soft mask only when not fully opaque). It is
@@ -159,7 +166,9 @@ export class PdfDoc {
     set(pagesId, `<< /Type /Pages /Kids [${pageIds.map((i) => `${i} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
     set(catalog, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
     const info = alloc();
-    set(info, `<< /Title (${pdfText(this.title)}) /Producer (inkflo) >>`);
+    const author = this.author ? ` /Author ${pdfInfoText(this.author)}` : '';
+    const subject = this.subject ? ` /Subject ${pdfInfoText(this.subject)}` : '';
+    set(info, `<< /Title ${pdfInfoText(this.title)}${author}${subject} /Producer (inkflo) >>`);
 
     // assemble with byte offsets
     const chunks: Uint8Array[] = [enc.encode('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')];

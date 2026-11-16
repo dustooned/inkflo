@@ -16,7 +16,8 @@ import { loadMarks, markKeys } from '../render/marks';
 import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
-import { download, h, seg, slug } from './dom';
+import { download, h, seg } from './dom';
+import { bookFileStem, pageFileStem } from '../io/publication';
 
 type Tab = 'print' | 'files' | 'apps' | 'scroll';
 type FilesGroup = 'share' | 'production' | 'apps' | 'backup';
@@ -43,7 +44,7 @@ export interface ExportOpen {
 export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpen = {}): void {
   const book = studio.book;
   if (!book) return;
-  const name = slug(book.title);
+  const name = bookFileStem(book);
   const progress = h('div', { class: 'progress', role: 'status', 'aria-live': 'polite' });
   const buttons: HTMLButtonElement[] = [];
   let exporting = false;
@@ -417,7 +418,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         const s = webSize(page, web.width);
         queueMicrotask(() => { info.textContent = `${s.width} × ${s.height} px · ${formatBytes(blob.size)} ${formatInfo(web.format).short}`; });
         return blob;
-      }, `${name}-page-${web.page}-${webSize(page, web.width).width}px.${formatInfo(web.format).ext}`);
+      }, `${pageFileStem(page, web.page, name)}-${webSize(page, web.width).width}px.${formatInfo(web.format).ext}`);
     }, true);
     const refresh = () => {
       const page = book!.pages[web.page - 1]!;

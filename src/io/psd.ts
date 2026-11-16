@@ -1,6 +1,7 @@
 import type { Layer as PsdLayer, Psd } from 'ag-psd';
 import type { Studio } from '../app/studio';
 import { pagePixels, PT, sheetOf, TYPE_DEFAULTS, type Book, type Layer, type LayerGroup, type Page } from '../doc/model';
+import { bookFileStem, pageFileStem } from './publication';
 import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { derivePanels, panelAt, panelStack } from '../geom/carve';
@@ -185,7 +186,7 @@ export function psdPlan(book: Book, range: PageRange, mode: PsdMode, dpi: number
   const numbers = pages.map((p) => book.pages.indexOf(p) + 1);
   const base = stem + (mode === 'template' ? '-template' : '');
   const single = numbers.length === 1;
-  const file = single ? base + '-page-' + numbers[0] + '.psd' : base + '-pages-' + numbers[0] + '-' + numbers[numbers.length - 1] + '.zip';
+  const file = single ? pageFileStem(pages[0]!, numbers[0]!, base) + '.psd' : base + '-pages-' + numbers[0] + '-' + numbers[numbers.length - 1] + '.zip';
   const sizes = [...new Set(pages.map((p) => p.widthIn + '×' + p.heightIn))];
   const first = pages[0];
   const px = first ? pagePixels(first, dpi) : { width: 0, height: 0 };
@@ -235,7 +236,8 @@ export async function exportPsd(studio: Studio, range: PageRange, mode: PsdMode,
       if (art) await studio.residency.pin(art);
       const bytes = writePsdUint8Array(pagePsd(book, page, art, dpi, mode));
       if (pages.length === 1) return new Blob([bytes as BlobPart], { type: 'image/vnd.adobe.photoshop' });
-      files.push({ name: 'page-' + String(n).padStart(3, '0') + '.psd', data: bytes });
+      const stem = bookFileStem(book) + (mode === 'template' ? '-template' : '');
+      files.push({ name: pageFileStem(page, n, stem) + '.psd', data: bytes });
     } finally {
       if (art) studio.residency.unpin(art);
     }

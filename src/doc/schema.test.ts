@@ -24,6 +24,12 @@ function file(): BookFile {
 const ink = (f: BookFile) => f.book.pages[0]!.groups[1]!.layers[1]!;
 
 describe('book.json', () => {
+  it('keeps publishing details and page titles in a portable book', () => {
+    const f = file();
+    f.book.publication = { series: 'Night Shift', volume: '2', chapter: '7a' };
+    f.book.pages[0]!.title = 'Arrival';
+    expect(parseBookFile(stringifyBookFile(f)).book).toEqual(f.book);
+  });
   it('retains unused book assets as storage references and rejects invalid keys', () => {
     const f = file();
     const key = 'assets/8ppw6wtu-mz.png';

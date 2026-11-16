@@ -155,7 +155,7 @@ export class Autosaver {
     const meta = this.meta;
     if (!meta) return this.queue;
     return this.enqueue(async () => {
-      if (this.savedChanges === this.changes) return;
+      if (this.meta?.id !== meta.id || this.savedChanges === this.changes) return;
       const at = this.changes;
       const quiet = this.quiet;
       if (!quiet) this.set('saving');

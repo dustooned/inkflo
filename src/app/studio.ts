@@ -96,12 +96,12 @@ export class Studio {
     return this.store.listBooks();
   }
 
-  async createBook(title: string, author: string, setup?: (book: Book) => void): Promise<Book> {
+  async createBook(title: string, author: string, setup?: (book: Book) => void, folder: string | null = null): Promise<Book> {
     await this.close();
     const book = newBook(title || 'Untitled book', author);
     setup?.(book);
     this.attach(book, new Map());
-    this.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: '', book, art: {} }), false);
+    this.saver.open(metaFromFile({ format: 'inkflo-book', schema: 1, savedBy: '', book, art: {} }, { folder }), false);
     await this.store.putSetting('lastBook', book.id);
     return book;
   }
@@ -116,7 +116,7 @@ export class Studio {
     void loadMarks(markKeys(book), (k) => this.store.getAsset(k));
     const meta = (await this.store.getBook(id)) ?? metaFromFile(parseBookFile(head.json));
     meta.opened = Date.now();
-    void this.store.putBookMeta(meta);
+    await this.store.updateBookMeta(id, { opened: meta.opened });
     this.saver.open(meta, true);
     await this.store.putSetting('lastBook', id);
     return book;
@@ -133,23 +133,28 @@ export class Studio {
   }
 
   async deleteBook(id: string): Promise<void> {
-    if (this.book?.id === id) {
-      this.book = null;
-      this.art = new Map();
-      this.residency.setPages(this.art);
-      this.history.clear();
-      this.saver.meta = null;
-    }
-    await this.saver.then(() => this.store.deleteBook(id));
+    await this.saver.then(async () => {
+      await this.store.deleteBook(id);
+      if (this.book?.id === id) {
+        this.saver.stop();
+        this.saver.meta = null;
+        this.book = null;
+        this.art = new Map();
+        this.residency.setPages(this.art);
+        this.history.clear();
+      }
+    });
     this.emit();
   }
 
-  async renameBook(title: string, author: string): Promise<void> {
+  editBookDetails(details: Pick<Book, 'title' | 'author' | 'publication'>): void {
     const b = this.requireBook();
-    const before = { title: b.title, author: b.author };
+    const before = { title: b.title, author: b.author, publication: b.publication };
+    const samePublication = (['series', 'volume', 'chapter'] as const).every((key) => before.publication?.[key] === details.publication?.[key]);
+    if (before.title === details.title && before.author === details.author && samePublication) return;
     this.run({
-      label: 'Rename book',
-      do: () => Object.assign(b, { title, author }),
+      label: 'Edit book details',
+      do: () => Object.assign(b, details),
       undo: () => Object.assign(b, before),
     });
   }
@@ -510,7 +515,7 @@ export class Studio {
   }
 
   /** Import an `.inkflo` into the library. A book whose id is taken becomes a copy. */
-  async importInkflo(bytes: Uint8Array, asStarter = false): Promise<BookMeta> {
+  async importInkflo(bytes: Uint8Array, asStarter = false, folder: string | null = null): Promise<BookMeta> {
     const entries = await readZip(bytes);
     const json = entries.get('book.json');
     if (!json) throw new Error('This file has no book.json; it is not an inkflo book.');
@@ -531,7 +536,7 @@ export class Studio {
       if (!data) throw new Error(`The file is missing ${k}.`);
       assets.set(k, data);
     }
-    const meta = metaFromFile(file, { modified: Date.now() });
+    const meta = metaFromFile(file, { modified: Date.now(), folder });
     await this.store.saveHead(meta, { id: file.book.id, json: stringifyBookFile(file), savedAt: Date.now() }, assets, [...assets.keys()]);
     return meta;
   }

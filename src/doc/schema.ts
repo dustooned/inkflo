@@ -672,6 +672,8 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
     state: stageState(o.state, `${path}.state`),
     updatedAt: num(o.updatedAt, `${path}.updatedAt`),
   };
+  const title = optStr(o.title, `${path}.title`)?.trim().slice(0, 120);
+  if (title) pg.title = title;
   if (lay) pg.layout = lay;
   if (o.grid !== undefined) pg.grid = modularGrid(o.grid, `${path}.grid`);
   if (o.downbeat !== undefined) pg.downbeat = relativePoint(o.downbeat, `${path}.downbeat`);
@@ -712,6 +714,15 @@ function book(v: unknown, v1Art?: Obj): Book {
     createdAt: num(o.createdAt, 'book.createdAt'),
     updatedAt: num(o.updatedAt, 'book.updatedAt'),
   };
+  if (o.publication !== undefined) {
+    const p = obj(o.publication, 'book.publication');
+    const publication: NonNullable<Book['publication']> = {};
+    for (const key of ['series', 'volume', 'chapter'] as const) {
+      const value = optStr(p[key], `book.publication.${key}`)?.trim().slice(0, 120);
+      if (value) publication[key] = value;
+    }
+    if (Object.keys(publication).length) b.publication = publication;
+  }
   if (o.print !== undefined) {
     const p = obj(o.print, 'book.print');
     const bleed = num(p.bleed, 'book.print.bleed');

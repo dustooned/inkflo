@@ -13,7 +13,7 @@ it('describes a single active page as one PSD with trim and pixel size', () => {
   const page = b.pages[1]!;
   const p = psdPlan(b, { from: 2, to: 2 }, 'art', 300, 'the-last-train');
   expect(p.pages).toEqual([2]);
-  expect(p.file).toBe('the-last-train-page-2.psd');
+  expect(p.file).toBe('the-last-train-page-002.psd');
   expect(p.pagesLabel).toBe('Page 2');
   expect(p.trimLabel).toContain(`${page.widthIn}″ × ${page.heightIn}″ trim`);
   expect(p.pixelsLabel).toBe(`${Math.round(page.widthIn * 300).toLocaleString('en-US')} × ${Math.round(page.heightIn * 300).toLocaleString('en-US')} px at 300 dpi`);

@@ -2,12 +2,14 @@ import type { Studio } from '../app/studio';
 import { sheetOf, STAGES, type Page } from '../doc/model';
 import { renderThumb } from '../render/page';
 import { openExport } from './exportdialog';
-import { askText, confirmDialog, h } from './dom';
+import { askText, confirmDialog, h, toast } from './dom';
 import { closePopover, displayButton, popover } from './popover';
 import { spreadButton } from './spread';
 import { applyPageTemplate } from '../geom/pagetemplates';
 import { openPageTemplates } from './pagetemplates';
 import { openBookAssets } from './bookassets';
+import { confirmDeleteBook, openBookDetails } from './bookdetails';
+import { publicationLabel } from '../io/publication';
 
 const STAGE_LABEL: Record<string, string> = { script: 'Script', layout: 'Layout', draw: 'Draw', caption: 'Caption', print: 'Print' };
 
@@ -21,17 +23,24 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
   const draw = () => {
     grid.replaceChildren(
       ...book.pages.map((p, i) => {
+        const label = `Page ${i + 1}${p.title ? ` · ${p.title}` : ''}`;
         const c = thumbs.get(p.id) ?? document.createElement('canvas');
         thumbs.set(p.id, c);
         const a = studio.art.get(p.id) ?? null;
         renderThumb(p, a && !a.parked ? a : null, 320, c, sheetOf(book));
         return h('div', { class: 'card pagecard' },
-          h('button', { class: 'sheet', type: 'button', 'aria-label': `Open page ${i + 1}`, onclick: () => go(deskOf(p)) }, c),
+          h('button', { class: 'sheet', type: 'button', 'aria-label': `Open ${label}`, onclick: () => go(deskOf(p)) }, c),
+          p.title ? h('small', { class: 'page-title' }, p.title) : null,
           h('div', { class: 'foot' },
             h('span', { class: 'num' }, String(i + 1).padStart(2, '0')),
             h('span', { class: 'acts' },
               h('button', { type: 'button', title: 'Move earlier', 'aria-label': `Move page ${i + 1} earlier`, disabled: i === 0, onclick: () => studio.movePage(p, i - 1) }, '◀'),
               h('button', { type: 'button', title: 'Move later', 'aria-label': `Move page ${i + 1} later`, disabled: i === book.pages.length - 1, onclick: () => studio.movePage(p, i + 1) }, '▶'),
+              h('button', { type: 'button', title: 'Rename page', 'aria-label': `Rename page ${i + 1}`,
+                onclick: async () => {
+                  const title = (await askText('Rename page', 'Page title', p.title ?? '', 'Save title', true))?.slice(0, 120).trim();
+                  if (title !== undefined && title !== (p.title ?? '')) studio.editPage(p, 'Rename page', ['title'], (next) => { next.title = title || undefined; });
+                } }, '✎'),
               h('button', { type: 'button', title: 'Delete page', 'aria-label': `Delete page ${i + 1}`, disabled: book.pages.length < 2,
                 onclick: async () => { if (await confirmDialog('Delete page?', `Page ${i + 1} and its art go away. Undo brings them back.`, 'Delete')) studio.deletePage(p); } }, '✕')),
             h('span', { class: 'dots', 'aria-label': STAGES.map((s) => `${STAGE_LABEL[s]} ${['to do', 'in progress', 'done'][p.state[s]]}`).join(', ') },
@@ -52,27 +61,23 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
   const save = h('span', { class: 'save', 'aria-live': 'polite' });
   const status = () => {
     titleEl.textContent = book.title;
-    metaEl.textContent = `${book.pages.length} ${book.pages.length === 1 ? 'page' : 'pages'} · ${book.dpi} dpi`;
+    metaEl.textContent = [publicationLabel(book.publication), `${book.pages.length} ${book.pages.length === 1 ? 'page' : 'pages'} · ${book.dpi} dpi`].filter(Boolean).join(' · ');
     save.dataset.state = studio.saveState;
     save.textContent = { idle: '', dirty: 'Unsaved', saving: 'Saving…', saved: 'Saved', error: `Not saved: ${studio.saver.error ?? ''}` }[studio.saveState];
   };
   const last = book.pages.find((p) => p.id === book.lastPageId) ?? book.pages[0]!;
 
-  // Rename and Delete live in one menu, so Delete is never one slip away from Rename
   function bookMenu(): HTMLElement {
-    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Book actions', title: 'Rename or delete this book', 'aria-haspopup': 'menu' }, '⋯');
+    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Book actions', title: 'Book actions', 'aria-haspopup': 'menu' }, '⋯');
     b.addEventListener('click', () => {
       const item = (label: string, run: () => void, danger = false) => h('button', { class: 'item' + (danger ? ' danger' : ''), type: 'button', role: 'menuitem', onclick: () => { closePopover(); run(); } }, label);
       popover(b, h('div', { class: 'chrome-menu', role: 'menu', 'aria-label': 'Book actions' },
-        item('Rename…', async () => {
-          const t = await askText('Rename book', 'Title', book.title, 'Rename');
-          if (t !== null) await studio.renameBook(t, book.author);
-        }),
         item(`Delete book (${book.pages.length} page${book.pages.length === 1 ? '' : 's'})…`, async () => {
-          if (await confirmDialog('Delete book?', `“${book.title}” and its ${book.pages.length} page${book.pages.length === 1 ? '' : 's'} are removed from this device. This cannot be undone. Export an .inkflo first to keep a copy.`, 'Delete book')) {
+          if (!await confirmDeleteBook(book.title, book.pages.length)) return;
+          try {
             await studio.deleteBook(book.id);
             go('#home');
-          }
+          } catch (error) { toast(error instanceof Error ? error.message : String(error), 5000); }
         }, true)), 'below', 'Book actions');
     });
     return b;
@@ -80,12 +85,16 @@ export async function renderBook(root: HTMLElement, studio: Studio, id: string, 
   root.replaceChildren(
     h('div', { class: 'screen' },
       h('header', { class: 'bar' },
-        h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to library', onclick: () => go('#home') }, '←'),
+        h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to library', onclick: () => {
+          const folder = studio.saver.meta?.folder;
+          go(folder ? `#home/${folder}` : '#home');
+        } }, '←'),
         h('div', {}, titleEl, h('div', {}, metaEl)),
         bookMenu(),
         h('span', { class: 'spacer' }),
         save,
         displayButton(),
+        h('button', { class: 'btn', type: 'button', onclick: () => openBookDetails(book, (details) => studio.editBookDetails(details)) }, 'Details'),
         h('button', { class: 'btn', type: 'button', onclick: () => openBookAssets(studio) }, 'Assets'),
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Undo', title: 'Undo (Ctrl+Z)', onclick: () => studio.undo() }, '↶'),
         h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => studio.redo() }, '↷'),
