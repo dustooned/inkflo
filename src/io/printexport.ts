@@ -5,7 +5,7 @@ import type { PageArt } from '../draw/residency';
 import { writeZip, type ZipFile } from '../engine/io/zip';
 import { groupLabel } from '../geom/groups';
 import { derivePanels } from '../geom/carve';
-import { bookletSheets, checkCount, miniZineCells, printOrder, printOf, readerSpreads } from '../geom/printkinds';
+import { bookletSheets, checkCount, coverLayout, miniZineCells, printOrder, printOf, readerSpreads } from '../geom/printkinds';
 import { lettersReady } from '../render/fonts';
 import { drawLayerBitmap, renderPage } from '../render/page';
 import { drawLayerAsTone } from '../render/tone';
@@ -233,6 +233,72 @@ export async function exportPrintPdf(studio: Studio, opt: PrintOptions, progress
       doc.addPage(p);
       doc.addPage(zineInstructions(W, H));
     }
+    progress('Writing the PDF…');
+    return new Blob([(await doc.build()) as BlobPart], { type: 'application/pdf' });
+  });
+}
+
+/** Keep the outer part of a bled canvas: drop `px` columns from the spine side. */
+function dropSide(c: HTMLCanvasElement, side: 'left' | 'right', px: number): HTMLCanvasElement {
+  if (px <= 0) return c;
+  const out = makeCanvas(c.width - px, c.height);
+  out.getContext('2d')!.drawImage(c, side === 'left' ? px : 0, 0, out.width, c.height, 0, 0, out.width, c.height);
+  return out;
+}
+
+export interface CoverOptions {
+  /** Spine width in inches (the printer's number; see spineWidth for an estimate). */
+  spine: number;
+  marks: boolean;
+  dpi?: number;
+}
+
+/**
+ * The flat cover for a perfect-bound or hardcover book: back cover, spine and front cover on one
+ * PDF page. The first book page is the front cover and the last is the back cover. Art runs past
+ * the trim by the bleed (and the wrap for a hardcover); the spine is paper with the title on it.
+ */
+export async function exportCoverPdf(studio: Studio, opt: CoverOptions, progress: Progress = () => {}): Promise<Blob> {
+  const book = studio.book!;
+  if (book.pages.length < 2) throw new Error('A cover needs at least two pages: the first is the front, the last is the back.');
+  const spec = printOf(book);
+  const dpi = opt.dpi ?? book.dpi;
+  const front = book.pages[0]!;
+  const back = book.pages[book.pages.length - 1]!;
+  const lay = coverLayout(front.widthIn, front.heightIn, opt.spine, spec.bleed, spec.binding, !!spec.rtl);
+  const outerPx = Math.round(lay.outer * dpi);
+  const doc = new PdfDoc(browserDeflate, book.title, book.author, publicationLabel(book.publication));
+  return withPages(studio, async (artOf) => {
+    const m = (opt.marks ? 0.375 : 0) * PT;
+    const o = lay.outer * PT;
+    const pw = lay.pageW * PT;
+    const ph = lay.trimH * PT;
+    const p = new PdfPage(lay.trimW * PT + 2 * (o + m), ph + 2 * (o + m));
+    const x0 = m + o;
+    const frontIsRight = lay.frontX > lay.backX;
+    for (const [label, page, isFront] of [['front', front, true], ['back', back, false]] as const) {
+      progress(`Drawing the ${label} cover…`);
+      await yieldToUi();
+      await lettersReady(page.balloons.map((l) => l.cap));
+      const right = isFront === frontIsRight;
+      const canvas = dropSide(withBleed(await renderSeparation(page, artOf(page), dpi, book, 'all'), outerPx), right ? 'left' : 'right', outerPx);
+      const img = await pdfImage(doc, canvas);
+      p.image(img, right ? x0 + (lay.trimW - lay.pageW) * PT : m, m, pw + o, ph + 2 * o);
+    }
+    const sx = x0 + pw;
+    const sw = lay.spine * PT;
+    if (sw >= 0.2 * PT) {
+      const size = Math.min(14, sw * 0.55);
+      const cx = sx + sw / 2 - size * 0.35;
+      p.textDown(book.title, cx, m + o + ph - 0.4 * PT, size, true);
+      if (book.author) p.textDown(book.author, cx, m + o + ph / 2 - 0.3 * PT, size * 0.8);
+    }
+    if (opt.marks) {
+      p.cropMarks(x0, m + o, lay.trimW * PT, ph, o + 3);
+      for (const x of [sx, sx + sw]) p.line(x, m + o + ph + 3, x, m + o + ph + 3 + 14, 0.25, 0.4, [2, 2]).line(x, m + o - 3, x, m + o - 3 - 14, 0.25, 0.4, [2, 2]);
+      p.text(`${book.title} - cover, spine ${lay.spine} in${spec.binding === 'hardcover' ? ', hardcover wrap included' : ''}`, x0, 9, 6);
+    }
+    doc.addPage(p, { trim: [x0, m + o, x0 + lay.trimW * PT, m + o + ph], bleed: [m, m, m + lay.trimW * PT + 2 * o, m + ph + 2 * o] });
     progress('Writing the PDF…');
     return new Blob([(await doc.build()) as BlobPart], { type: 'application/pdf' });
   });

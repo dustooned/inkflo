@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deflateSync, inflateSync } from 'node:zlib';
-import { bookletSheets, checkCount, kindById, miniZineCells, PRINT_KINDS, printOrder, printOf, readerSpreads, specFor, spineWidth } from './printkinds';
+import { coverLayout, HARDCOVER_WRAP, bookletSheets, checkCount, kindById, miniZineCells, PRINT_KINDS, printOrder, printOf, readerSpreads, specFor, spineWidth } from './printkinds';
 import { PdfDoc, PdfPage } from '../io/pdf';
 import { newBook } from '../doc/model';
 import { FORMAT, parseBookFile, SCHEMA, stringifyBookFile } from '../doc/schema';
@@ -119,5 +119,20 @@ describe('custom page sizes', () => {
     expect(sizeProblem(70, 5, 300)).toMatch(/at most/);
     expect(sizeProblem(50, 50, 300)).toMatch(/too big/);
     expect(sizeProblem(Number.NaN, 5, 300)).toMatch(/width and a height/);
+  });
+});
+
+describe('cover wrap', () => {
+  it('lays back, spine and front left to right, front first for manga', () => {
+    const l = coverLayout(6, 9, 0.5, 0.125, 'perfect');
+    expect(l.trimW).toBe(12.5);
+    expect([l.backX, l.spineX, l.frontX]).toEqual([0, 6, 6.5]);
+    expect(l.outer).toBe(0.125);
+    const r = coverLayout(5, 7.5, 0.25, 0.125, 'perfect', true);
+    expect([r.frontX, r.backX]).toEqual([0, 5.25]);
+  });
+  it('adds the board wrap for a hardcover and never goes negative', () => {
+    expect(coverLayout(8, 10, -1, 0.125, 'hardcover').outer).toBe(0.125 + HARDCOVER_WRAP);
+    expect(coverLayout(8, 10, -1, 0.125, 'hardcover').trimW).toBe(16);
   });
 });

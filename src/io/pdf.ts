@@ -67,6 +67,12 @@ export class PdfPage {
     return this;
   }
 
+  /** Text turned 90° clockwise (reads top to bottom, the US spine way) from (x, y). Glyphs sit right of x. */
+  textDown(s: string, x: number, y: number, size = 10, bold = false): this {
+    this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${num(size)} Tf 0 -1 1 0 ${num(x)} ${num(y)} Tm (${pdfText(s)}) Tj ET`);
+    return this;
+  }
+
   /** Crop marks at the corners of a trim box, kept `offset` outside it. */
   cropMarks(x: number, y: number, w: number, h: number, offset: number, len = 18): this {
     for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]] as const) {

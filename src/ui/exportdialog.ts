@@ -3,9 +3,9 @@ import type { Studio } from '../app/studio';
 import { sheetOf } from '../doc/model';
 import { derivePanels } from '../geom/carve';
 import { preflightPage } from '../geom/preflight';
-import { kindById, printOf } from '../geom/printkinds';
+import { checkCount, kindById, printOf, spineWidth } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
-import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, renderSeparation, SEPARATION_LABEL, tone, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
+import { exportCoverPdf, exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, renderSeparation, SEPARATION_LABEL, tone, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
 import { DEFAULT_SCROLL_GAP, exportScroll, exportScrollPng, scrollEstimate, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
 import { clampQuality, clampSlice, clampWidth, DEFAULT_QUALITY, formatBytes, formatInfo, SCROLL_SETUPS, SCROLL_SLICE_RANGE, SCROLL_WIDTH_RANGE, setupMatching, WEB_FORMATS, type WebFormat } from '../io/webformat';
@@ -104,6 +104,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   // ---- Print it
 
   const pr = { mode: 'shop' as PrintMode, paper: 'letter' as Paper, marks: true, dpi: book.dpi };
+  const cover = { spine: null as number | null };
   function printTab(): HTMLElement {
     const spec = printOf(book!);
     const kind = kindById(spec.kind);
@@ -125,6 +126,20 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const first = book!.pages[0]!;
     const pagePx = (first.widthIn + spec.bleed * 2) * pr.dpi * (first.heightIn + spec.bleed * 2) * pr.dpi;
     const heavy = pr.dpi > 300 && (pr.mode === 'shop' || pr.mode === 'pod') ? `At ${pr.dpi} dpi each page is about ${Math.round(pagePx / 1e6)} megapixels. A long book can run out of memory in the browser; try 300 dpi if it fails.` : '';
+    const bound = spec.binding === 'perfect' || spec.binding === 'hardcover';
+    let coverBlock: HTMLElement | null = null;
+    if (bound && book!.pages.length >= 2) {
+      const estimate = spineWidth(checkCount(book!.pages.length, spec.binding).total);
+      if (cover.spine === null) cover.spine = estimate;
+      const spineIn = h('input', { type: 'number', min: '0', max: '5', step: '0.001', value: String(cover.spine), 'aria-label': 'Spine width in inches' });
+      spineIn.addEventListener('change', () => { const v = Number(spineIn.value); cover.spine = Number.isFinite(v) && v >= 0 ? v : estimate; });
+      coverBlock = h('div', { class: 'sec stack' },
+        h('h4', { class: 'label' }, 'Cover wrap'),
+        h('p', { class: 'note', style: 'margin:0' }, `One flat PDF page: back cover, spine and front cover. The first page is the front and the last is the back.${spec.binding === 'hardcover' ? ' Includes the board wrap.' : ''} Ask your printer for the real spine width; ${estimate} in is an estimate.`),
+        h('div', { style: 'display:flex;gap:12px;align-items:end;flex-wrap:wrap' },
+          h('label', { class: 'field' }, 'Spine width (in)', spineIn),
+          btn('Make the cover PDF', () => void run('Cover PDF', () => exportCoverPdf(studio, { spine: cover.spine ?? estimate, marks: pr.marks, dpi: pr.dpi }, (m) => (progress.textContent = m)), `${name}-cover.pdf`))));
+    }
     const order = h('div', { class: 'order', 'aria-label': 'Page order' },
       plan.order.map((s) => h('span', { class: `chip${s === null ? ' blank' : ''}`, title: s === null ? 'Blank page, added' : `Page ${s + 1}` }, s === null ? 'blank' : String(s + 1))));
     const file = `${name}-${pr.mode === 'shop' ? 'print' : pr.mode === 'pod' ? 'interior' : pr.mode}.pdf`;
@@ -143,6 +158,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
             } }, 'Review page ' + number),
             h('ul', { class: 'check' }, warnings.map((c) => h('li', { class: 'warn' }, c.text))))))
         : h('p', { class: 'note', style: 'margin:0' }, 'Preflight: nothing to fix.'),
+      coverBlock,
       h('div', { style: 'display:flex;justify-content:flex-end' },
         btn('Make the PDF', () => void run('Print PDF', () => exportPrintPdf(studio, { ...pr }, (m) => (progress.textContent = m)), file), true)),
     );

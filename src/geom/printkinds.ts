@@ -183,6 +183,42 @@ export function spineWidth(pages: number, ppi = 444): number {
   return Math.round((pages / ppi) * 1000) / 1000;
 }
 
+/** Extra cover past the trim that a hardcover wraps around the board, in inches. */
+export const HARDCOVER_WRAP = 0.625;
+
+/**
+ * The flat cover for a bound book, in inches from the left edge of the whole trim: the back
+ * cover, the spine and the front cover side by side (front on the left for right-to-left books).
+ * `outer` is how far art runs past the trim: the printer's bleed, plus the wrap for a hardcover.
+ */
+export interface CoverLayout {
+  trimW: number;
+  trimH: number;
+  outer: number;
+  backX: number;
+  spineX: number;
+  frontX: number;
+  pageW: number;
+  spine: number;
+}
+
+export function coverLayout(pageW: number, pageH: number, spine: number, bleed: number, binding: Binding, rtl = false): CoverLayout {
+  const s = Math.max(0, spine);
+  const outer = bleed + (binding === 'hardcover' ? HARDCOVER_WRAP : 0);
+  const first = 0;
+  const second = pageW + s;
+  return {
+    trimW: pageW * 2 + s,
+    trimH: pageH,
+    outer,
+    backX: rtl ? second : first,
+    spineX: pageW,
+    frontX: rtl ? first : second,
+    pageW,
+    spine: s,
+  };
+}
+
 // ---- custom page sizes
 
 export type SizeUnit = 'in' | 'mm' | 'cm';
