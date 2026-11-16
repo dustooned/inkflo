@@ -1595,3 +1595,11 @@ pm run build then
 pm run package:offline writes dist-offline/inkflo-offline.zip: the build plus a Windows launcher (serve.ps1, no install needed), a Mac launcher (**untested**) and a student READ ME FIRST.txt (sources in scripts/offline-kit/). It serves on fixed port 5191 so the browser's saved books stay with the same address.
 - **Student guide:** manual section #offline (Working offline), plus a classroom bullet.
 - **Verified:** in Chrome, the worker cached 38 files, and the app, its Offline dialog and the manual all reloaded with the server stopped. Not yet checked: iPad Safari Add to Home Screen, the Mac launcher, a real lab PC. The built-in browser pane does not run service workers.
+
+## Web comic export options
+
+- **Vertical scroll tab** (`src/ui/exportdialog.ts`, `src/io/scroll.ts`): setups (Standard web column, Sharp on phones, Small and fast, Custom), width 320-2400 px, tallest image 400-4000 px, format PNG/WebP/JPG with quality, "Trim empty space" at the very top of the first page and bottom of the last, image-count estimate, a finished-size report, a "Before you post" checklist and a three-step intro. The package gains a `READ ME.txt`. The long single image stays PNG-only.
+- **Pure helpers** in `src/io/webformat.ts` (formats, limits, setups, `blankEdgeRows`) with tests; `encodeImage` in `src/io/canvasops.ts` fails with a plain message if the browser cannot make a format.
+- **Web image** (single page) now takes PNG/WebP/JPG and quality.
+- **New vertical comic** asks for a title and a page size (Webtoon 8 x 32 in by default) with a short "how do these numbers work" note.
+- **Verified** in the dev app: the same two pages come out at 152 KB as PNG, 47 KB as WebP, 50 KB as JPG; trimming shortened The Last Train from 2460 to 1880 rows. **Not verified:** actual platform upload limits (the setups are starting points; the UI says to check each site), Safari WebP encoding (Safari may refuse it; the error says to choose PNG or JPG), and the phone-width layout of the new controls. Trimming is not shown in the preview.

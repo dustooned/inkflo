@@ -7,7 +7,8 @@ import { kindById, printOf } from '../geom/printkinds';
 import { exportCbz, exportMotionComic } from '../io/exports';
 import { exportLayerFiles, exportPageFiles, exportPrintPdf, exportSpreadsPdf, planPrint, renderSeparation, SEPARATION_LABEL, tone, type FilesOptions, type Paper, type PrintMode, type Separation } from '../io/printexport';
 import { exportPsd, psdPlan, type PsdMode } from '../io/psd';
-import { DEFAULT_SCROLL_GAP, exportScroll, exportScrollPng, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
+import { DEFAULT_SCROLL_GAP, exportScroll, exportScrollPng, scrollEstimate, scrollPreview, type BreakArt, type ScrollOptions } from '../io/scroll';
+import { clampQuality, clampSlice, clampWidth, DEFAULT_QUALITY, formatBytes, formatInfo, SCROLL_SETUPS, SCROLL_SLICE_RANGE, SCROLL_WIDTH_RANGE, setupMatching, WEB_FORMATS, type WebFormat } from '../io/webformat';
 import { IMAGE_ACCEPT, prepareAsset } from '../io/bookassets';
 import { exportWebImage, WEB_WIDTH, webSize } from '../io/webimage';
 import { exportGamePackage, type DialogueFormat } from '../io/gameexport';
@@ -53,7 +54,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   let tab: Tab = start;
   let filesGroup: FilesGroup = (() => { try { const g = localStorage.getItem('inkflo:export-group'); return g === 'production' || g === 'apps' || g === 'backup' ? g : 'share'; } catch { return 'share'; } })();
 
-  const run = async (label: string, make: () => Promise<Blob>, file: string) => {
+  const run = async (label: string, make: () => Promise<Blob>, file: string, note?: () => string) => {
     if (exporting) return;
     busy(true);
     progress.textContent = `${label}…`;
@@ -63,7 +64,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       const t0 = performance.now();
       const blob = await make();
       download(blob, file);
-      progress.textContent = `${label}: ${(blob.size / 1024 / 1024).toFixed(1)} MB in ${((performance.now() - t0) / 1000).toFixed(1)} s. Saved to your downloads as ${file}.`;
+      progress.textContent = `${label}: ${(blob.size / 1024 / 1024).toFixed(1)} MB in ${((performance.now() - t0) / 1000).toFixed(1)} s. Saved to your downloads as ${file}.${note?.() ? ' ' + note() : ''}`;
     } catch (e) {
       progress.textContent = `${label} failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {
@@ -148,7 +149,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   const currentPage = open.page && open.page >= 1 && open.page <= book.pages.length
     ? Math.round(open.page)
     : Math.max(1, book.pages.findIndex((p) => p.id === book.lastPageId) + 1);
-  const scroll: ScrollOptions = { range: { from: 1, to: book.pages.length }, gap: DEFAULT_SCROLL_GAP, background: '#ffffff' };
+  const scroll: ScrollOptions = { range: { from: 1, to: book.pages.length }, gap: DEFAULT_SCROLL_GAP, background: '#ffffff', width: 800, sliceHeight: 1280, format: 'png', quality: DEFAULT_QUALITY, trim: false };
   // Page-break art: a book image between pages (and optionally after the last), kept for the dialog
   const breakSet = { key: '' as string, fit: 'width' as BreakArt['fit'], end: false };
   const breakImages = new Map<string, ImageBitmap>();
@@ -172,14 +173,15 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const options = { ...scroll, range: { ...scroll.range } };
     const artwork = { ...breakSet };
     const exportComic = format === 'png' ? exportScrollPng : exportScroll;
+    let report = '';
     void run(format === 'png' ? 'Long PNG' : 'Vertical scroll', async () => {
       const art = await breakArt(artwork, null);
       try {
-        return await exportComic(studio, { ...options, breakArt: art }, (m) => (progress.textContent = m));
+        return await exportComic(studio, { ...options, breakArt: art }, (m) => { progress.textContent = m; report = /^\d+ image/.test(m) ? m + '.' : report; });
       } finally {
         art?.image.close();
       }
-    }, `${name}-scroll.${format}`);
+    }, `${name}-scroll.${format}`, () => report);
   }
   function scrollTab(): HTMLElement {
     const field = (label: string, value: number, min: number, max: number, apply: (v: number) => void) => {
@@ -226,16 +228,62 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       seg<BreakArt['fit']>([{ id: 'width', label: 'Full width' }, { id: 'natural', label: 'Actual size' }], breakSet.fit, (v) => { breakSet.fit = v; render(); }, 'Break art size'),
       check('Also after the last page', breakSet.end, (v) => { breakSet.end = v; refreshPreview(); })) : null;
     queueMicrotask(() => void refreshPreview());
+    const fmt = formatInfo(scroll.format ?? 'png');
+    const numField = (label: string, value: number, min: number, max: number, step: number, apply: (v: number) => void, hint: string) => {
+      const input = h('input', { type: 'number', value, min, max, step, inputmode: 'numeric', 'aria-label': label });
+      input.addEventListener('change', () => { apply(Math.round(input.valueAsNumber || value)); render(); });
+      return h('label', { class: 'field' }, label, input, h('small', { class: 'note' }, hint));
+    };
+    const setupSel = h('select', { 'aria-label': 'Set up for' },
+      SCROLL_SETUPS.map((st) => h('option', { value: st.id }, st.label)),
+      h('option', { value: 'custom' }, 'Custom (my own numbers)'));
+    const current = setupMatching({ width: scroll.width!, sliceHeight: scroll.sliceHeight!, format: scroll.format!, quality: scroll.quality! });
+    setupSel.value = current?.id ?? 'custom';
+    setupSel.addEventListener('change', () => {
+      const st = SCROLL_SETUPS.find((x) => x.id === setupSel.value);
+      if (!st) return;
+      Object.assign(scroll, { width: st.width, sliceHeight: st.sliceHeight, format: st.format, quality: st.quality });
+      render();
+    });
+    const est = scrollEstimate(book!, scroll);
+    const qualityPct = Math.round((scroll.quality ?? DEFAULT_QUALITY) * 100);
+    const qualityInput = h('input', { type: 'range', min: 30, max: 100, step: 5, value: qualityPct, 'aria-label': 'Image quality' });
+    const qualityOut = h('output', {}, `${qualityPct}%`);
+    qualityInput.addEventListener('input', () => { qualityOut.textContent = `${qualityInput.value}%`; });
+    qualityInput.addEventListener('change', () => { scroll.quality = clampQuality(Number(qualityInput.value) / 100); render(); });
+    const checklist = ['Every drawing, character and font is mine, or I have permission to use it (and I have credited anyone who helped).',
+      'I zoomed out in the preview: the lettering is easy to read on a phone.',
+      'I checked the upload rules of the site I am posting to (width, height, file size).',
+      'I saved my .inkflo book file somewhere safe. The images are not editable.'];
     return h('div', { class: 'scroll-tab' },
       h('div', { class: 'stack' },
         h('h3', {}, 'Vertical scroll'),
-        h('p', { class: 'note' }, 'Stack the selected pages into one long PNG or download a ZIP with numbered PNG strips and a web reader.'),
+        h('details', { class: 'note', open: book!.pages.length <= 2 },
+          h('summary', {}, 'New to web comics? Three steps'),
+          h('ol', {},
+            h('li', {}, 'Pick a setup below. “Standard web column” is a safe start.'),
+            h('li', {}, 'Look at the preview, then set the space between pages: a bigger gap is a longer pause.'),
+            h('li', {}, 'Download the package, then upload the numbered images in order to the site you publish on.'))),
+        h('label', { class: 'field' }, 'Set up for', setupSel),
+        h('p', { class: 'note' }, (setupMatching({ width: scroll.width!, sliceHeight: scroll.sliceHeight!, format: scroll.format!, quality: scroll.quality! })?.note ?? 'Your own numbers. Check them against the site you publish on.') + ' Sites differ, so check theirs.'),
         h('div', { class: 'export-app-fields' },
           field('First page', scroll.range.from, 1, book!.pages.length, (v) => (scroll.range.from = v)),
           field('Last page', scroll.range.to, 1, book!.pages.length, (v) => (scroll.range.to = v)),
           field('Space between pages (px)', scroll.gap, 0, 960, (v) => (scroll.gap = v))),
+        h('details', { class: 'advanced', open: !current },
+          h('summary', {}, 'Size, format and file weight'),
+          h('div', { class: 'export-app-fields' },
+            numField('Width (px)', scroll.width!, SCROLL_WIDTH_RANGE.min, SCROLL_WIDTH_RANGE.max, 10, (v) => (scroll.width = clampWidth(v)), `${SCROLL_WIDTH_RANGE.min} to ${SCROLL_WIDTH_RANGE.max}`),
+            numField('Tallest image (px)', scroll.sliceHeight!, SCROLL_SLICE_RANGE.min, SCROLL_SLICE_RANGE.max, 10, (v) => (scroll.sliceHeight = clampSlice(v)), 'Long episodes are cut into pieces this tall')),
+          h('div', { class: 'spread-links' },
+            select<WebFormat>('Image format', WEB_FORMATS.map((f) => [f.id, f.label] as [WebFormat, string]), scroll.format!, (v) => { scroll.format = v; render(); }),
+            fmt.lossy ? h('label', { class: 'field' }, 'Quality ', qualityOut, qualityInput) : null),
+          check('Trim empty space at the very top and bottom', !!scroll.trim, (v) => { scroll.trim = v; render(); }),
+          fmt.alpha ? null : h('p', { class: 'note' }, 'JPG cannot be see-through, so any transparent areas are filled white.'),
+          h('p', { class: 'note' }, 'Smaller files upload faster and load faster for readers. If a site rejects a file, try WebP or JPG, or lower the quality.')),
+        h('p', { class: 'note', 'aria-live': 'polite' }, `${est.images} image${est.images === 1 ? '' : 's'} · ${est.width} px wide · about ${est.rows} px tall in all${scroll.trim ? ' (before trimming)' : ''}. The exact file sizes show when it is done.`),
         h('div', { class: 'spread-links' },
-          select('Scroll background', [['white', 'White'], ['transparent', 'Transparent PNG'], ['custom', 'Custom colour']], scroll.background === null ? 'transparent' : scroll.background === '#ffffff' ? 'white' : 'custom', (v) => {
+          select('Scroll background', [['white', 'White'], ['transparent', 'Transparent'], ['custom', 'Custom colour']], scroll.background === null ? 'transparent' : scroll.background === '#ffffff' ? 'white' : 'custom', (v) => {
             scroll.background = v === 'transparent' ? null : v === 'white' ? '#ffffff' : '#d9e2df'; render();
           }), scroll.background && scroll.background !== '#ffffff' ? color : null),
         h('fieldset', { class: 'break-art' },
@@ -243,9 +291,13 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
           h('p', { class: 'note' }, 'Add a divider, footer or “to be continued” banner in the break after each page.'),
           h('div', { class: 'spread-links' }, h('label', { class: 'field' }, 'Image', artSelect), h('label', { class: 'field' }, 'Add an image', addArt)),
           breakControls),
+        h('details', { class: 'note' },
+          h('summary', {}, 'Before you post'),
+          h('ul', { class: 'check' }, checklist.map((t) => h('li', {}, check(t, false, () => {}))))),
         h('div', { class: 'spread-links' },
-          btn('Download long PNG', () => downloadScroll('png'), true),
-          btn('Download scroll package', () => downloadScroll('zip')))),
+          btn(`Download scroll package (${fmt.short})`, () => downloadScroll('zip'), true),
+          btn('Download one long PNG', () => downloadScroll('png'))),
+        h('p', { class: 'note' }, 'The package is numbered images plus a simple reader page and a READ ME. The long image is always a PNG.')),
       preview);
   }
   const psd = { mode: 'art' as PsdMode, dpi: book.dpi, from: currentPage, to: currentPage };
@@ -354,25 +406,25 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   }
 
   // ---- Web image: one page (a strip) as a PNG sized in pixels
-  const web = { page: currentPage, width: WEB_WIDTH };
+  const web = { page: currentPage, width: WEB_WIDTH, format: 'png' as WebFormat, quality: DEFAULT_QUALITY };
   function webImage(): HTMLElement {
     const info = h('p', { class: 'note', 'aria-live': 'polite', style: 'margin:0' });
     const preview = h('div', { class: 'export-previews' });
-    const go = btn('Download PNG', () => {
+    const go = btn('Download image', () => {
       const page = book!.pages[web.page - 1]!;
       void run('Web image', async () => {
-        const blob = await exportWebImage(studio, page, web.width);
+        const blob = await exportWebImage(studio, page, web.width, web.format, web.quality);
         const s = webSize(page, web.width);
-        queueMicrotask(() => { info.textContent = `${s.width} × ${s.height} px · ${(blob.size / 1024 / 1024).toFixed(2)} MB PNG`; });
+        queueMicrotask(() => { info.textContent = `${s.width} × ${s.height} px · ${formatBytes(blob.size)} ${formatInfo(web.format).short}`; });
         return blob;
-      }, `${name}-page-${web.page}-${webSize(page, web.width).width}px.png`);
+      }, `${name}-page-${web.page}-${webSize(page, web.width).width}px.${formatInfo(web.format).ext}`);
     }, true);
     const refresh = () => {
       const page = book!.pages[web.page - 1]!;
       const s = webSize(page, web.width);
       info.textContent = s.tooLarge
         ? `${s.width} × ${s.height} px is too large for the browser. Choose a smaller width.`
-        : `${s.width} × ${s.height} px PNG · page ${web.page} (${page.widthIn}″ × ${page.heightIn}″ trim)`;
+        : `${s.width} × ${s.height} px ${formatInfo(web.format).short} · page ${web.page} (${page.widthIn}″ × ${page.heightIn}″ trim)`;
       go.disabled = exporting || s.tooLarge;
       void thumb(web.page - 1, 'all').then((c) => preview.replaceChildren(h('figure', {}, c, h('figcaption', {}, 'Page ' + web.page))));
     };
@@ -384,10 +436,20 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       h('button', { class: 'btn', type: 'button', onclick: () => { web.width = w; widthField.value = String(w); refresh(); } }, label)));
     queueMicrotask(refresh);
     return h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
-      h('b', {}, 'Web image (PNG)'),
-      h('p', {}, 'One page, such as a strip, as a single PNG sized in pixels for phones, social posts and websites. Lettering and your Artist mark included.'),
+      h('b', {}, 'Web image'),
+      h('p', {}, 'One page, such as a strip, as a single image sized in pixels for phones, social posts and websites. Lettering and your Artist mark included. PNG is sharpest; WebP and JPG make much smaller files.'),
       h('div', { class: 'export-app-fields' }, h('label', { class: 'field' }, 'Page', pageField), h('label', { class: 'field' }, 'Width (px)', widthField)),
-      presets, info,
+      presets,
+      h('div', { class: 'spread-links' },
+        select<WebFormat>('Format', WEB_FORMATS.map((f) => [f.id, f.label] as [WebFormat, string]), web.format, (v) => { web.format = v; render(); }),
+        formatInfo(web.format).lossy ? (() => {
+          const q = h('input', { type: 'range', min: 30, max: 100, step: 5, value: Math.round(web.quality * 100), 'aria-label': 'Image quality' });
+          const out = h('output', {}, `${Math.round(web.quality * 100)}%`);
+          q.addEventListener('input', () => { out.textContent = `${q.value}%`; });
+          q.addEventListener('change', () => { web.quality = clampQuality(Number(q.value) / 100); });
+          return h('label', { class: 'field' }, 'Quality ', out, q);
+        })() : null),
+      info,
       h('div', { style: 'display:flex;gap:12px;align-items:end;justify-content:space-between;margin-top:6px' }, preview, go));
   }
 

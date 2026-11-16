@@ -5,7 +5,7 @@ export const ABOUT_CREDIT = 'Designed, programmed and developed by Professor T';
 export const LBCC_URL = 'https://www.lbcc.edu/digitalmedia';
 import type { Studio } from '../app/studio';
 import { STAGES } from '../doc/model';
-import { askText, h, pickFile, toast } from './dom';
+import { h, pickFile, toast } from './dom';
 import { displayButton } from './popover';
 import { openOfflineDialog } from './offlinedialog';
 import { DEFAULT_PRINT, kindById, specFor } from '../geom/printkinds';
@@ -65,18 +65,42 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
     }
   };
 
-  const newScroll = async () => {
-    const title = await askText('New vertical comic', 'Title', 'Untitled episode', 'Create');
-    if (title === null) return;
+  /** New vertical comic: a title and a page size (starts as the 8 x 32 in Webtoon page, 800 px wide), with a short guide. */
+  const newScroll = () => {
+    const title = h('input', { value: 'Untitled episode', 'aria-label': 'Title', maxlength: 120 });
     const kind = kindById('webtoon')!;
-    const book = await studio.createBook(title, '', (b) => {
-      b.print = specFor(kind);
-      b.dpi = kind.dpi;
-      b.pages[0]!.widthIn = kind.w;
-      b.pages[0]!.heightIn = kind.h;
-      b.pages[0]!.layout = { ...DEFAULT_LAYOUT, gutter: 0.6, border: 0, gutterPaper: '#ffffff' };
+    const create = h('button', { class: 'btn primary', type: 'submit' }, 'Create episode');
+    const sizeBox = sizePicker({ w: kind.w, h: kind.h, dpi: kind.dpi, onChange: (v) => { create.disabled = !!v.problem; } });
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New vertical comic')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), h('h4', {}, 'Page size'), sizeBox.el,
+        h('details', { class: 'note' },
+          h('summary', {}, 'How do these numbers work?'),
+          h('ul', {},
+            h('li', {}, 'inkflo draws vertical pages at 100 pixels per inch, so 8 in wide is 800 px wide: a common width for web comics.'),
+            h('li', {}, 'A page is one long chunk of your episode. Add more pages as you go; they stack into one scroll.'),
+            h('li', {}, 'When you are done, Export → Vertical scroll lets you pick the final width, image format and file size for the site you publish on.'))),
+        h('p', { class: 'note' }, 'Not sure? Keep the defaults. You can change the size in Print until you start drawing.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), create));
+    const d = h('dialog', { 'aria-label': 'New vertical comic' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = sizeBox.value();
+      if (v.problem) return;
+      d.close();
+      const book = await studio.createBook(title.value.trim() || 'Untitled episode', '', (b) => {
+        b.print = { ...specFor(kind), kind: v.kind ?? 'custom' };
+        b.dpi = kind.dpi;
+        b.pages[0]!.widthIn = v.w;
+        b.pages[0]!.heightIn = v.h;
+        b.pages[0]!.layout = { ...DEFAULT_LAYOUT, gutter: 0.6, border: 0, gutterPaper: '#ffffff' };
+      });
+      go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
     });
-    go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
+    document.body.append(d);
+    d.showModal();
+    title.select();
   };
   /** Comic strip: three or four panels side by side, or three stacked; opens in Draw, ready to ink. */
   const newStrip = () => {

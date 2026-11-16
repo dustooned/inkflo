@@ -398,7 +398,26 @@ section[hidden] { display: none; }
 <div class="history">Two-colour printing on a <strong>risograph</strong>, a stencil duplicator from Japan, became a favourite of zine makers and small presses because it's cheap, fast and gives bold, slightly imperfect colour. Designing in two inks is a classic small-press skill.</div>
 
 <h3 id="scroll">Vertical scroll comics</h3>
-<p><strong>Vertical scroll</strong> stacks the selected pages into one episode. <strong>Download long PNG</strong> saves the episode as a single 800 px wide image. <strong>Download scroll package</strong> saves a ZIP with numbered PNG strips, a ready-to-upload <code>index.html</code>, and an <code>episode.json</code>. Both downloads use the selected background and spacing. <strong>Page-break art</strong> adds a divider, logo or "to be continued" banner between pages and optionally after the last. The preview shows the first pages as readers will see them.</p>
+<p><strong>Vertical scroll</strong> stacks the selected pages into one episode. Start with <strong>New vertical comic</strong> on the home screen: it asks for a title and a page size (8 &times; 32 in, which is 800 px wide, unless you change it). When you are ready to publish, open <strong>Export &rarr; Vertical scroll</strong>.</p>
+<h4>Set it up for where you publish</h4>
+<p>Sites differ in how wide, how tall and how heavy an image may be, so <strong>check the upload page of the site you use</strong>. Pick a starting point under <strong>Set up for</strong>, then adjust:</p>
+<table>
+<tr><th>Setup</th><th>Width</th><th>Format</th><th>Good for</th></tr>
+<tr><td>Standard web column</td><td>800 px</td><td>PNG</td><td>A safe start; works almost everywhere.</td></tr>
+<tr><td>Sharp on phones</td><td>1080 px</td><td>WebP</td><td>Crisp on modern screens, much smaller files.</td></tr>
+<tr><td>Small and fast</td><td>720 px</td><td>JPG</td><td>Upload limits and slow connections.</td></tr>
+<tr><td>Custom</td><td>320&ndash;2400 px</td><td>any</td><td>Your own numbers.</td></tr>
+</table>
+<ul>
+<li><strong>Width</strong> is the width of every image. <strong>Tallest image</strong> (400&ndash;4000 px) is how tall each piece can be: a long episode is cut into numbered pieces this tall.</li>
+<li><strong>Format.</strong> PNG is the sharpest and the heaviest. WebP and JPG are much lighter; slide <strong>Quality</strong> down for smaller files (80&ndash;90% looks good for most comics). JPG cannot be see-through, so transparent areas turn white.</li>
+<li><strong>Trim empty space</strong> removes the blank margin at the very top of the first page and the very bottom of the last, so the episode starts and ends on the art.</li>
+<li><strong>Space between pages</strong> is a pacing tool: a bigger gap is a longer pause. <strong>Page-break art</strong> adds a divider or &ldquo;to be continued&rdquo; banner between pages.</li>
+<li>The dialog tells you how many images you will get. When the download finishes it shows the exact total size and the largest image, so you can tell whether a site will accept it.</li>
+</ul>
+<p><strong>Download scroll package</strong> saves a ZIP with the numbered images, a simple reader page (<code>index.html</code>), an <code>episode.json</code> and a <em>READ ME</em> with publishing steps. Upload the numbered images in order. <strong>Download one long PNG</strong> saves the whole episode as a single PNG. Both use the same width, trimming, background and spacing.</p>
+<p><strong>Before you post:</strong> check that every drawing, character and font is yours or used with permission, and credit anyone who helped; zoom out and check the lettering reads on a phone; and keep your <code>.inkflo</code> file, because the images cannot be edited.</p>
+<p><strong>Single pages.</strong> <em>Export files &rarr; Web image</em> exports one page at a width you choose (Phone 1080, Web 1600, Large 2400 or your own) as PNG, WebP or JPG with the same quality slider.</p>
 <div class="history">Vertical scrolling comics took off on Korean web platforms in the early 2000s, where they became known as <em>webtoons</em>. Instead of pages and spreads, the reader scrolls one long column, so pacing comes from <em>space</em>: a long gap can be a pause, and a reveal lands when it scrolls into view. Page-break art and gap size are your pacing tools.</div>
 
 <h3 id="psd">Export for drawing</h3>

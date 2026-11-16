@@ -38,6 +38,19 @@ export function encodePng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   });
 }
 
+/** Encode a canvas as PNG, JPG or WebP (`quality` 0 to 1 for the lossy two). Fails if the browser cannot make that format. */
+export function encodeImage(canvas: HTMLCanvasElement, mime: string, quality?: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob || blob.type !== mime) {
+        reject(new Error(`this browser cannot save ${mime.replace('image/', '').toUpperCase()}. Choose PNG or JPG instead.`));
+        return;
+      }
+      blob.arrayBuffer().then((b) => resolve(new Uint8Array(b)), reject);
+    }, mime, quality);
+  });
+}
+
 export async function decodePngInto(canvas: HTMLCanvasElement, bytes: Uint8Array): Promise<void> {
   const bmp = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/png' }));
   try {

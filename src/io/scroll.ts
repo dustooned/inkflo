@@ -1,11 +1,12 @@
 import type { Studio } from '../app/studio';
-import { sheetOf, type Book } from '../doc/model';
+import { sheetOf, type Book, type Page } from '../doc/model';
 import { crc32, writeZip, type ZipFile } from '../engine/io/zip';
 import { lettersReady } from '../render/fonts';
 import { renderPage } from '../render/page';
-import { encodePng, makeCanvas } from './canvasops';
+import { encodeImage, makeCanvas } from './canvasops';
 import type { Progress } from './exports';
 import { pagesIn, type PageRange } from './printexport';
+import { blankEdgeRows, clampQuality, clampSlice, clampWidth, DEFAULT_QUALITY, formatBytes, formatInfo, stripCount, type WebFormat } from './webformat';
 
 export const SCROLL_WIDTH = 800;
 export const SCROLL_HEIGHT = 1280;
@@ -32,6 +33,31 @@ export interface ScrollOptions {
   gap: number;
   background: string | null;
   breakArt?: BreakArt | null;
+  /** Strip width in pixels (default 800). */
+  width?: number;
+  /** Tallest single image in pixels (default 1280). The episode is cut into strips this tall. */
+  sliceHeight?: number;
+  /** Image format for the package (default PNG). The long single image is always PNG. */
+  format?: WebFormat;
+  /** 0.3 to 1 for WebP and JPG. */
+  quality?: number;
+  /** Cut empty margin from the very top of the first page and bottom of the last. */
+  trim?: boolean;
+}
+
+/** The options with every default filled in and clamped to its limits. */
+export function resolveScroll(o: ScrollOptions) {
+  const format = o.format ?? 'png';
+  return {
+    width: clampWidth(o.width ?? SCROLL_WIDTH),
+    sliceHeight: clampSlice(o.sliceHeight ?? SCROLL_HEIGHT),
+    format,
+    info: formatInfo(format),
+    quality: clampQuality(o.quality ?? DEFAULT_QUALITY),
+    trim: !!o.trim,
+    // JPG cannot be transparent: flatten onto white
+    background: o.background ?? (format === 'jpeg' ? '#ffffff' : null),
+  };
 }
 
 /** The art's drawn size in a strip `width` pixels wide. */
@@ -57,7 +83,7 @@ function paintBreak(g: CanvasRenderingContext2D, art: BreakArt | null | undefine
 
 const html = (value: string) => value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
-export function scrollReader(title: string, author: string, slices: Slice[], background: string | null): string {
+export function scrollReader(title: string, author: string, slices: Slice[], background: string | null, width = SCROLL_WIDTH): string {
   const color = background && /^#[0-9a-f]{6}$/i.test(background) ? background : '#ffffff';
   return `<!doctype html>
 <html lang="en">
@@ -66,7 +92,7 @@ export function scrollReader(title: string, author: string, slices: Slice[], bac
 <title>${html(title)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#efefec;color:#202225;font:16px/1.5 system-ui,sans-serif}
-header{max-width:800px;margin:auto;padding:24px 20px}h1,p{margin:0}main{max-width:800px;margin:auto;background:${color}}
+header{max-width:${width}px;margin:auto;padding:24px 20px}h1,p{margin:0}main{max-width:${width}px;margin:auto;background:${color}}
 img{display:block;width:100%;height:auto}
 </style>
 <header><h1>${html(title)}</h1>${author ? `<p>${html(author)}</p>` : ''}</header>
@@ -76,43 +102,76 @@ ${slices.map((s, i) => `<img src="${html(s.file)}" width="${s.width}" height="${
 </html>`;
 }
 
-function scrollPlan(book: Book, options: ScrollOptions) {
+/** Empty margin above the first page and below the last, found by drawing them at the strip width. */
+async function measureTrim(studio: Studio, book: Book, pages: Page[], width: number): Promise<{ top: number; bottom: number }> {
+  const render = async (page: Page, edge: 'top' | 'bottom') => {
+    const h = Math.max(1, Math.round(page.heightIn * width / page.widthIn));
+    const canvas = makeCanvas(width, h);
+    const art = studio.ensureArt(page);
+    try {
+      await studio.residency.pin(art);
+      await lettersReady(page.balloons.map((l) => l.cap));
+      renderPage(canvas.getContext('2d')!, page, art, { scale: width / page.widthIn, printOnly: true, sheet: sheetOf(book) });
+      const rows = blankEdgeRows(canvas.getContext('2d')!.getImageData(0, 0, width, h).data, width, h, Math.round(width * 0.02));
+      return edge === 'top' ? rows.top : rows.bottom;
+    } finally {
+      studio.residency.unpin(art);
+      canvas.width = canvas.height = 0;
+    }
+  };
+  return { top: await render(pages[0]!, 'top'), bottom: await render(pages[pages.length - 1]!, 'bottom') };
+}
+
+async function scrollPlan(studio: Studio, book: Book, options: ScrollOptions) {
   const pages = pagesIn(book, options.range);
   if (!pages.length) throw new Error('Choose at least one page.');
-  const heightOf = (p: typeof pages[number]) => Math.max(1, Math.round(p.heightIn * SCROLL_WIDTH / p.widthIn));
-  const bands = pages.map((page, i) => ({
-    page, number: book.pages.indexOf(page) + 1, height: heightOf(page), breakRows: breakHeight(options, i, pages.length),
-  }));
-  return { bands, total: bands.reduce((sum, band) => sum + band.height + band.breakRows, 0) };
+  const o = resolveScroll(options);
+  const trim = o.trim ? await measureTrim(studio, book, pages, o.width) : { top: 0, bottom: 0 };
+  const bands = pages.map((page, i) => {
+    const full = Math.max(1, Math.round(page.heightIn * o.width / page.widthIn));
+    // trim never eats a whole page: always leave at least one row
+    const from = i === 0 ? Math.min(trim.top, full - 1) : 0;
+    const to = i === pages.length - 1 ? Math.min(trim.bottom, full - from - 1) : 0;
+    return { page, number: book.pages.indexOf(page) + 1, from, height: full - from - to, breakRows: breakHeight(options, i, pages.length, o.width) };
+  });
+  return { bands, total: bands.reduce((sum, band) => sum + band.height + band.breakRows, 0), ...o };
+}
+
+/** Before exporting: how tall the episode is and how many images it becomes (edge trimming not counted). */
+export function scrollEstimate(book: Book, options: ScrollOptions): { width: number; rows: number; images: number } {
+  const pages = pagesIn(book, options.range);
+  const o = resolveScroll(options);
+  const rows = pages.reduce((sum, p, i) => sum + Math.max(1, Math.round(p.heightIn * o.width / p.widthIn)) + breakHeight(options, i, pages.length, o.width), 0);
+  return { width: o.width, rows, images: pages.length ? stripCount(rows, o.sliceHeight) : 0 };
 }
 
 /** Both download formats consume the same rendered strips, one at a time. */
-async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOptions, progress: Progress, plan: ReturnType<typeof scrollPlan>) {
-  const { bands, total } = plan;
-  const canvas = makeCanvas(SCROLL_WIDTH, Math.min(SCROLL_HEIGHT, total));
+async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOptions, progress: Progress, plan: Awaited<ReturnType<typeof scrollPlan>>) {
+  const { bands, total, width: W, sliceHeight: SLICE, background } = plan;
+  const canvas = makeCanvas(W, Math.min(SLICE, total));
   const g = canvas.getContext('2d')!;
   let y = 0;
   let written = 0;
   let label = '';
   const fillBackground = () => {
-    if (options.background) { g.fillStyle = options.background; g.fillRect(0, 0, canvas.width, canvas.height); }
+    if (background) { g.fillStyle = background; g.fillRect(0, 0, canvas.width, canvas.height); }
   };
   const advance = () => {
     written += canvas.height;
     label = '';
     y = 0;
     if (written < total) {
-      canvas.height = Math.min(SCROLL_HEIGHT, total - written);
+      canvas.height = Math.min(SLICE, total - written);
       fillBackground();
     }
   };
   try {
     fillBackground();
-    for (const [i, { page, number, height, breakRows }] of bands.entries()) {
+    for (const [i, { page, number, from, height, breakRows }] of bands.entries()) {
       progress(`Preparing page ${number} · ${i + 1} of ${bands.length}`);
       const art = studio.ensureArt(page);
-      const pageScale = SCROLL_WIDTH / page.widthIn;
-      const band = makeCanvas(SCROLL_WIDTH, Math.min(height, SCROLL_HEIGHT));
+      const pageScale = W / page.widthIn;
+      const band = makeCanvas(W, Math.min(height, SLICE));
       const b = band.getContext('2d')!;
       try {
         await studio.residency.pin(art);
@@ -122,9 +181,9 @@ async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOp
           const rows = Math.min(height - top, canvas.height - y);
           b.resetTransform();
           b.clearRect(0, 0, band.width, band.height);
-          b.setTransform(1, 0, 0, 1, 0, -top);
+          b.setTransform(1, 0, 0, 1, 0, -(from + top));
           renderPage(b, page, art, { scale: pageScale, printOnly: true, sheet: sheetOf(book) });
-          g.drawImage(band, 0, 0, SCROLL_WIDTH, rows, 0, y, SCROLL_WIDTH, rows);
+          g.drawImage(band, 0, 0, W, rows, 0, y, W, rows);
           label ||= 'Comic page ' + number;
           y += rows;
           top += rows;
@@ -143,10 +202,10 @@ async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOp
         const rows = Math.min(breakRows - top, canvas.height - y);
         g.save();
         g.beginPath();
-        g.rect(0, y, SCROLL_WIDTH, rows);
+        g.rect(0, y, W, rows);
         g.clip();
         g.translate(0, y - top);
-        paintBreak(g, options.breakArt, SCROLL_WIDTH, breakRows);
+        paintBreak(g, options.breakArt, W, breakRows);
         g.restore();
         y += rows;
         top += rows;
@@ -163,17 +222,47 @@ async function* renderScrollStrips(studio: Studio, book: Book, options: ScrollOp
 
 export async function exportScroll(studio: Studio, options: ScrollOptions, progress: Progress): Promise<Blob> {
   const book = studio.book!;
+  const plan = await scrollPlan(studio, book, options);
+  const { info, quality, width } = plan;
   const files: ZipFile[] = [];
   const slices: Slice[] = [];
-  for await (const { canvas, label } of renderScrollStrips(studio, book, options, progress, scrollPlan(book, options))) {
-    const file = 'images/' + String(slices.length + 1).padStart(4, '0') + '.png';
-    files.push({ name: file, data: await encodePng(canvas) });
+  let largest = 0;
+  for await (const { canvas, label } of renderScrollStrips(studio, book, options, progress, plan)) {
+    const file = 'images/' + String(slices.length + 1).padStart(4, '0') + '.' + info.ext;
+    const data = await encodeImage(canvas, info.mime, info.lossy ? quality : undefined);
+    largest = Math.max(largest, data.length);
+    files.push({ name: file, data });
     slices.push({ file, width: canvas.width, height: canvas.height, alt: label });
   }
+  const total = files.reduce((sum, f) => sum + f.data.length, 0);
   const encoder = new TextEncoder();
-  files.push({ name: 'index.html', data: encoder.encode(scrollReader(book.title, book.author, slices, options.background)) });
-  files.push({ name: 'episode.json', data: encoder.encode(JSON.stringify({ title: book.title, author: book.author, slices }, null, 2)) });
+  files.push({ name: 'index.html', data: encoder.encode(scrollReader(book.title, book.author, slices, plan.background, width)) });
+  files.push({ name: 'episode.json', data: encoder.encode(JSON.stringify({ title: book.title, author: book.author, width, format: info.short, slices }, null, 2)) });
+  files.push({ name: 'READ ME.txt', data: encoder.encode(scrollReadMe(book.title, slices.length, width, plan.sliceHeight, info.short, total, largest)) });
+  progress(`${slices.length} image${slices.length === 1 ? '' : 's'}, ${formatBytes(total)} in all, largest ${formatBytes(largest)}`);
   return new Blob([writeZip(files) as BlobPart], { type: 'application/zip' });
+}
+
+function scrollReadMe(title: string, images: number, width: number, slice: number, format: string, total: number, largest: number): string {
+  return `${title}
+${'='.repeat(title.length)}
+
+This package holds your comic episode as ${images} numbered ${format} image${images === 1 ? '' : 's'} (${width} px wide, up to ${slice} px tall each).
+Total size: ${formatBytes(total)}. Largest image: ${formatBytes(largest)}.
+
+TO PUBLISH
+  1. Upload the images in the images folder, in order (0001 first). Most comic sites want them in this order.
+  2. Or put the whole folder on any web host and share the link to index.html. It is a simple reader page.
+  3. Check the upload rules of the site you publish on. Width, height and file size limits differ from site to site.
+     If a file is too big, go back to inkflo and choose "Small and fast", or lower the quality.
+
+BEFORE YOU POST
+  - Is every drawing, character, font and sound yours, or used with permission? Credit anyone who helped.
+  - Does each page read clearly on a phone? Zoom out and check the lettering.
+  - Keep your .inkflo book file somewhere safe. It is the editable original; these images are not.
+
+index.html and episode.json are optional extras. Most sites only need the images.
+`;
 }
 
 function pngChunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -189,14 +278,14 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array<ArrayBuffer> {
 /** Write one PNG from the rendered rows, independent of the browser's maximum canvas height. */
 export async function exportScrollPng(studio: Studio, options: ScrollOptions, progress: Progress): Promise<Blob> {
   const book = studio.book!;
-  const plan = scrollPlan(book, options);
+  const plan = await scrollPlan(studio, book, { ...options, format: 'png' });
   if (!Number.isSafeInteger(plan.total) || plan.total < 1 || plan.total > 0x7fffffff) {
     throw new Error('The selected page range is too tall for a PNG. Choose a smaller range.');
   }
 
   const header = new Uint8Array(13);
   const dimensions = new DataView(header.buffer);
-  dimensions.setUint32(0, SCROLL_WIDTH);
+  dimensions.setUint32(0, plan.width);
   dimensions.setUint32(4, plan.total);
   header.set([8, 6], 8); // 8-bit RGBA
   const chunks: BlobPart[] = [
@@ -205,7 +294,7 @@ export async function exportScrollPng(studio: Studio, options: ScrollOptions, pr
   ];
 
   const deflate = new CompressionStream('deflate');
-  const strips = renderScrollStrips(studio, book, options, progress, plan);
+  const strips = renderScrollStrips(studio, book, { ...options, format: 'png' }, progress, plan);
   const source = new ReadableStream<Uint8Array<ArrayBuffer>>({
     async pull(controller) {
       try {
