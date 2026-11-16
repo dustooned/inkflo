@@ -63,6 +63,18 @@ describe('vector line editing', () => {
     expect(removePoint(source, 0)).toBe(source);
   });
 
+  it('catches a fast swipe across a sparse line and adds samples only near the brush', () => {
+    const source = { ...line(1, 1, 5, 2), pressure: [0.4, 1], pw: [1, 1] };
+    const swipe = [{ x: 3, y: 0.3 }, { x: 3, y: 1.7 }];
+    const thick = brushWidth(source, swipe, 0.2, 1.2)!;
+    expect(Math.max(...thick.pw!)).toBeGreaterThan(1.19);
+    expect(thick.pts.slice(1, -1).every(({ x, y }) => Math.abs(x - 3) <= 0.200001 && y === 1)).toBe(true);
+    expect(thick.pw![0]).toBe(1);
+    expect(thick.pw!.at(-1)).toBe(1);
+    const slowSwipe = [swipe[0]!, { x: 3, y: 0.8 }, { x: 3, y: 1 }, { x: 3, y: 1 }, swipe[1]!];
+    expect(brushWidth(source, slowSwipe, 0.2, 1.2)).toEqual(thick);
+  });
+
   it('simplify drops points a straight line does not need; smooth keeps the ends', () => {
     const s = simplify(line(1), 0.005);
     expect(s.pts).toHaveLength(2);

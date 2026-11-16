@@ -1,6 +1,6 @@
 import type { Studio } from '../app/studio';
 import { bakeLayerTone, openLayerTone } from './layertone';
-import { LAYER_TYPES, newLayer, TYPE_DEFAULTS, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
+import { LAYER_TYPES, newLayer, tonesOf, TYPE_DEFAULTS, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { drawLayerBitmap } from '../render/page';
 import { drawScreenTone } from '../render/tone';
@@ -224,7 +224,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
     g.beginPath();
     g.rect(x0 * scale, y0 * scale, (x1 - x0) * scale, (y1 - y0) * scale);
     g.clip();
-    if (l.screenTone) drawScreenTone(g, l.screenTone, page.widthIn * scale, page.heightIn * scale, scale);
+    for (const t of tonesOf(l)) drawScreenTone(g, t, page.widthIn * scale, page.heightIn * scale, scale);
     if (plane?.width) drawLayerBitmap(g, plane, page.widthIn * scale, page.heightIn * scale, scale, l.image);
     return canvas;
   }
@@ -261,7 +261,7 @@ export function layersPanel(o: LayersPanelOptions): HTMLElement {
       const on = o.target === 'layer' && o.active === l.id;
       const more = h('button', { class: 'lt', type: 'button', 'aria-label': `${l.name} options`, title: 'Options', onclick: () => o.onView({ kind: 'layer', id: l.id }) }, '⋯');
       const type = TYPE_DEFAULTS[l.type].name;
-      const status = [l.image ? 'Placed image' : l.screenTone ? 'Editable screentone' : l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
+      const status = [l.image ? 'Placed image' : l.screenTone ? (tonesOf(l).length > 1 ? `Screentone, ${tonesOf(l).length} areas` : 'Editable screentone') : l.vector ? 'Vector' : l.name !== type ? type : null, !l.prints ? 'No print' : null, l.overFrame ? 'Over frame' : null].filter(Boolean).join(' · ');
       card.append(
         h('div', { class: `llayer${on ? ' on' : ''}${l.visible ? '' : ' off'}` },
           h('button', { class: 'lname layer-select', type: 'button', 'data-focus': 'layer-' + l.id, 'aria-pressed': String(on),

@@ -225,7 +225,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   } | null = null;
   /** Vector edits in progress. */
   let vdrag: { layerId: string; before: Stroke[]; index: number; grabbed: Stroke; grab: number; from: Pt; moved: boolean; kind: 'pull' | 'move' } | null = null;
-  let vbrush: { layerId: string; before: Stroke[]; last: Pt } | null = null;
+  let vbrush: { layerId: string; before: Stroke[]; path: Pt[]; radius: number; factor: number; frame: number; changed: boolean } | null = null;
   let verase: Pt[] | null = null;
   /** Vector eraser QuickShape: the snapped shape (layer pixels) and where the pen held. */
   let veraseShape: { shape: InkShape; grab: Pt; hold: Pt | null; timer: number } | null = null;
@@ -1489,6 +1489,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
 
   const editVariant = (): EditVariant => (variantOf(mode, 'vedit') || 'pull') as EditVariant;
+  const widthEditing = () => mode.tool === 'vedit' && (editVariant() === 'wider' || editVariant() === 'thinner');
 
   function vectorDown(p: Pt, addNode = false): void {
     if (vectorErase()) {
@@ -1533,24 +1534,46 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       toast('No vector lines here. The Vector pen (V) makes them.');
       return;
     }
-    vbrush = { layerId: layer.id, before: structuredClone(layer.strokes), last: pointInLayer(p, layer.id) };
+    vbrush = { layerId: layer.id, before: layer.strokes, path: [], radius: vstate.widthR,
+      factor: v === 'wider' ? 1.2 : 1 / 1.2, frame: 0, changed: false };
+    studio.drawing = true;
     widthBrush(p);
   }
 
-  function widthBrush(p: Pt): void {
-    if (!vbrush) return;
-    const layer = findLayer(page, vbrush.layerId)?.layer;
+  function previewWidth(brush: NonNullable<typeof vbrush>): void {
+    const layer = findLayer(page, brush.layerId)?.layer;
     if (!layer) return;
-    p = pointInLayer(p, layer.id);
-    const factor = editVariant() === 'wider' ? 1.08 : 1 / 1.08;
     let any = false;
-    layer.strokes = layer.strokes.map((st) => {
-      const next = brushWidth(st, [vbrush!.last, p], vstate.widthR, factor);
+    const strokes = brush.before.map((st) => {
+      const next = brushWidth(st, brush.path, brush.radius, brush.factor);
       if (next) any = true;
       return next ?? st;
     });
-    vbrush.last = p;
-    if (any) redrawVector(layer.id);
+    if (any || brush.changed) {
+      layer.strokes = any ? strokes : brush.before;
+      redrawVector(layer.id);
+    }
+    brush.changed = any;
+  }
+
+  function widthBrush(p: Pt, finish = false): void {
+    const brush = vbrush;
+    if (!brush) return;
+    p = pointInLayer(p, brush.layerId);
+    const last = brush.path.at(-1);
+    const spacing = finish ? 1e-6 : Math.min(0.008, brush.radius / 8);
+    const add = !last || Math.hypot(p.x - last.x, p.y - last.y) >= spacing;
+    if (add) brush.path.push(p);
+    if (finish) {
+      if (brush.frame) cancelAnimationFrame(brush.frame);
+      if (brush.frame || add) previewWidth(brush);
+      brush.frame = 0;
+    } else if (add && !brush.frame) {
+      brush.frame = requestAnimationFrame(() => {
+        brush.frame = 0;
+        if (vbrush === brush) previewWidth(brush);
+      });
+    }
   }
 
   function vectorMove(p: Pt): void {
@@ -1625,16 +1648,20 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     if (vbrush) {
       const b = vbrush;
       vbrush = null;
+      studio.drawing = false;
       const layer = findLayer(page, b.layerId)?.layer;
-      if (!layer) return;
-      if (JSON.stringify(layer.strokes) === JSON.stringify(b.before)) return;
-      editVector(b.layerId, editVariant() === 'wider' ? 'Thicken lines' : 'Thin lines', layer.strokes, b.before);
+      if (!layer || !b.changed) return;
+      editVector(b.layerId, b.factor > 1 ? 'Thicken lines' : 'Thin lines', layer.strokes, b.before);
     }
   }
 
   /** Change the selected vector line as one undo step. */
   function cancelVector(): void {
     const edit = vdrag ?? vbrush;
+    if (vbrush) {
+      if (vbrush.frame) cancelAnimationFrame(vbrush.frame);
+      studio.drawing = false;
+    }
     if (veraseShape) clearTimeout(veraseShape.timer);
     veraseShape = null;
     vdrag = vbrush = verase = null;
@@ -1683,7 +1710,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.stroke();
       g.restore();
     }
-    if (mode.tool === 'vedit' && vsel) {
+    if (mode.tool === 'vedit' && vsel && !widthEditing()) {
       const st = findLayer(page, vsel.layerId)?.layer.strokes[vsel.index];
       if (!st) return;
       g.save();
@@ -1777,6 +1804,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     tool: 'ink',
     cursor: () => (pickingColor ? 'cross' : mode.tool === 'image' || shapeEditor.active() ? 'move' : ['fill', 'tone', 'lines', 'vedit', 'selection', 'pixels'].includes(mode.tool) ? 'cross' : 'brush'),
     ctx(bar) {
+      if (vbrush && !widthEditing()) cancelVector();
       if (mode.tool !== 'pixels') pixels.clear();
       if (mode.tool !== 'selection') selection.clear();
       if (mode.tool !== 'tone') tone.clear();
@@ -2158,7 +2186,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       }
       if (vdrag || vbrush || verase) {
         if (e.type === 'pointercancel') cancelVector();
-        else vectorUp();
+        else {
+          if (vbrush) widthBrush(p, true);
+          vectorUp();
+        }
         return;
       }
       endStroke(e.type !== 'pointercancel');
@@ -2215,8 +2246,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         g.save(); g.strokeStyle = '#2F7FD8'; g.lineWidth = 2; g.beginPath();
         g.arc(cloneFrom.x * s, cloneFrom.y * s, 7, 0, Math.PI * 2); g.stroke(); g.restore();
       }
-      if (!hover || (!t && !pixelBrush()) || pickingColor) return;
-      const r = Math.max(2, ((t ? sizeIn(t) : smudgeSize / PT) * s) / 2);
+      const widthRadius = widthEditing() ? (vbrush?.radius ?? vstate.widthR) * (vbrush ? layerPlacement(vbrush.layerId)?.k ?? 1 : 1) : 0;
+      if (!hover || (!t && !pixelBrush() && !widthRadius) || pickingColor) return;
+      const r = Math.max(2, (widthRadius || (t ? sizeIn(t) : smudgeSize / PT) / 2) * s);
       g.save();
       g.lineWidth = 1;
       g.strokeStyle = 'rgba(255,255,255,.9)';
@@ -2279,6 +2311,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     },
     dispose() {
       clearTimeout(holdTimer);
+      if (vbrush) cancelVector();
       bins.dispose();
       selection.dispose();
       tone.clear();

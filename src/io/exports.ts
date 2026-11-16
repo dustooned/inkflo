@@ -1,5 +1,5 @@
 import type { Studio } from '../app/studio';
-import { PT, sheetOf, type Book, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
+import { PT, sheetOf, tonesOf, type Book, type Layer, type LayerGroup, type LayerType, type Page } from '../doc/model';
 import { bookFileStem, pageFileStem } from './publication';
 import { centreIn } from '../geom/lettering';
 import type { PageArt } from '../draw/residency';
@@ -49,7 +49,7 @@ function paintLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageAr
     const l = group.layers[i]!;
     if (!l.visible || !l.prints || !pick(l)) continue;
     g.globalAlpha = l.opacity * group.opacity;
-    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, scale);
+    for (const t of tonesOf(l)) drawScreenTone(g, t, W, H, scale);
     const c = art.planes[l.id];
     if (!c || !c.width) continue;
     drawLayerBitmap(g, c, W, H, scale, l.image);

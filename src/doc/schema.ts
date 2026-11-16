@@ -5,7 +5,7 @@ import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
 import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
-import { TONE_SHAPES } from './model';
+import { MAX_TONES_PER_LAYER, TONE_SHAPES } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
@@ -275,6 +275,7 @@ function layer(v: unknown, path: string): Layer {
     overFrame: bool(o.overFrame, `${path}.overFrame`, false),
     ...(o.vector === true ? { vector: true } : {}),
     ...(o.screenTone !== undefined ? { screenTone: screenTone(o.screenTone, `${path}.screenTone`) } : {}),
+    ...(o.screenTone !== undefined && o.moreTones !== undefined && arr(o.moreTones, `${path}.moreTones`).length ? { moreTones: arr(o.moreTones, `${path}.moreTones`).slice(0, MAX_TONES_PER_LAYER - 1).map((x, i) => screenTone(x, `${path}.moreTones[${i}]`)) } : {}),
     ...(o.asTone !== undefined ? { asTone: toneScreen(o.asTone, `${path}.asTone`) } : {}),
     ...(o.image !== undefined ? { image: placedImage(o.image, `${path}.image`) } : {}),
     ...(o.outline !== undefined ? { outline: paperEdge(o.outline, `${path}.outline`) } : {}),

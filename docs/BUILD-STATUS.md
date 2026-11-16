@@ -1603,3 +1603,8 @@ pm run package:offline writes dist-offline/inkflo-offline.zip: the build plus a 
 - **Web image** (single page) now takes PNG/WebP/JPG and quality.
 - **New vertical comic** asks for a title and a page size (Webtoon 8 x 32 in by default) with a short "how do these numbers work" note.
 - **Verified** in the dev app: the same two pages come out at 152 KB as PNG, 47 KB as WebP, 50 KB as JPG; trimming shortened The Last Train from 2460 to 1880 rows. **Not verified:** actual platform upload limits (the setups are starting points; the UI says to check each site), Safari WebP encoding (Safari may refuse it; the error says to choose PNG or JPG), and the phone-width layout of the new controls. Trimming is not shown in the preview.
+
+## Tone: one layer per panel
+
+- The Screentone tool no longer makes a layer per tap. New flat, selection and gradient tones go into the selected tone layer (if it is in that panel) or the panel's existing one; "New tone layer" starts a separate layer on purpose. Model: `Layer.screenTone` stays the first area and new `Layer.moreTones` holds the rest (`tonesOf` / `setTones` in `src/doc/model.ts`), so old files load unchanged; the schema keeps up to 64 areas per layer. Rendering, exports and layer thumbnails draw every area; an Area menu in the tool picks which to edit, re-aim or remove.
+- **Verified** in the dev app on a 3-panel strip: repeated taps in one panel gave one layer with two areas; New tone layer then made a second layer that took the following taps. **Not verified:** undo of an added area in the UI, PSD export of a multi-area layer, and the Paint tone brush (unchanged: it already reused one layer per panel).

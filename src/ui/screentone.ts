@@ -1,4 +1,4 @@
-import { findLayer, newLayer, TONE_SHAPES, type Pt, type ScreenTone, type ToneGradient } from '../doc/model';
+import { findLayer, MAX_TONES_PER_LAYER, newLayer, setTones, TONE_SHAPES, tonesOf, type Layer, type Pt, type ScreenTone, type ToneGradient } from '../doc/model';
 import { invert } from '../engine/core/selxform';
 import { mapPanelPoint } from '../geom/carve';
 import { groupAt, groupLabel, insertIndex, panelForGroup } from '../geom/groups';
@@ -38,35 +38,82 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
   let draft: ScreenTone = { shape: 'dot', frequency: 60, density: 0.25, angle: 45, color: '#191a1f' };
   let draftGradient: { kind: ToneGradient['kind']; stops: Stops } = { kind: 'linear', stops: GRADIENTS[0]!.stops.map((s) => ({ ...s })) };
   const active = (id: string) => findLayer(page, id);
+  /** The next tone starts a layer of its own (the "New tone layer" button); cleared once used. */
+  let startNew = false;
+  /** Which area of the selected tone layer Edit and Re-aim act on (the newest by default). */
+  let picked = { layer: '', index: -1 };
+  const areaOf = (layer: Layer): number => {
+    const n = tonesOf(layer).length;
+    return picked.layer === layer.id && picked.index >= 0 && picked.index < n ? picked.index : n - 1;
+  };
+  const describe = (t: ScreenTone, i: number) => `${i + 1} · ${SHAPE_NAMES[t.shape]}${t.gradient ? ' gradient' : ' ' + Math.round(t.density * 100) + '%'}${t.region ? ' (selection)' : ''}`;
 
   function add(at: Pt, region?: Pt[], gradient?: { from: Pt; to: Pt }): void {
     const panels = ctx.panels();
     const group = groupAt(page, panels, at);
     if (group.kind !== 'panel') { toast('Start inside the panel you want to tone.'); return; }
     if (group.locked || !group.visible) { toast(`${groupLabel(page, panels, group)} is ${group.locked ? 'locked' : 'hidden'}.`); return; }
-    const layer = newLayer('tone');
     const matrix = panelForGroup(panels, group)?.transform?.matrix;
     const inverse = matrix ? invert(matrix) : null;
     const inPanel = (p: Pt) => mapPanelPoint(p, inverse);
-    layer.name = SHAPE_NAMES[draft.shape] + (gradient ? ' gradient' : ' tone');
-    layer.screenTone = {
+    const tone: ScreenTone = {
       ...draft,
       ...(region ? { region: region.map(inPanel) } : {}),
       ...(gradient ? { gradient: { kind: draftGradient.kind, from: inPanel(gradient.from), to: inPanel(gradient.to), stops: draftGradient.stops.map((s) => ({ ...s })) } } : {}),
     };
+    // One tone layer per panel: use the selected tone layer if it is in this panel, else the panel's
+    // existing one. "New tone layer" (startNew) makes a separate one on purpose.
+    const usable = (l: Layer) => !!l.screenTone && l.visible && !l.locked && tonesOf(l).length < MAX_TONES_PER_LAYER;
+    const selId = selected();
+    const sel = selId ? active(selId) : null;
+    const target = startNew ? undefined : sel && sel.group.id === group.id && usable(sel.layer) ? sel.layer : group.layers.find(usable);
+    startNew = false;
+    const label = gradient ? 'Add gradient tone' : 'Add screentone';
+    if (target) {
+      const id = target.id;
+      const at = tonesOf(target).length;
+      studio.editPage(page, label, ['groups'], (p) => {
+        const l = p.groups.find((item) => item.id === group.id)?.layers.find((item) => item.id === id);
+        if (l) setTones(l, [...tonesOf(l), tone]);
+      });
+      picked = { layer: id, index: at };
+      studio.markStage(page, 'draw', 1);
+      select(id);
+      toast(`Added to “${target.name}”. Use New tone layer for a separate one.`);
+      return;
+    }
+    const layer = newLayer('tone');
+    layer.name = 'Screentone';
+    layer.screenTone = tone;
     studio.editPage(page, gradient ? 'Add gradient tone' : 'Add screentone', ['groups'], (p) => {
       const g = p.groups.find((item) => item.id === group.id)!;
       g.layers.splice(insertIndex(g, 'tone'), 0, layer);
     });
+    picked = { layer: layer.id, index: 0 };
     studio.markStage(page, 'draw', 1);
     select(layer.id);
+  }
+
+  function removeArea(layer: Layer, index: number): void {
+    if (layer.locked) { toast('Unlock this tone layer to edit it.'); return; }
+    const id = layer.id;
+    studio.editPage(page, 'Remove tone area', ['groups'], (p) => {
+      const l = findLayer(p, id)?.layer;
+      if (!l) return;
+      const list = tonesOf(l);
+      list.splice(index, 1);
+      setTones(l, list);
+    });
+    picked = { layer: id, index: -1 };
+    ctx.chrome(); ctx.request();
   }
 
   /** Drag on a selected gradient tone in its own panel: aim it again. True when it did. */
   function reaim(from: Pt, to: Pt): boolean {
     const id = selected();
     const entry = id ? active(id) : null;
-    const g = entry?.layer.screenTone?.gradient;
+    const ai = entry ? areaOf(entry.layer) : -1;
+    const g = entry ? tonesOf(entry.layer)[ai]?.gradient : undefined;
     if (!entry || !g || entry.layer.locked || entry.group.locked) return false;
     const panels = ctx.panels();
     if (groupAt(page, panels, from).id !== entry.group.id) return false;
@@ -74,15 +121,18 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
     const inverse = matrix ? invert(matrix) : null;
     studio.editPage(page, 'Aim gradient tone', ['groups'], (p) => {
       const layer = p.groups.find((x) => x.id === entry.group.id)?.layers.find((x) => x.id === entry.layer.id);
-      if (layer?.screenTone?.gradient) layer.screenTone = { ...layer.screenTone, gradient: { ...layer.screenTone.gradient, from: mapPanelPoint(from, inverse), to: mapPanelPoint(to, inverse) } };
+      const list = layer ? tonesOf(layer) : [];
+      const cur = list[ai];
+      if (layer && cur?.gradient) { list[ai] = { ...cur, gradient: { ...cur.gradient, from: mapPanelPoint(from, inverse), to: mapPanelPoint(to, inverse) } }; setTones(layer, list); }
     });
     return true;
   }
 
-  function settings(id?: string): void {
+  function settings(id?: string, index?: number): void {
     const entry = id ? active(id) : undefined;
     if (entry && (entry.group.locked || entry.layer.locked)) { toast('Unlock this tone layer to edit it.'); return; }
-    const value: ScreenTone = structuredClone(entry?.layer.screenTone ?? draft);
+    const areaIndex = entry ? index ?? areaOf(entry.layer) : -1;
+    const value: ScreenTone = structuredClone((entry ? tonesOf(entry.layer)[areaIndex] : undefined) ?? draft);
     // a gradient being set up (new) or edited
     let grad: { kind: ToneGradient['kind']; stops: Stops } | null = entry ? (value.gradient ? { kind: value.gradient.kind, stops: value.gradient.stops } : null) : (fill === 'gradient' ? structuredClone(draftGradient) : null);
     const preview = h('canvas', { width: 520, height: 155, class: 'tone-preview', 'aria-label': 'Screentone sample', role: 'img' });
@@ -149,7 +199,9 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
             if (!layer) return;
             const next: ScreenTone = { ...value };
             if (grad && value.gradient) next.gradient = { ...value.gradient, kind: grad.kind, stops: grad.stops.map((s) => ({ ...s })) };
-            layer.screenTone = next;
+            const list = tonesOf(layer);
+            list[areaIndex] = next;
+            setTones(layer, list);
           });
           else {
             const { gradient: _g, ...flat } = value;
@@ -172,17 +224,25 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
   return {
     edit: settings,
     controls(id?: string) {
-      const sel = id ? active(id)?.layer.screenTone : undefined;
+      const selLayer = id ? active(id)?.layer : undefined;
+      const areas = selLayer ? tonesOf(selLayer) : [];
+      const ai = selLayer ? areaOf(selLayer) : -1;
+      const sel = areas[ai];
+      const areaSel = selLayer && areas.length > 1 ? h('select', { 'aria-label': 'Tone area in this layer' }, areas.map((t, i) => h('option', { value: String(i), selected: i === ai }, describe(t, i)))) : null;
+      areaSel?.addEventListener('change', () => { picked = { layer: selLayer!.id, index: Number(areaSel.value) }; ctx.chrome(); });
       return [
         seg<'flat' | 'gradient'>([{ id: 'flat', label: 'Flat' }, { id: 'gradient', label: 'Gradient' }], fill, (v) => { fill = v; if (v === 'gradient') placement = 'panel'; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone fill'),
         fill === 'flat' ? seg<'panel' | 'lasso'>([{ id: 'panel', label: 'Panel' }, { id: 'lasso', label: 'Selection' }], placement, (v) => { placement = v; marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone area') : null,
         fill === 'flat' && placement === 'lasso' ? seg([...MARQUEE_SHAPES], shape, (v) => { shape = marqueeShape(v); marquee.clear(); ctx.chrome(); ctx.request(); }, 'Tone selection shape') : null,
         ...(fill === 'flat' ? marquee.controls() : []),
         h('button', { type: 'button', class: 'btn', onclick: () => settings() }, `${SHAPE_NAMES[draft.shape]} · ${fill === 'gradient' ? gradientLabel() : Math.round(draft.density * 100) + '%'} ▾`),
-        sel ? h('button', { type: 'button', class: 'btn', onclick: () => settings(id) }, sel.gradient ? 'Edit selected gradient' : 'Edit selected tone') : null,
+        h('button', { type: 'button', class: 'btn', 'aria-pressed': String(startNew), title: 'By default new tone goes into the panel’s tone layer. Press this to start a separate layer for the next tone.', onclick: () => { startNew = !startNew; ctx.chrome(); } }, startNew ? 'Next tone: new layer ✓' : 'New tone layer'),
+        areaSel,
+        sel ? h('button', { type: 'button', class: 'btn', onclick: () => settings(id, ai) }, sel.gradient ? 'Edit selected gradient' : 'Edit selected tone') : null,
+        selLayer && areas.length > 1 ? h('button', { type: 'button', class: 'btn', onclick: () => removeArea(selLayer, ai) }, 'Remove this area') : null,
         h('span', { class: 'hint' }, fill === 'gradient'
           ? (sel?.gradient ? 'Drag in its panel to aim the selected gradient again, or in another panel for a new one.' : 'Drag across a panel: the gradient runs from where you start to where you let go.')
-          : placement === 'panel' ? 'Tap inside a panel to add a tone layer.' : 'Draw around the area to shade.'),
+          : placement === 'panel' ? 'Tap inside a panel to add tone to its tone layer.' : 'Draw around the area to shade.'),
       ];
     },
     clear: marquee.clear,

@@ -78,38 +78,75 @@ export function reshape(s: Stroke, grab: number, delta: Pt, radius: number): Str
  * `radius` (CSP "adjust line width"). Widths stay within 0.1×–4× of the stroke's base.
  */
 export function brushWidth(s: Stroke, path: readonly Pt[], radius: number, factor: number): Stroke | null {
-  if (!path.length) return null;
-  // Long straight segments need intermediate width samples for the brush to affect their middle.
-  let line = s;
-  const reach = Math.max(radius / 2, 0.015);
-  for (let i = s.pts.length - 2; i >= 0 && line.pts.length < 4096; i--) {
-    const a = s.pts[i]!, b = s.pts[i + 1]!;
-    const span = Math.hypot(b.x - a.x, b.y - a.y);
-    if (span <= radius || !path.some((q) => q.x >= Math.min(a.x, b.x) - radius && q.x <= Math.max(a.x, b.x) + radius && q.y >= Math.min(a.y, b.y) - radius && q.y <= Math.max(a.y, b.y) + radius)) continue;
-    const parts = Math.min(128, Math.ceil(span / reach));
-    const range = Array.from({ length: parts - 1 }, (_, j) => (j + 1) / parts);
-    const lerp = (x: number, y: number, t: number) => x + (y - x) * t;
-    const samples = range.map((t) => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) }));
-    const expand = (values: number[]) => [...values.slice(0, i + 1), ...range.map((t) => lerp(values[i]!, values[i + 1]!, t)), ...values.slice(i + 1)];
-    line = { ...line, pts: [...line.pts.slice(0, i + 1), ...samples, ...line.pts.slice(i + 1)],
-      ...(line.pressure ? { pressure: expand(line.pressure) } : {}), ...(line.pw ? { pw: expand(line.pw) } : {}) };
-  }
-  let touched = false;
-  const pw = line.pts.map((p, i) => {
-    let near = Math.hypot(p.x - path[0]!.x, p.y - path[0]!.y);
-    for (let j = 1; j < path.length; j++) {
-      const a = path[j - 1]!, b = path[j]!;
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
-      near = Math.min(near, Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy));
-    }
-    const k = ease(near, radius);
-    const cur = line.pw?.[i] ?? 1;
-    if (k <= 0) return cur;
-    touched = true;
-    return Math.max(0.1, Math.min(4, cur * Math.pow(factor, k)));
+  if (!path.length || radius <= 0 || factor === 1) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const sweep = path.map((b, i) => {
+    x0 = Math.min(x0, b.x - radius); y0 = Math.min(y0, b.y - radius);
+    x1 = Math.max(x1, b.x + radius); y1 = Math.max(y1, b.y + radius);
+    const a = path[i - 1] ?? b;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    return { a, dx, dy, len2: dx * dx + dy * dy };
   });
-  return touched ? { ...line, pw } : null;
+  function widthAt(p: Pt, original: number): number {
+    if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) return original;
+    let near2 = radius * radius;
+    for (const { a, dx, dy, len2 } of sweep) {
+      const x = p.x - a.x, y = p.y - a.y;
+      const t = len2 ? Math.max(0, Math.min(1, (x * dx + y * dy) / len2)) : 0;
+      near2 = Math.min(near2, (x - dx * t) ** 2 + (y - dy * t) ** 2);
+    }
+    const influence = ease(Math.sqrt(near2), radius);
+    return influence ? Math.max(0.1, Math.min(4, original * factor ** influence)) : original;
+  }
+
+  const pts: Pt[] = [], pw: number[] = [], pressure: number[] = [];
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  let changed = false, room = Math.max(0, 4096 - s.pts.length);
+  for (const [i, a] of s.pts.entries()) {
+    const base = s.pw?.[i] ?? 1;
+    const width = widthAt(a, base);
+    pts.push(a);
+    pw.push(width);
+    if (s.pressure) pressure.push(s.pressure[i]!);
+    changed ||= width !== base;
+    const b = s.pts[i + 1];
+    if (!b || room < 3) continue;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const length = Math.hypot(dx, dy);
+    if (length <= radius) continue;
+
+    // Sample just the part of a long segment inside the sweep bounds, including the fade edges.
+    let start = 0, end = 1;
+    for (const [at, delta, lo, hi] of [[a.x, dx, x0, x1], [a.y, dy, y0, y1]] as const) {
+      if (!delta && (at < lo || at > hi)) { end = -1; break; }
+      if (!delta) continue;
+      const t0 = (lo - at) / delta, t1 = (hi - at) / delta;
+      start = Math.max(start, Math.min(t0, t1));
+      end = Math.min(end, Math.max(t0, t1));
+    }
+    if (end <= start) continue;
+    const steps = Math.min(room - 1, 128, Math.max(2, Math.ceil((end - start) * length / Math.max(radius / 4, 0.01))));
+    const samples = [];
+    let sampleChanged = false;
+    for (let j = 0; j <= steps; j++) {
+      const t = lerp(start, end, j / steps);
+      if (t <= 0 || t >= 1) continue;
+      const point = { x: a.x + dx * t, y: a.y + dy * t };
+      const original = lerp(base, s.pw?.[i + 1] ?? 1, t);
+      const width = widthAt(point, original);
+      sampleChanged ||= width !== original;
+      samples.push({ point, width, t });
+    }
+    if (!sampleChanged) continue;
+    for (const sample of samples) {
+      pts.push(sample.point);
+      pw.push(sample.width);
+      if (s.pressure) pressure.push(lerp(s.pressure[i]!, s.pressure[i + 1]!, sample.t));
+    }
+    room -= samples.length;
+    changed = true;
+  }
+  return changed ? { ...s, pts, pw, ...(s.pressure ? { pressure } : {}) } : null;
 }
 
 export function removePoint(s: Stroke, index: number): Stroke {

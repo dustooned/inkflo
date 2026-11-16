@@ -1,7 +1,7 @@
 import { cutoutPath } from '../geom/collage';
 import { drawTypeFrames } from './typeset';
 import { drawMarks } from './marks';
-import { DEFAULT_SHEET, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
+import { DEFAULT_SHEET, tonesOf, type Layer, type LayerGroup, type LayerType, type LetterSheet, type Page, type PlacedImage } from '../doc/model';
 import type { PageArt } from '../draw/residency';
 import { area, cornerOverrides, derivePanels, gutterPaths, layoutOf, panelStack, type Panel } from '../geom/carve';
 import { panelForGroup } from '../geom/groups';
@@ -349,7 +349,7 @@ function drawLayers(g: CanvasRenderingContext2D, group: LayerGroup, art: PageArt
     if (which === 'over' && !l.overFrame) continue;
     if (!shows(l, group, opts)) continue;
     g.globalAlpha = l.opacity * group.opacity;
-    if (l.screenTone) drawScreenTone(g, l.screenTone, W, H, opts.scale, area, l.id);
+    tonesOf(l).forEach((t, n) => drawScreenTone(g, t, W, H, opts.scale, area, n ? `${l.id}:${n}` : l.id));
     const live = opts.live?.[l.id];
     const c = live ?? (art && !art.parked ? art.planes[l.id] : null);
     if (!c || !c.width) continue;

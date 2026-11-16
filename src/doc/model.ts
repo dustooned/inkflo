@@ -308,7 +308,10 @@ export interface Layer {
    * only a cache redrawn from them after every edit. No raster strokes or fills on it.
    */
   vector?: boolean;
+  /** A screentone layer's first tone area. More areas in the same layer follow in `moreTones`. */
   screenTone?: ScreenTone;
+  /** Further tone areas in this layer, drawn after `screenTone`. Older files have none. */
+  moreTones?: ScreenTone[];
   /** Print this painted layer as halftone dots (its pixels stay untouched). */
   asTone?: ToneScreen;
   image?: PlacedImage;
@@ -581,6 +584,21 @@ export function newBook(title: string, author = '', now = Date.now()): Book {
 export function allLayers(page: Page): Layer[] {
   return page.groups.flatMap((g) => g.layers);
 }
+
+/** Every tone area a screentone layer holds, bottom to top (empty for other layers). */
+export function tonesOf(layer: Pick<Layer, 'screenTone' | 'moreTones'>): ScreenTone[] {
+  return layer.screenTone ? [layer.screenTone, ...(layer.moreTones ?? [])] : [];
+}
+
+/** Store a list of tone areas on a layer: the first as `screenTone`, the rest as `moreTones`. */
+export function setTones(layer: Pick<Layer, 'screenTone' | 'moreTones'>, tones: ScreenTone[]): void {
+  const [first, ...rest] = tones;
+  if (first) layer.screenTone = first; else delete layer.screenTone;
+  if (rest.length) layer.moreTones = rest; else delete layer.moreTones;
+}
+
+/** The most tone areas one layer may hold. */
+export const MAX_TONES_PER_LAYER = 64;
 
 export function findLayer(page: Page, id: string): { group: LayerGroup; layer: Layer } | null {
   for (const group of page.groups) {
