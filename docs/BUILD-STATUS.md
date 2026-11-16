@@ -1551,3 +1551,27 @@ Script → Layout → Draw → Print → every export, in the built-in pane.
   - moving the balloon 60 pt kept the tip and moved the bend 30 pt;
   - a double tap straightened it;
   - the inspector showed Curve, Base width, Taper and Tip.
+
+## Layout: Smoothing replaces Curve, 2026-11-15
+
+- **Why:** `curve` was a whole number of Chaikin passes (0–5) on drawn cuts.
+  - It never changed straight cuts, so it did nothing on grids.
+  - It went backwards after its first step: a zig-zag's bend was rounded off 0.625 in at 1,
+    0.451 at 2 and 0.376 at 5.
+  - It moved in whole steps that barely differed.
+- **Smoothing** (`PageLayout.smooth`, 0–1; `roundBends` in `geom/carve.ts`) turns each bend into
+  a quadratic arc that reaches `smooth` of the way to its sides' midpoints. At 1 it's the
+  smoothest curve through those midpoints. It is continuous and monotonic: 0 / 25 / 50 / 75 /
+  100% rounded the test bend by 0 / 0.095 / 0.188 / 0.281 / 0.375 in.
+- **Compatibility:** `smoothCutPath` uses `smooth` only when a page has it; otherwise it applies
+  the old passes, so existing pages keep their exact panel shapes until the slider is moved.
+  - The slider shows the old value's nearest match (0 → 0%, 1 → 50%, 2–5 → 100%).
+  - Layout code writes `smooth N%`. `curve N` still reads, and chooses the old passes (clearing
+    `smooth`).
+  - The carve cache key includes `smooth`, and the schema validates it as 0–1.
+- **UI:** Layout bar → **Smoothing 0–100%** in 5% steps. Its tooltip says straight cuts stay
+  straight and points to Curve edges (B).
+- Checks: `carve.test.ts` covers rounding that rises with each step, straight cuts unchanged at
+  any value, old pages identical to the old passes, and the code round trip with `curve N`
+  choosing the old passes. All 460 tests pass. In the built-in pane the slider stored 0–1 and the
+  bend rounding rose evenly.

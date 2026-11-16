@@ -535,6 +535,7 @@ function layout(v: unknown, path: string): PageLayout | undefined {
     return { at: relativePoint(item.at, `${entry}.at`), radius };
   });
   const edgeBorder = o.edgeBorder === undefined ? undefined : bool(o.edgeBorder, `${path}.edgeBorder`, false);
+  const smooth = o.smooth === undefined ? undefined : unit(o.smooth, `${path}.smooth`, 0.75);
   const panelTransforms = o.panelTransforms === undefined ? undefined : arr(o.panelTransforms, `${path}.panelTransforms`).map((value, i) => {
     const entry = `${path}.panelTransforms[${i}]`, item = obj(value, entry);
     const raw = arr(item.matrix, `${entry}.matrix`);
@@ -544,7 +545,7 @@ function layout(v: unknown, path: string): PageLayout | undefined {
     return { at: relativePoint(item.at, `${entry}.at`), matrix, order: num(item.order, `${entry}.order`) };
   });
   const order = o.order === undefined ? undefined : arr(o.order, `${path}.order`).slice(0, 200).map((v, i) => relativePoint(v, `${path}.order[${i}]`));
-  return { gutter, border, curve, ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}), ...(panelTransforms?.length ? { panelTransforms } : {}), ...(order?.length ? { order } : {}) };
+  return { gutter, border, curve, ...(smooth !== undefined ? { smooth } : {}), ...(gutterPaper !== undefined ? { gutterPaper } : {}), ...(edgeBorder !== undefined ? { edgeBorder } : {}), ...(cornerRadius !== undefined ? { cornerRadius } : {}), ...(panelCorners ? { panelCorners } : {}), ...(panelTransforms?.length ? { panelTransforms } : {}), ...(order?.length ? { order } : {}) };
 }
 
 function source(o: Obj, path: string): Letter['src'] | undefined {

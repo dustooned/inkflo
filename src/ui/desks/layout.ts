@@ -57,6 +57,9 @@ function panelNumberAt(panel: Panel, page: DeskCtx['page'], scale: number): Pt |
 
 
 /** Layout: carve panels with a knife; drag a panel's edge to move the cut under it. */
+/** Smoothing as the slider shows it: the page's own, or the closest match to the older passes. */
+const smoothOf = (L: { curve: number; smooth?: number }) => L.smooth ?? (L.curve <= 0 ? 0 : L.curve === 1 ? 0.5 : 1);
+
 export function layoutDesk(ctx: DeskCtx): DeskMode {
   const { studio, book, page } = ctx;
   let showGrid = true;
@@ -433,7 +436,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       bar.append(
         slider('Gutter', 0, 2, 0.01, L.gutter, (v) => `${v.toFixed(2)}″`, (v) => setLayout({ gutter: v }, false), (v) => setLayout({ gutter: v }, true)),
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
-        slider('Curve', 0, 5, 1, L.curve, (v) => String(v), (v) => setLayout({ curve: v }, false), (v) => setLayout({ curve: v }, true)),
+        h('span', { title: 'Rounds the bends in cuts you draw with the Knife. Straight cuts stay straight: bend a gutter with Curve edges (B).' },
+          slider('Smoothing', 0, 100, 5, Math.round(smoothOf(L) * 100), (v) => `${v}%`, (v) => setLayout({ smooth: v / 100 }, false), (v) => setLayout({ smooth: v / 100 }, true))),
         h('button', { class: 'btn document-option', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
         h('span', { class: 'hint' }, mode.tool === 'knife' ? (cutMode() === 'panel' ? 'Draw a line through a panel. It runs on to the panel’s borders.' : 'Draw a line across the page. It runs on to the page edges.') : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : mode.tool === 'curve' ? 'Select a gutter, then drag a Bézier handle' : 'Click a gutter to remove it'),
       );

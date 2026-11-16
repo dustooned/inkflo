@@ -198,7 +198,7 @@ section[hidden] { display: none; }
 <li>Draw anywhere: from the board around the page, or just across the part you want split. A line drawn inside the page runs on to the edges by itself.</li>
 <li>Hold <kbd>Shift</kbd> for a perfectly straight cut that turns in 15° steps. While you cut, a readout by the pen shows the angle in degrees with an arc from level; straight cuts click to level, upright and 45° when you get within a few degrees, and turn green with a guide across the page.</li>
 <li><strong>Auto Shape</strong> (on by default): pause at the end of a cut without lifting, and inkflo snaps it to the cleanest shape it sees: a <strong>straight line</strong>, an <strong>arc</strong>, a <strong>zig-zag</strong> for jagged action edges, or a <strong>smooth curve</strong> with the wobble taken out. Keep holding and drag to adjust the end, then lift.</li>
-<li><strong>Curve</strong> in the tool bar rounds every corner of the cut; set it to 0 for sharp zig-zags.</li>
+<li><strong>Smoothing</strong> in the tool bar (0–100%) rounds the bends of cuts you draw: 0% keeps sharp zig-zags, higher is rounder, smoothly. Straight cuts stay straight; to bend a gutter, use <strong>Curve edges</strong> (<kbd>B</kbd>). In Layout code it reads <code>smooth 75%</code>.</li>
 <li><strong>Uncut</strong> (<kbd>E</kbd>) removes a cut: click its gutter.</li>
 </ul>
 

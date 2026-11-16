@@ -387,6 +387,11 @@ export interface PageLayout {
   gutterPaper?: string | null;
   /** Ink the trim and carry gutter borders all the way to it. */
   edgeBorder?: boolean;
+  /**
+   * How round the bends of drawn cuts are, 0–1 (the Layout desk's Smoothing). When set it
+   * replaces `curve`; pages that never set it keep `curve`, so their panels don't move.
+   */
+  smooth?: number;
   panelTransforms?: PanelTransform[];
   cornerRadius?: number;
   panelCorners?: { at: Pt; radius: number }[];

@@ -89,6 +89,37 @@ function segInt(a: Pt, b: Pt, c: Pt, d: Pt): Hit | null {
   return { x: a.x + t * r.x, y: a.y + t * r.y, tp: t, tu: Math.max(0, Math.min(1, tu)) };
 }
 
+/**
+ * Round each bend of a path: the corner becomes a smooth arc (a quadratic curve) that reaches
+ * `amount` (0–1) of the way to the midpoints of its two sides. 0 keeps the bends sharp; 1 is the
+ * smoothest curve through the sides' midpoints. Rounder as the amount grows, never less round.
+ */
+export function roundBends(pts: readonly Pt[], amount: number, step = 3): Pt[] {
+  if (pts.length < 3 || amount <= 0) return pts.map((q) => ({ ...q }));
+  const t = Math.min(1, amount) * 0.5;
+  const out: Pt[] = [{ ...pts[0]! }];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1]!, v = pts[i]!, b = pts[i + 1]!;
+    const p1 = { x: v.x + (a.x - v.x) * t, y: v.y + (a.y - v.y) * t };
+    const p2 = { x: v.x + (b.x - v.x) * t, y: v.y + (b.y - v.y) * t };
+    const n = Math.max(3, Math.ceil((Math.hypot(p1.x - v.x, p1.y - v.y) + Math.hypot(p2.x - v.x, p2.y - v.y)) / step));
+    for (let k = 0; k <= n; k++) {
+      const s = k / n, u = 1 - s;
+      out.push({ x: u * u * p1.x + 2 * u * s * v.x + s * s * p2.x, y: u * u * p1.y + 2 * u * s * v.y + s * s * p2.y });
+    }
+  }
+  out.push({ ...pts[pts.length - 1]! });
+  return out;
+}
+
+/**
+ * The smoothing a page applies to drawn cuts: `smooth` (0–1, the Layout desk's Smoothing) when
+ * the page has one; otherwise the older `curve` passes, so pages made before keep their shape.
+ */
+export function smoothCutPath(pts: readonly Pt[], L: Pick<LayoutStyle, 'curve'> & { smooth?: number }): Pt[] {
+  return L.smooth !== undefined ? roundBends(pts, L.smooth) : chaikin(pts, L.curve);
+}
+
 export function chaikin(pts: readonly Pt[], iters: number): Pt[] {
   let p = pts.map((q) => ({ ...q }));
   for (let k = 0; k < iters; k++) {
@@ -288,7 +319,7 @@ function trimProto(page: Page): Pt[] {
 }
 
 /** The full path a cut splits along, in proto space. */
-function cutPathProto(c: Cut, curve: number): Pt[] {
+function cutPathProto(c: Cut, L: Pick<LayoutStyle, 'curve'> & { smooth?: number }): Pt[] {
   if (c.handles) {
     const endpoints = c.mode === 'panel' && c.extended?.length ? c.extended : c.pts;
     const [a, b, d, e] = toProto([endpoints[0]!, ...c.handles, endpoints.at(-1)!]);
@@ -300,13 +331,13 @@ function cutPathProto(c: Cut, curve: number): Pt[] {
     return c.mode === 'panel' || c.bounded ? path : extendEnds(path);
   }
   if (c.mode === 'panel' && c.extended && c.extended.length >= 2) return toProto(c.extended);
-  const path = simplify(chaikin(toProto(c.pts), curve), 0.65);
+  const path = simplify(smoothCutPath(toProto(c.pts), L), 0.65);
   return c.bounded ? path : extendEnds(path);
 }
 
 /** The stored cut's construction path, including extensions, in inches. */
 export function cutPath(c: Cut, page: Page): Pt[] {
-  return toInches(cutPathProto(c, layoutOf(page).curve));
+  return toInches(cutPathProto(c, layoutOf(page)));
 }
 
 /** Right to left (manga): set from the open book's print settings. */
@@ -384,14 +415,14 @@ interface CarvedPage { polys: Pt[][]; gutters: GutterPath[] }
 const cache = new WeakMap<Page, { key: string; value: CarvedPage }>();
 
 function carvePage(page: Page): CarvedPage {
-  const curve = layoutOf(page).curve;
-  const key = JSON.stringify([page.widthIn, page.heightIn, curve, page.cuts, layoutOf(page).order, readRtl]);
+  const L = layoutOf(page);
+  const key = JSON.stringify([page.widthIn, page.heightIn, L.curve, L.smooth, page.cuts, L.order, readRtl]);
   const cached = cache.get(page);
   if (cached?.key === key) return cached.value;
   let ps: Pt[][] = [trimProto(page)];
   const gutters: GutterPath[] = [];
   for (const cut of page.cuts) {
-    const path = cutPathProto(cut, curve);
+    const path = cutPathProto(cut, L);
     const boundaries: Pt[][] = [];
     ps = ps.flatMap((poly) => divide(poly, path, boundaries));
     for (const pts of boundaries) gutters.push({ cut, points: toInches(pts) });
@@ -517,7 +548,7 @@ export function planCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
   raw[raw.length - 1] = snapToTrim(raw[raw.length - 1]!, page, 14);
   const cut: Omit<Cut, 'id'> = { mode, pts: toInches(raw) };
   const { polys } = carvePage(page);
-  const path = cutPathProto({ id: '', ...cut }, layoutOf(page).curve);
+  const path = cutPathProto({ id: '', ...cut }, layoutOf(page));
   if (mode === 'panel') {
     const first = path[1]!;
     const next = path[2]!;
@@ -546,7 +577,7 @@ export function makeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straig
 export function planKnifeCut(page: Page, stroke: readonly Pt[], mode: CutMode, straight = false, target?: Pt): ReturnType<typeof planCut> {
   if (stroke.length < 2) return null;
   const raw = straight ? toProto([stroke[0]!, stroke.at(-1)!]) : simplify(toProto(stroke), 2);
-  const drawn = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
+  const drawn = simplify(smoothCutPath(raw, layoutOf(page)), 0.65);
   if (drawn.length < 2 || dist(drawn[0]!, drawn.at(-1)!) < 12) return null;
   // As drawn first: a swipe that starts and ends outside behaves exactly as before.
   const aim = target ? toProto([target])[0] : undefined;
@@ -575,7 +606,7 @@ function extendInsideEnds(raw: readonly Pt[], reach: number, inside: (q: Pt) => 
 
 /** Plan a cut along `raw` (proto units). `within`, when given, picks the panel containing it. */
 function planFrom(page: Page, raw: Pt[], mode: CutMode, within?: Pt): ReturnType<typeof planCut> {
-  const path = simplify(chaikin(raw, layoutOf(page).curve), 0.65);
+  const path = simplify(smoothCutPath(raw, layoutOf(page)), 0.65);
   if (path.length < 2) return null;
   const outside = (poly: Pt[]) => [path[0]!, path.at(-1)!].every((p) => !pointInPoly(p, poly) && !onBoundary(p, poly));
   const { polys } = carvePage(page);

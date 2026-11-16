@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { area, canEvenOut, cutsForCount, derivePanels, evenOut, gutterPaths, layoutOf, makeCut, mapPanelPoint, nearestCut, panelAt, planKnifeCut, pointInPoly, presetCuts, setReadingRtl, shiftCut, sourcePanelAt } from './carve';
+import { area, canEvenOut, cutPath, cutsForCount, derivePanels, evenOut, gutterPaths, layoutOf, makeCut, mapPanelPoint, nearestCut, panelAt, planKnifeCut, pointInPoly, presetCuts, setReadingRtl, shiftCut, sourcePanelAt } from './carve';
 import { invert } from '../engine/core/selxform';
 import { gutterMask, inGutter } from './gutters';
 import { newPage, type Page, type Pt } from '../doc/model';
@@ -393,5 +393,50 @@ describe('reordering keeps beats with panels', () => {
     // back to automatic: the beats return
     const back = beatsFollowing({ ...p, layout: next, beats }, layoutWithOrder({ ...p, layout: next }, null));
     expect(back.map((b) => b.desc)).toEqual(['A', 'B', 'C', 'D', 'E']);
+  });
+});
+
+describe('cut smoothing', () => {
+  const zig = { id: 'z', mode: 'across' as const, pts: [{ x: 0, y: 4 }, { x: 2, y: 5.5 }, { x: 4, y: 4 }, { x: 6.625, y: 5 }] };
+  const straight = { id: 's', mode: 'across' as const, pts: [{ x: 0, y: 2 }, { x: 6.625, y: 2 }] };
+  /** How far the path stays from the sharp bend at (2, 5.5): more is rounder. */
+  const rounding = (smooth: number) => {
+    const p = newPage();
+    const path = cutPath(zig, { ...p, cuts: [zig], layout: { ...layoutOf(p), smooth } });
+    return Math.min(...path.map((q) => Math.hypot(q.x - 2, q.y - 5.5)));
+  };
+
+  it('rounds bends more as Smoothing goes up, from sharp to round', async () => {
+    const steps = [0, 0.25, 0.5, 0.75, 1].map(rounding);
+    expect(steps[0]).toBeLessThan(0.01);
+    for (let i = 1; i < steps.length; i++) expect(steps[i]!).toBeGreaterThan(steps[i - 1]! + 0.02);
+  });
+
+  it('keeps straight cuts straight at any smoothing', () => {
+    const p = newPage();
+    for (const smooth of [0, 0.5, 1]) {
+      const path = cutPath(straight, { ...p, cuts: [straight], layout: { ...layoutOf(p), smooth } });
+      expect(path.every((q) => Math.abs(q.y - 2) < 1e-9)).toBe(true);
+    }
+  });
+
+  it('leaves pages without Smoothing exactly as before (the older passes)', async () => {
+    const { chaikin, smoothCutPath } = await import('./carve');
+    const pts = zig.pts;
+    expect(smoothCutPath(pts, { curve: 2 })).toEqual(chaikin(pts, 2));
+    expect(smoothCutPath(pts, { curve: 2, smooth: 0 })).toEqual(pts);
+  });
+
+  it('round-trips through layout code, and curve N still chooses the older passes', async () => {
+    const { formatLayoutCode, parseLayoutCode } = await import('./layoutcode');
+    const p = newPage();
+    p.cuts = [zig];
+    p.layout = { ...layoutOf(p), smooth: 0.6 };
+    const code = formatLayoutCode(p);
+    expect(code).toMatch(/^smooth 60%$/m);
+    expect(parseLayoutCode(code, p).layout.smooth).toBeCloseTo(0.6);
+    const old = parseLayoutCode(code.replace('smooth 60%', 'curve 3'), p).layout;
+    expect(old.smooth).toBeUndefined();
+    expect(old.curve).toBe(3);
   });
 });

@@ -7,7 +7,7 @@ import { anchorFor } from './groups';
  *
  *   gutter 0.18
  *   border 2.5pt
- *   curve 2
+ *   smooth 75%                       how round the bends of drawn cuts are (0–100%)
  *   round 0.1
  *   gutters black                    gutter colour: white, black, none (see-through) or #hex
  *   edge on                          ink the page edge, so outer panels are framed too
@@ -103,7 +103,7 @@ export function formatLayoutCode(page: Page): string {
     if (corner) out.push(`panel ${p.index + 1} round ${r2(corner.radius)}`);
   }
   // the look; settings left at their defaults aren't written
-  out.push('', '# look', `gutter ${r3(L.gutter)}`, `border ${r3(L.border * 72)}pt`, `curve ${L.curve}`);
+  out.push('', '# look', `gutter ${r3(L.gutter)}`, `border ${r3(L.border * 72)}pt`, L.smooth !== undefined ? `smooth ${Math.round(L.smooth * 100)}%` : `curve ${L.curve}`);
   if (L.cornerRadius) out.push(`round ${r3(L.cornerRadius)}`);
   if (L.gutterPaper !== undefined && gutterWord(L.gutterPaper) !== 'white') out.push(`gutters ${gutterWord(L.gutterPaper)}`);
   if (L.edgeBorder) out.push('edge on');
@@ -190,10 +190,16 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       const w = (args[0] ?? '').toLowerCase();
       if (w === 'on' || w === 'yes') layout.edgeBorder = true;
       else if (w !== 'off' && w !== 'no') return fail('edge needs on or off, like “edge on”.');
+    } else if (k === 'smooth') {
+      const w = (args[0] ?? '').replace(/%$/, '');
+      const n = num(w, 0, 100);
+      if (n === null) return fail('smooth needs a percentage from 0 (sharp bends) to 100 (round), like “smooth 75%”.');
+      layout.smooth = Math.round(n) / 100;
     } else if (k === 'curve') {
       const n = num(args[0], 0, 5);
       if (n === null || !Number.isInteger(n)) return fail('curve needs a whole number from 0 (sharp) to 5 (round).');
       layout.curve = n;
+      delete layout.smooth; // the older passes, chosen on purpose
     } else if (k === 'cut') {
       const bendAt = args.findIndex((w) => w.toLowerCase() === 'bend');
       const path = (bendAt >= 0 ? args.slice(0, bendAt) : args).filter((w) => w !== '->');
@@ -220,7 +226,7 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       if (n === null || !Number.isInteger(n)) return fail('panel needs its number, like “panel 2 turn 5”.');
       panelLines.push({ line: i + 1, n, words: args.slice(1).map((w) => w.toLowerCase()) });
     } else {
-      return fail(`“${key}” isn't a layout word. Use gutter, gutters, border, edge, curve, round, cut, keep or panel.`);
+      return fail(`“${key}” isn't a layout word. Use gutter, gutters, border, edge, smooth, round, cut, keep or panel.`);
     }
     lines.push({ tokens });
   });
@@ -257,7 +263,7 @@ export const LAYOUT_LEGEND: { code: string; means: string }[] = [
   { code: 'border 2.5pt', means: 'Panel border width (pt or in)' },
   { code: 'gutters black', means: 'Gutter colour: white, black, none or #hex' },
   { code: 'edge on', means: 'Ink the page edge (frames the outer panels)' },
-  { code: 'curve 2', means: 'Rounding of drawn cuts, 0–5' },
+  { code: 'smooth 75%', means: 'How round the bends of drawn cuts are (straight cuts stay straight)' },
   { code: 'round 0.1', means: 'Corner radius of every panel' },
   { code: 'cut 3.3,0 -> 3.3,10', means: 'A cut through these points; runs on to the edges' },
   { code: 'cut … bend 2,1 4,3', means: 'Curves the cut with two handles' },
