@@ -1,6 +1,7 @@
 import { canInstall, install, isInstalled, offlineState, onOfflineChange } from '../app/offline';
 import { h, toast } from './dom';
 import { openManual } from './manual';
+import { openModal } from './modal';
 
 /** "Use inkflo offline": one dialog with the status, the Install button, and plain steps for each device. */
 export function openOfflineDialog(): void {
@@ -23,9 +24,9 @@ export function openOfflineDialog(): void {
   const off = onOfflineChange(refresh);
   const steps = (title: string, items: string[]) =>
     h('details', {}, h('summary', {}, title), h('ol', {}, items.map((t) => h('li', {}, t))));
-  const d = h('dialog', {},
-    h('header', {}, h('h2', {}, 'Use inkflo offline')),
-    h('div', { class: 'content' },
+  openModal({
+    title: 'Use inkflo offline',
+    content: [
       status,
       installBtn,
       steps('Windows or Mac: Chrome or Edge', [
@@ -44,11 +45,12 @@ export function openOfflineDialog(): void {
         'Tap the menu (three dots), then Install app or Add to Home screen.',
       ]),
       h('p', { class: 'note' }, h('strong', {}, 'Your drawings stay on this device. '), 'They are saved in this browser, not on a server. On a shared or lab computer they can disappear when it is reset, so before you leave use ', h('em', {}, 'Export → Export files → Backup → Book file (.inkflo)'), ' and keep the file on a USB stick or cloud drive.'),
-      h('p', { class: 'note' }, 'Updates arrive by themselves the next time you open inkflo online.')),
-    h('footer', {},
-      h('button', { class: 'btn', type: 'button', onclick: () => openManual('offline') }, 'Read the full guide'),
-      h('button', { class: 'btn primary', type: 'button', onclick: () => d.close() }, 'Done')));
-  d.addEventListener('close', () => { off(); d.remove(); });
-  document.body.append(d);
-  d.showModal();
+      h('p', { class: 'note' }, 'Updates arrive by themselves the next time you open inkflo online.'),
+    ],
+    actions: [
+      { id: 'guide', label: 'Read the full guide', run: () => { openManual('offline'); return false; } },
+      { id: 'done', label: 'Done', primary: true },
+    ],
+    onClose: off,
+  });
 }
