@@ -4,6 +4,7 @@ import { derivePanels, presetCuts, type Preset } from '../geom/carve';
 import { applyPageTemplate, capturePageTemplate, type PageTemplate } from '../geom/pagetemplates';
 import { renderThumb } from '../render/page';
 import { askText, confirmDialog, h, toast } from './dom';
+import { openModal } from './modal';
 
 const KEY = 'inkflo.page-templates.v1';
 const BINS_KEY = 'inkflo.layout-bins.v1';
@@ -54,13 +55,14 @@ export function openPageTemplates(page: Page, apply: (template: PageTemplate) =>
     example.cuts = presetCuts(example, id);
     return capturePageTemplate(example, name);
   });
-  const gallery = h('div', { class: 'content' });
-  const d = h('dialog', { class: 'template-dialog', 'aria-label': 'Page templates' },
-    h('header', {}, h('h2', {}, editing ? 'Page templates' : 'New page from template')),
-    gallery,
-    h('footer', {},
-      editing ? h('button', { class: 'btn', type: 'button', onclick: () => void save() }, 'Save this layout') : null,
-      h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')));
+  const modal = openModal<'save' | 'close' | 'use'>({
+    title: editing ? 'Page templates' : 'New page from template', className: 'template-dialog', ariaLabel: 'Page templates', cancelId: 'close',
+    actions: [
+      ...(editing ? [{ id: 'save' as const, label: 'Save this layout', run: () => { void save(); return false; } }] : []),
+      { id: 'close', label: 'Close' },
+    ],
+  });
+  const gallery = modal.content;
 
   async function save(): Promise<void> {
     const name = (await askText('Save this layout', 'Template name', '', 'Save'))?.trim().slice(0, 72);
@@ -89,7 +91,7 @@ export function openPageTemplates(page: Page, apply: (template: PageTemplate) =>
       return h('div', { class: 'template-card' },
         h('button', { type: 'button', 'aria-label': 'Use ' + template.name, onclick: async () => {
           if (editing && page.cuts.length && !(await confirmDialog('Replace this page layout?', 'The new layout changes the cuts and panel style. Undo restores the previous layout.', 'Use template'))) return;
-          d.close();
+          modal.close('use');
           apply(template);
         } }, preview, h('strong', {}, template.name), h('small', {}, count + (count === 1 ? ' panel' : ' panels'))),
         removable ? h('button', { type: 'button', class: 'template-remove', 'aria-label': 'Remove template ' + template.name, onclick: async () => {
@@ -114,8 +116,5 @@ export function openPageTemplates(page: Page, apply: (template: PageTemplate) =>
       cards(built),
     );
   }
-  d.addEventListener('close', () => d.remove());
   render();
-  document.body.append(d);
-  d.showModal();
 }
