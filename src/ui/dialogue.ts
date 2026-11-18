@@ -2,11 +2,18 @@ import { newId, sheetOf, type Beat } from '../doc/model';
 import { assignDialoguePanel, assignDialoguePreset, bindDialogue, dialoguePanel, letterForLine, parseLine, reconcileDialogue, scriptRevision, speakerKey, speakers } from '../geom/lettering';
 import type { DeskCtx } from './desk';
 import { h } from './dom';
+import { openModal } from './modal';
 
 /** The same dialogue and panel assignments are editable in Script and Caption. */
 export function openDialogue(ctx: DeskCtx, onLocate?: (id: string) => void): void {
   const { studio, book, page } = ctx;
-  const body = h('div', { class: 'content dialogue-body' });
+  // After the dialog closes (and anything the closing action calls), refresh the desk, as the "close" event used to.
+  const modal = openModal<'done' | 'locate'>({
+    title: 'Script dialogue', className: 'dialogue-dialog', ariaLabel: 'Script dialogue', contentClass: 'dialogue-body', cancelId: 'done',
+    actions: [{ id: 'done', label: 'Done' }],
+    onClose: () => queueMicrotask(() => { ctx.chrome(); ctx.request(); }),
+  });
+  const body = modal.content;
   const count = h('span', { class: 'note', role: 'status' });
   const placeButton = h('button', { class: 'btn primary', type: 'button', onclick: () => save('Place script lettering', () => {}, true) }, 'Place missing lettering');
   const updateCount = () => {
@@ -44,7 +51,7 @@ export function openDialogue(ctx: DeskCtx, onLocate?: (id: string) => void): voi
       const status = h('span', { class: 'note' });
       const locate = action('Select balloon', () => {
         const l = letterForLine(page, beat, i);
-        if (l && onLocate) { d.close(); onLocate(l.id); }
+        if (l && onLocate) { modal.close('locate'); onLocate(l.id); }
       });
       const updateRow = () => {
         const l = letterForLine(page, beat, i);
@@ -154,10 +161,5 @@ export function openDialogue(ctx: DeskCtx, onLocate?: (id: string) => void): voi
       h('p', { class: 'note' }, 'Add beats in the Script desk to start lettering this page.'));
   }
 
-  const d = h('dialog', { class: 'dialogue-dialog', 'aria-label': 'Script dialogue' },
-    h('header', {}, h('h2', {}, 'Script dialogue')), body, h('footer', {}, action('Done', () => d.close())));
-  d.addEventListener('close', () => { d.remove(); ctx.chrome(); ctx.request(); });
-  document.body.append(d);
   render();
-  d.showModal();
 }
