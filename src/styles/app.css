@@ -1049,3 +1049,13 @@ details > summary:hover { color: var(--text); }
     repeating-conic-gradient(#d8d2c4 0 25%, #fffdf7 0 50%) 0 0 / 10px 10px; }
 .swatch-clear[aria-pressed="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (pointer: coarse) { .swatch-clear { width: 32px; height: 32px; } }
+
+/* lettering style sheet: the layout that used to be inline style attributes */
+.note.flush { margin: 0; }
+.sheet-pt { width: 80px; }
+.sheet-grid { display: grid; gap: 10px; }
+.sheet-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.sheet-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.sheet-heading { margin: 6px 0 0; font-size: 13px; }
+.option.sheet-char { align-items: center; }
+.sheet-actions { display: flex; gap: 8px; }
