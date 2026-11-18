@@ -1073,3 +1073,19 @@ details > summary:hover { color: var(--text); }
 .xd-row-center { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
 .xd-row-start { display: flex; gap: 12px; align-items: flex-start; }
 .xd-grid10 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+
+/* Gesture Controls */
+dialog.gesture-dialog { width: min(760px, calc(100vw - 32px)); }
+.gesture-groups { display: flex; flex-direction: column; gap: 14px; }
+.gesture-group h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); }
+.gesture-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr auto auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line-2); min-height: 40px; }
+.gesture-row.fixed { grid-template-columns: minmax(120px, 190px) 1fr auto; }
+.gesture-spec kbd { font: 500 12px/1 var(--mono); padding: 3px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--btn); }
+.gesture-spec em { font-size: 12px; opacity: .8; }
+.gesture-fixed { font-size: 11px; opacity: .55; }
+.gesture-on { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.gesture-actions { display: inline-flex; gap: 6px; min-width: 112px; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .gesture-row, .gesture-row.fixed { grid-template-columns: 1fr auto; }
+  .gesture-sentence { grid-column: 1 / -1; order: 3; }
+}

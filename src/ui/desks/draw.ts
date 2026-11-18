@@ -1,5 +1,6 @@
 import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
 import { DEFAULT_TONE_SCREEN, openLayerTone } from '../layertone';
+import { gesturePrefs } from '../../app/gestureprefs';
 import { DEFAULT_BRUSH, entry, PASS_STYLE, withGPenPressure, type BrushEntry, type GPenPressure } from '../../draw/brushes';
 import { AssistLock, DEFAULT_RULER, focusLines, speedLines, type GenLine, type Ruler, type RulerKind } from '../../draw/assist';
 import { dabsForStroke } from '../../engine/brush/dabs';
@@ -2356,12 +2357,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         else changeSelected('Delete line', () => null);
         return true;
       }
-      if (e.key === '[' || e.key === ']') {
+      const bigger = gesturePrefs.matches('key.brush.bigger', e);
+      if (bigger || gesturePrefs.matches('key.brush.smaller', e)) {
         const t = sizeTool() ?? (mode.tool === 'lines' ? 'ink' : null);
         if (!t) return false;
         const pt = sizeIn(t) * PT;
         const step = Math.max(SIZE_STEP, pt * 0.12);
-        ink.sizes[brushKey(t)] = clampToolValue(pt + (e.key === ']' ? step : -step), MIN_SIZE, maxSize(t), SIZE_STEP);
+        ink.sizes[brushKey(t)] = clampToolValue(pt + (bigger ? step : -step), MIN_SIZE, maxSize(t), SIZE_STEP);
         saveInk();
         ctx.chrome();
         ctx.request();

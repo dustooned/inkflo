@@ -22,6 +22,11 @@ export interface GestureRow {
   /** What it does, by action id (see `ACTIONS`). */
   actionId: string;
   enabledByDefault: boolean;
+  /**
+   * True only when the desk reads this row's live binding. Other rows are listed so people can
+   * learn them, but are fixed: letting someone change a binding nothing obeys would make the page lie.
+   */
+  adjustable?: boolean;
   /** Touch and pointer rows can only be rebound to one of these. Key rows accept any valid chord. */
   options?: readonly string[];
 }
@@ -54,15 +59,15 @@ export const ACTIONS: ReadonlyMap<string, ActionDef> = new Map([
   ...STAGES.map((s) => action(`desk.${s}`, `Go to ${s}`, `open the ${s} desk`)),
 ]);
 
-const key = (id: string, spec: string, actionId: string, surface: Surface = 'global'): GestureRow =>
-  ({ id, surface, input: 'key', spec, actionId, enabledByDefault: true });
+const key = (id: string, spec: string, actionId: string, surface: Surface = 'global', adjustable = true): GestureRow =>
+  ({ id, surface, input: 'key', spec, actionId, enabledByDefault: true, adjustable });
 
 export const GESTURES: readonly GestureRow[] = [
   // touch
   { id: 'touch.pan', surface: 'global', input: 'touch', spec: 'One-finger drag', actionId: 'view.pan', enabledByDefault: true },
   { id: 'touch.pinch', surface: 'global', input: 'touch', spec: 'Two-finger pinch', actionId: 'view.zoomRotate', enabledByDefault: true },
-  { id: 'touch.undo', surface: 'global', input: 'touch', spec: 'Two-finger tap', actionId: 'edit.undo', enabledByDefault: true },
-  { id: 'touch.redo', surface: 'global', input: 'touch', spec: 'Three-finger tap', actionId: 'edit.redo', enabledByDefault: true },
+  { id: 'touch.undo', surface: 'global', input: 'touch', spec: 'Two-finger tap', actionId: 'edit.undo', enabledByDefault: true, adjustable: true },
+  { id: 'touch.redo', surface: 'global', input: 'touch', spec: 'Three-finger tap', actionId: 'edit.redo', enabledByDefault: true, adjustable: true },
   { id: 'touch.menu', surface: 'global', input: 'touch', spec: 'Long press', actionId: 'menu.canvas', enabledByDefault: true },
   { id: 'touch.tooloptions', surface: 'global', input: 'touch', spec: 'Press and hold a tool', actionId: 'tool.options', enabledByDefault: true },
   // pointer
@@ -77,11 +82,11 @@ export const GESTURES: readonly GestureRow[] = [
   key('key.undo', 'Mod+Z', 'edit.undo'),
   key('key.redo', 'Mod+Shift+Z', 'edit.redo'),
   key('key.redo.alt', 'Mod+Y', 'edit.redo'),
-  key('key.copy', 'Mod+C', 'edit.copy'),
-  key('key.paste', 'Mod+V', 'edit.paste'),
+  key('key.copy', 'Mod+C', 'edit.copy', 'global', false),
+  key('key.paste', 'Mod+V', 'edit.paste', 'global', false),
   key('key.layout', 'Tab', 'layout.toggle'),
   key('key.fit', '0', 'view.fit'),
-  key('key.cancel', 'Escape', 'cancel'),
+  key('key.cancel', 'Escape', 'cancel', 'global', false),
   ...STAGES.map((s, i) => key(`key.desk.${s}`, String(i + 1), `desk.${s}`)),
   key('key.brush.bigger', ']', 'brush.bigger', 'draw'),
   key('key.brush.smaller', '[', 'brush.smaller', 'draw'),
@@ -111,6 +116,24 @@ export function parseChord(spec: string): { mods: string[]; key: string } | null
 export function canonicalChord(spec: string): string | null {
   const c = parseChord(spec);
   return c ? [...c.mods, c.key].join('+') : null;
+}
+
+/** Does this key event press this chord? Modifiers must match exactly; `Mod` is Ctrl or Cmd. */
+export function chordMatches(spec: string, e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): boolean {
+  const c = parseChord(spec);
+  if (!c) return false;
+  const pressed = e.key === ' ' ? 'Space' : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  return pressed === c.key
+    && (e.ctrlKey || e.metaKey) === c.mods.includes('Mod')
+    && e.altKey === c.mods.includes('Alt')
+    && e.shiftKey === c.mods.includes('Shift');
+}
+
+/** The chord a key event makes, for capturing a new binding. Null for a bare modifier press. */
+export function chordOf(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): string | null {
+  if (['Control', 'Meta', 'Alt', 'Shift', 'AltGraph', 'Dead', 'Unidentified'].includes(e.key)) return null;
+  const key = e.key === ' ' ? 'Space' : e.key;
+  return canonicalChord([...(e.ctrlKey || e.metaKey ? ['Mod'] : []), ...(e.altKey ? ['Alt'] : []), ...(e.shiftKey ? ['Shift'] : []), key].join('+'));
 }
 
 /** What the person sees on a KeyCap: `Mod` becomes Ctrl or Cmd, `Escape` becomes Esc. */

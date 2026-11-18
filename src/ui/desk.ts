@@ -14,6 +14,7 @@ import { glyphEl, icon, iconFor } from './icons';
 import { openManual } from './manual';
 import { MARK_EVENT } from '../render/marks';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
+import { gesturePrefs } from '../app/gestureprefs';
 import { h, slider, toast } from './dom';
 import { openModal } from './modal';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
@@ -461,7 +462,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     if (pinch && e.pointerId === pinch.third) return;
     if (pinch && (e.pointerId === primaryPointer || e.pointerId === pinch.id)) {
       if (!pinch.moved && e.type === 'pointerup' && performance.now() - pinch.at < 300) {
-        if (pinch.third === undefined) studio.undo(); else studio.redo();
+        if (pinch.third === undefined) { if (gesturePrefs.get('touch.undo')?.enabled) studio.undo(); }
+        else if (gesturePrefs.get('touch.redo')?.enabled) studio.redo();
       }
       const remaining = e.pointerId === primaryPointer ? pinch.b : pinch.a;
       if (e.pointerId === primaryPointer) primaryPointer = pinch.id;
@@ -1068,17 +1070,12 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
     const t = e.target as HTMLElement | null;
     const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    const redoKey = gesturePrefs.matches('key.redo', e) || gesturePrefs.matches('key.redo.alt', e);
+    if (redoKey || gesturePrefs.matches('key.undo', e)) {
       if (typing) return;
       e.preventDefault();
-      if (e.shiftKey) studio.redo();
+      if (redoKey) studio.redo();
       else studio.undo();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
-      if (typing) return;
-      e.preventDefault();
-      studio.redo();
       return;
     }
     if (e.key === 'Escape' && message.clearHint()) { e.preventDefault(); return; }
@@ -1089,7 +1086,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     }
     if (typing || t?.closest('.layer-picker')) return;
     // Tab toggles the layout only when nothing has keyboard focus, so Tab still moves focus
-    if (e.key === 'Tab' && !e.shiftKey && (document.activeElement === document.body || document.activeElement === null)) {
+    if (gesturePrefs.matches('key.layout', e) && (document.activeElement === document.body || document.activeElement === null)) {
       e.preventDefault();
       toggleLayout();
       return;
@@ -1103,12 +1100,16 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       return;
     }
     if (primaryPointer !== null) return;
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const n = Number(e.key);
-    if (n >= 1 && n <= 5) {
-      go(`#desk/${book.id}/${page.id}/${STAGES[n - 1]}`);
+    const deskKey = STAGES.find((s) => gesturePrefs.matches(`key.desk.${s}`, e));
+    if (deskKey) {
+      go(`#desk/${book.id}/${page.id}/${deskKey}`);
       return;
     }
+    if (gesturePrefs.matches('key.fit', e)) {
+      resetView();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     for (const tool of mode.tools) {
       const v = tool.variants?.find((x) => x.key?.toLowerCase() === k);
@@ -1121,9 +1122,6 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         selectTool(tool.id);
         return;
       }
-    }
-    if (e.key === '0') {
-      resetView();
     }
   };
   const onKeyUp = (e: KeyboardEvent) => {

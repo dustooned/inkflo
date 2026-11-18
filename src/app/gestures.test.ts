@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, GESTURES, actionOf, canonicalChord, formatSpec, sentence } from './gestures';
+import { ACTIONS, GESTURES, actionOf, canonicalChord, chordMatches, chordOf, formatSpec, sentence } from './gestures';
 import { GESTURE_PREFS_KEY, createGesturePrefs, parseOverrides, type StoreLike } from './gestureprefs';
 
 const memoryStore = (initial?: string): StoreLike & { data: Map<string, string> } => {
@@ -48,6 +48,53 @@ describe('chords', () => {
     expect(formatSpec('Mod+Shift+Z')).toBe('Ctrl+Shift+Z');
     expect(formatSpec('Mod+Shift+Z', true)).toBe('Cmd+Shift+Z');
     expect(formatSpec('Escape')).toBe('Esc');
+  });
+});
+
+describe('matching key events', () => {
+  const ev = (key: string, mods: Partial<Record<'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey', boolean>> = {}) =>
+    ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+  it('treats Mod as Ctrl or Cmd and needs the other modifiers exactly', () => {
+    expect(chordMatches('Mod+Z', ev('z', { ctrlKey: true }))).toBe(true);
+    expect(chordMatches('Mod+Z', ev('z', { metaKey: true }))).toBe(true);
+    expect(chordMatches('Mod+Z', ev('Z', { ctrlKey: true, shiftKey: true }))).toBe(false);
+    expect(chordMatches('Mod+Shift+Z', ev('Z', { ctrlKey: true, shiftKey: true }))).toBe(true);
+    expect(chordMatches('Tab', ev('Tab'))).toBe(true);
+    expect(chordMatches('Tab', ev('Tab', { altKey: true }))).toBe(false);
+    expect(chordMatches('0', ev('0'))).toBe(true);
+    expect(chordMatches('Space', ev(' '))).toBe(true);
+    expect(chordMatches('nonsense chord', ev('x'))).toBe(false);
+  });
+  it('builds a chord from a key event, and ignores a bare modifier', () => {
+    expect(chordOf(ev('z', { ctrlKey: true, shiftKey: true }))).toBe('Mod+Shift+Z');
+    expect(chordOf(ev('Tab', { altKey: true }))).toBe('Alt+Tab');
+    expect(chordOf(ev(' '))).toBe('Space');
+    expect(chordOf(ev('Shift', { shiftKey: true }))).toBeNull();
+    expect(chordOf(ev('Control', { ctrlKey: true }))).toBeNull();
+  });
+  it('the live binding decides what a key does', () => {
+    const p = prefsOn(memoryStore());
+    expect(p.matches('key.fit', ev('0'))).toBe(true);
+    p.set('key.fit', { spec: 'Shift+9' });
+    expect(p.matches('key.fit', ev('0'))).toBe(false);
+    expect(p.matches('key.fit', ev('9', { shiftKey: true }))).toBe(true);
+    p.set('key.fit', { enabled: false });
+    expect(p.matches('key.fit', ev('9', { shiftKey: true }))).toBe(false);
+    expect(p.matches('touch.undo', ev('x'))).toBe(false);
+  });
+});
+
+describe('fixed rows', () => {
+  it('lists gestures the desk does not read as fixed, and refuses to change them', () => {
+    const fixed = GESTURES.filter((g) => !g.adjustable).map((g) => g.id);
+    expect(fixed).toEqual(expect.arrayContaining(['key.copy', 'key.paste', 'key.cancel', 'touch.pinch', 'wheel.zoom', 'pointer.menu']));
+    const p = prefsOn(memoryStore());
+    expect(p.set('key.copy', { spec: 'Mod+K' })).toEqual({ ok: false, reason: 'fixed' });
+    expect(p.set('touch.pinch', { enabled: false })).toEqual({ ok: false, reason: 'fixed' });
+    expect(p.get('touch.pinch')?.enabled).toBe(true);
+  });
+  it('ignores stored overrides for fixed rows', () => {
+    expect(parseOverrides(JSON.stringify({ v: 1, bindings: { 'key.copy': { spec: 'Mod+K' }, 'touch.pinch': { enabled: false } } }))).toEqual({});
   });
 });
 

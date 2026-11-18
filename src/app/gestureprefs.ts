@@ -1,4 +1,4 @@
-import { GESTURES, canonicalChord, gestureRow, sentence, type GestureRow, type Surface } from './gestures';
+import { GESTURES, canonicalChord, chordMatches, gestureRow, sentence, type GestureRow, type Surface } from './gestures';
 
 /**
  * Device preferences for gestures: which are on and which chord a key row uses. Like the other
@@ -17,7 +17,7 @@ export interface Binding extends GestureRow {
   enabled: boolean;
 }
 
-export type SetResult = { ok: true } | { ok: false; reason: 'unknown' | 'invalid' | 'conflict'; with?: string };
+export type SetResult = { ok: true } | { ok: false; reason: 'unknown' | 'fixed' | 'invalid' | 'conflict'; with?: string };
 
 export interface StoreLike {
   getItem(key: string): string | null;
@@ -55,6 +55,7 @@ export function parseOverrides(raw: string | null): Overrides {
   const out: Overrides = {};
   const live = new Map(GESTURES.map((g) => [g.id, { spec: g.spec, enabled: g.enabledByDefault }]));
   for (const row of GESTURES) {
+    if (!row.adjustable) continue;
     const v = (stored as Record<string, unknown>)[row.id];
     if (!v || typeof v !== 'object') continue;
     const item: StoredBinding = {};
@@ -99,6 +100,7 @@ export function createGesturePrefs(storeOf: () => StoreLike | undefined = () => 
     set(id: string, patch: StoredBinding): SetResult {
       const row = gestureRow(id);
       if (!row) return { ok: false, reason: 'unknown' };
+      if (!row.adjustable) return { ok: false, reason: 'fixed' };
       const next: StoredBinding = { ...overrides[id] };
       if (patch.spec !== undefined) {
         const spec = validSpec(row, patch.spec);
@@ -123,6 +125,11 @@ export function createGesturePrefs(storeOf: () => StoreLike | undefined = () => 
       if (id === undefined) overrides = {};
       else delete overrides[id];
       save();
+    },
+    /** Is this key row on, and is this the chord that was pressed? The desk asks this instead of testing keys itself. */
+    matches(id: string, e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): boolean {
+      const b = get(id);
+      return !!b && b.enabled && b.input === 'key' && chordMatches(b.spec, e);
     },
     /** "<gesture> will <action>." from the live binding. */
     describe(id: string, mac = false): string | undefined {
