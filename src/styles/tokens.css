@@ -5,6 +5,16 @@
  *
  * Theme: <html data-theme="light|dark"> forces one; no attribute follows the system.
  */
+
+/* The interface font: one variable file covers every weight the app uses (licence in public/fonts). */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/InterVariable.ttf') format('truetype');
+}
+
 :root {
   color-scheme: light;
   --tap: 44px;
