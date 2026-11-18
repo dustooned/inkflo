@@ -3,6 +3,7 @@ import { layoutOf } from '../geom/carve';
 import { gridCuts } from '../geom/composition';
 import type { DeskCtx } from './desk';
 import { confirmDialog, h } from './dom';
+import { openModal } from './modal';
 
 export function openGrid(ctx: DeskCtx, current: ModularGrid): void {
   const { page, book, studio } = ctx;
@@ -13,7 +14,7 @@ export function openGrid(ctx: DeskCtx, current: ModularGrid): void {
   const error = h('p', { class: 'warnline', role: 'status', hidden: true });
   const field = (label: string, control: HTMLElement) => h('label', { class: 'field' }, label, control);
   const action = (label: string, onclick: () => void) => h('button', { class: 'btn', type: 'button', onclick }, label);
-  const close = () => { d.close(); ctx.chrome(); ctx.request(); };
+  const close = () => { modal.close('closed'); ctx.chrome(); ctx.request(); };
 
   function read(): ModularGrid | undefined {
     const parse = (s: string) => s.trim().split(/\s*,\s*|\s+/).map(Number);
@@ -63,9 +64,9 @@ export function openGrid(ctx: DeskCtx, current: ModularGrid): void {
     close();
   }
 
-  const d = h('dialog', { 'aria-label': 'Modular grid' },
-    h('header', {}, h('h2', {}, 'Modular grid')),
-    h('div', { class: 'content stack' },
+  const modal = openModal<'close' | 'closed'>({
+    title: 'Modular grid', ariaLabel: 'Modular grid', contentClass: 'stack', cancelId: 'close',
+    content: [
       field('Column weights', columns), field('Row weights', rows), field('Gutter (inches)', gutter),
       h('p', { class: 'note' }, 'Use relative sizes. For example, 1, 2, 1 makes the centre twice as wide as the edges. Save guides and cut only the cell edges you need with the Knife.'),
       error,
@@ -78,17 +79,16 @@ export function openGrid(ctx: DeskCtx, current: ModularGrid): void {
       action('Carve every cell on this page', () => void carve()),
       action('Set as book grid', setFixed),
       h('p', { class: 'note' }, 'The book grid carves new pages and empty pages without a custom grid. Edit individual cuts to vary the rhythm.'),
-      page.grid ? action('Clear page guides', () => {
+      ...(page.grid ? [action('Clear page guides', () => {
         studio.editPage(page, 'Clear page grid', ['grid'], (pg) => { delete pg.grid; });
         close();
-      }) : null,
-      book.fixedGrid ? action('Turn off book grid', () => {
+      })] : []),
+      ...(book.fixedGrid ? [action('Turn off book grid', () => {
         const before = book.fixedGrid;
         studio.run({ label: 'Turn off book grid', do: () => { delete book.fixedGrid; }, undo: () => (book.fixedGrid = before) });
         close();
-      }) : null),
-    h('footer', {}, action('Close', () => d.close())));
-  d.addEventListener('close', () => d.remove());
-  document.body.append(d);
-  d.showModal();
+      })] : []),
+    ],
+    actions: [{ id: 'close', label: 'Close' }],
+  });
 }
