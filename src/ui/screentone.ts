@@ -7,6 +7,7 @@ import { drawScreenTone } from '../render/tone';
 import type { DeskCtx } from './desk';
 import { h, seg, slider, toast } from './dom';
 import { icon } from './icons';
+import { openModal } from './modal';
 import { createMarquee, MARQUEE_SHAPES, marqueeShape, type MarqueeShape } from './marquee';
 
 const PRESETS = [
@@ -227,34 +228,32 @@ export function screentoneTool(ctx: DeskCtx, select: (id: string) => void, selec
       paintStops();
       redraw();
     };
-    const dialog = h('dialog', { class: 'tone-dialog', 'aria-label': entry ? 'Edit screentone' : 'Screentone settings' },
-      h('header', {}, h('h2', {}, entry ? (grad ? 'Edit gradient tone' : 'Edit screentone') : grad ? 'Gradient tone settings' : 'Screentone settings')),
-      h('div', { class: 'content' }, preview,
-        grad ? null : h('div', { class: 'tone-presets', role: 'group', 'aria-label': 'Screentone presets' }, PRESETS.map(({ name, ...preset }) =>
-          h('button', { type: 'button', class: 'btn', onclick: () => { Object.assign(value, preset); update(); } }, name))),
-        options, stopsBox),
-      h('footer', {}, h('button', { type: 'button', class: 'btn', onclick: () => dialog.close() }, 'Cancel'),
-        h('button', { type: 'button', class: 'btn primary', onclick: () => {
-          if (entry) studio.editPage(page, grad ? 'Edit gradient tone' : 'Edit screentone', ['groups'], (p) => {
-            const layer = p.groups.find((item) => item.id === entry.group.id)?.layers.find((item) => item.id === entry.layer.id);
-            if (!layer) return;
-            const next: ScreenTone = { ...value };
-            if (grad && value.gradient) next.gradient = { ...value.gradient, kind: grad.kind, stops: grad.stops.map((s) => ({ ...s })) };
-            const list = tonesOf(layer);
-            list[areaIndex] = next;
-            setTones(layer, list);
-          });
-          else {
-            const { gradient: _g, ...flat } = value;
-            draft = flat;
-            if (grad) draftGradient = { kind: grad.kind, stops: grad.stops.map((s) => ({ ...s })) };
-          }
-          dialog.close(); ctx.chrome(); ctx.request();
-        } }, entry ? 'Apply' : 'Use tone')));
-    dialog.addEventListener('close', () => dialog.remove());
-    document.body.append(dialog);
+    openModal<'cancel' | 'apply'>({
+      title: entry ? (grad ? 'Edit gradient tone' : 'Edit screentone') : grad ? 'Gradient tone settings' : 'Screentone settings',
+      className: 'tone-dialog', ariaLabel: entry ? 'Edit screentone' : 'Screentone settings',
+      content: [preview,
+        ...(grad ? [] : [h('div', { class: 'tone-presets', role: 'group', 'aria-label': 'Screentone presets' }, PRESETS.map(({ name, ...preset }) =>
+          h('button', { type: 'button', class: 'btn', onclick: () => { Object.assign(value, preset); update(); } }, name)))]),
+        options, stopsBox],
+      actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'apply', label: entry ? 'Apply' : 'Use tone', primary: true, run: () => {
+        if (entry) studio.editPage(page, grad ? 'Edit gradient tone' : 'Edit screentone', ['groups'], (p) => {
+          const layer = p.groups.find((item) => item.id === entry.group.id)?.layers.find((item) => item.id === entry.layer.id);
+          if (!layer) return;
+          const next: ScreenTone = { ...value };
+          if (grad && value.gradient) next.gradient = { ...value.gradient, kind: grad.kind, stops: grad.stops.map((s) => ({ ...s })) };
+          const list = tonesOf(layer);
+          list[areaIndex] = next;
+          setTones(layer, list);
+        });
+        else {
+          const { gradient: _g, ...flat } = value;
+          draft = flat;
+          if (grad) draftGradient = { kind: grad.kind, stops: grad.stops.map((s) => ({ ...s })) };
+        }
+      } }],
+      onClose: (id) => { if (id === 'apply') { ctx.chrome(); ctx.request(); } },
+    });
     update();
-    dialog.showModal();
   }
 
   /** The colour swatch: the colour the next tone gets (Match fill overrides it). */
