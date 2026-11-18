@@ -1059,3 +1059,17 @@ details > summary:hover { color: var(--text); }
 .sheet-heading { margin: 6px 0 0; font-size: 13px; }
 .option.sheet-char { align-items: center; }
 .sheet-actions { display: flex; gap: 8px; }
+
+/* export center: layout that used to be inline style attributes */
+.xd-row-wrap-end { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+.xd-row-end-wrap { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.xd-end { display: flex; justify-content: flex-end; }
+.option.xd-stack { flex-direction: column; align-items: stretch; }
+.xd-row-between { display: flex; gap: 12px; align-items: end; justify-content: space-between; margin-top: 6px; }
+.xd-page { width: 60px; }
+.xd-grid8 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+.xd-end-top { display: flex; justify-content: flex-end; margin-top: 6px; }
+.xd-row-gap10 { display: flex; gap: 10px; flex-wrap: wrap; }
+.xd-row-center { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.xd-row-start { display: flex; gap: 12px; align-items: flex-start; }
+.xd-grid10 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }

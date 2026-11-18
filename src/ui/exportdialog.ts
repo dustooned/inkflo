@@ -17,6 +17,7 @@ import { DEFAULT_MOTION, type MotionOptions } from '../io/to2dope';
 import { exportTwoInks, inkMix, twoInkProof, type InkPair } from '../io/twoink';
 import { letterBox } from '../render/caption';
 import { download, h, seg } from './dom';
+import { openModal } from './modal';
 import { bookFileStem, pageFileStem } from '../io/publication';
 
 type Tab = 'print' | 'files' | 'apps' | 'scroll';
@@ -118,7 +119,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const cards = h('div', { class: 'modes', role: 'radiogroup', 'aria-label': 'How it is printed' },
       PRINT_MODES.map((m) => h('button', { type: 'button', role: 'radio', class: 'option modecard', 'aria-checked': String(m.id === pr.mode), onclick: () => { pr.mode = m.id; render(); } },
         h('div', {}, h('b', {}, m.title), h('p', {}, m.body)))));
-    const settings = h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;align-items:end' });
+    const settings = h('div', { class: 'xd-row-wrap-end' });
     if (pr.mode === 'booklet' || pr.mode === 'minizine') settings.append(select('Paper', [['letter', 'Letter'], ['a4', 'A4']], pr.paper, (v) => (pr.paper = v)));
     if (pr.mode === 'shop') settings.append(check('Crop marks', pr.marks, (v) => (pr.marks = v)));
     const dpiChoices = [...new Set([book!.dpi, 300, 600])].sort((a, b) => a - b);
@@ -135,8 +136,8 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       spineIn.addEventListener('change', () => { const v = Number(spineIn.value); cover.spine = Number.isFinite(v) && v >= 0 ? v : estimate; });
       coverBlock = h('div', { class: 'sec stack' },
         h('h4', { class: 'label' }, 'Cover wrap'),
-        h('p', { class: 'note', style: 'margin:0' }, `One flat PDF page: back cover, spine and front cover. The first page is the front and the last is the back.${spec.binding === 'hardcover' ? ' Includes the board wrap.' : ''} Ask your printer for the real spine width; ${estimate} in is an estimate.`),
-        h('div', { style: 'display:flex;gap:12px;align-items:end;flex-wrap:wrap' },
+        h('p', { class: 'note flush' }, `One flat PDF page: back cover, spine and front cover. The first page is the front and the last is the back.${spec.binding === 'hardcover' ? ' Includes the board wrap.' : ''} Ask your printer for the real spine width; ${estimate} in is an estimate.`),
+        h('div', { class: 'xd-row-end-wrap' },
           h('label', { class: 'field' }, 'Spine width (in)', spineIn),
           btn('Make the cover PDF', () => void run('Cover PDF', () => exportCoverPdf(studio, { spine: cover.spine ?? estimate, marks: pr.marks, dpi: pr.dpi }, (m) => (progress.textContent = m)), `${name}-cover.pdf`))));
     }
@@ -144,7 +145,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       plan.order.map((s) => h('span', { class: `chip${s === null ? ' blank' : ''}`, title: s === null ? 'Blank page, added' : `Page ${s + 1}` }, s === null ? 'blank' : String(s + 1))));
     const file = `${name}-${pr.mode === 'shop' ? 'print' : pr.mode === 'pod' ? 'interior' : pr.mode}.pdf`;
     return h('div', { class: 'stack' },
-      h('p', { class: 'note', style: 'margin:0' }, `${kind ? kind.label : 'Custom'}: ${book!.pages[0]!.widthIn}″ × ${book!.pages[0]!.heightIn}″, ${spec.bleed}″ bleed. Change it in the Print desk.`),
+      h('p', { class: 'note flush' }, `${kind ? kind.label : 'Custom'}: ${book!.pages[0]!.widthIn}″ × ${book!.pages[0]!.heightIn}″, ${spec.bleed}″ bleed. Change it in the Print desk.`),
       cards, settings,
       h('div', {}, h('h4', { class: 'label' }, 'Page order'), order),
       plan.message ? h('p', { class: 'warnline' }, plan.message) : null,
@@ -153,13 +154,13 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         ? h('details', {}, h('summary', {}, issues.length + (issues.length === 1 ? ' page to review' : ' pages to review')),
           ...issues.map(({ page, number, warnings }) => h('section', { class: 'print-review-page' },
             h('button', { class: 'btn', type: 'button', onclick: () => {
-              d.close();
+              modal.close('closed');
               location.hash = '#desk/' + book!.id + '/' + page.id + '/print';
             } }, 'Review page ' + number),
             h('ul', { class: 'check' }, warnings.map((c) => h('li', { class: 'warn' }, c.text))))))
-        : h('p', { class: 'note', style: 'margin:0' }, 'Preflight: nothing to fix.'),
+        : h('p', { class: 'note flush' }, 'Preflight: nothing to fix.'),
       coverBlock,
-      h('div', { style: 'display:flex;justify-content:flex-end' },
+      h('div', { class: 'xd-end' },
         btn('Make the PDF', () => void run('Print PDF', () => exportPrintPdf(studio, { ...pr }, (m) => (progress.textContent = m)), file), true)),
     );
   }
@@ -184,7 +185,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       if (!bytes) return null;
       image = await createImageBitmap(new Blob([bytes as BlobPart], { type: 'image/png' }));
       if (cache) {
-        if (!d.open) { image.close(); return null; }
+        if (modal.closed) { image.close(); return null; }
         const existing = cache.get(key);
         if (existing) { image.close(); image = existing; }
         else cache.set(key, image);
@@ -431,7 +432,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
   // ---- Web image: one page (a strip) as a PNG sized in pixels
   const web = { page: currentPage, width: WEB_WIDTH, format: 'png' as WebFormat, quality: DEFAULT_QUALITY };
   function webImage(): HTMLElement {
-    const info = h('p', { class: 'note', 'aria-live': 'polite', style: 'margin:0' });
+    const info = h('p', { class: 'note flush', 'aria-live': 'polite' });
     const preview = h('div', { class: 'export-previews' });
     const go = btn('Download image', () => {
       const page = book!.pages[web.page - 1]!;
@@ -458,7 +459,7 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     const presets = h('div', { class: 'type-toggles' }, ([[1080, 'Phone 1080'], [1600, 'Web 1600'], [2400, 'Large 2400']] as const).map(([w, label]) =>
       h('button', { class: 'btn', type: 'button', onclick: () => { web.width = w; widthField.value = String(w); refresh(); } }, label)));
     queueMicrotask(refresh);
-    return h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+    return h('div', { class: 'option xd-stack' },
       h('b', {}, 'Web image'),
       h('p', {}, 'One page, such as a strip, as a single image sized in pixels for phones, social posts and websites. Lettering and your Artist mark included. PNG is sharpest; WebP and JPG make much smaller files.'),
       h('div', { class: 'export-app-fields' }, h('label', { class: 'field' }, 'Page', pageField), h('label', { class: 'field' }, 'Width (px)', widthField)),
@@ -473,15 +474,15 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
           return h('label', { class: 'field' }, 'Quality ', out, q);
         })() : null),
       info,
-      h('div', { style: 'display:flex;gap:12px;align-items:end;justify-content:space-between;margin-top:6px' }, preview, go));
+      h('div', { class: 'xd-row-between' }, preview, go));
   }
 
   // ---- Game engine package: manifest, panel cut-outs, art and lettering apart, dialogue script
   const game = { from: 1, to: book.pages.length, width: 2048, dialogue: 'both' as DialogueFormat };
   function gamePackage(): HTMLElement {
-    const info = h('p', { class: 'note', 'aria-live': 'polite', style: 'margin:0' });
-    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.from, 'aria-label': 'From page', style: 'width:60px' });
-    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.to, 'aria-label': 'To page', style: 'width:60px' });
+    const info = h('p', { class: 'note flush', 'aria-live': 'polite' });
+    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.from, 'aria-label': 'From page', class: 'xd-page' });
+    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: game.to, 'aria-label': 'To page', class: 'xd-page' });
     const clampPage = (v: number) => Math.max(1, Math.min(book!.pages.length, Math.round(v || 1)));
     const refresh = () => {
       const a = Math.min(game.from, game.to), b = Math.max(game.from, game.to);
@@ -502,26 +503,26 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
       ['dialogue.yarn / .ink', 'the script for Yarn Spinner or Ink, tagged by panel'],
       ['README.md', 'loading examples for Unity, Godot and Unreal'],
     ];
-    return h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+    return h('div', { class: 'option xd-stack' },
       h('b', {}, 'Game engine package (.zip)'),
       h('p', {}, 'For Unity, Godot, Unreal, Ren’Py or your own reader: everything a game needs to show the comic panel by panel, with dialogue it can voice or restyle.'),
       h('dl', { class: 'game-contents' }, contents.flatMap(([f, d]) => [h('dt', {}, h('code', {}, f)), h('dd', {}, d)])),
-      h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px' },
+      h('div', { class: 'xd-grid8' },
         h('label', { class: 'field' }, 'Pages', h('span', { class: 'page-range' }, from, h('span', {}, 'to'), to)),
         select('Page width', [[1024, '1024 px'], [2048, '2048 px'], [4096, '4096 px']], game.width, (v) => { game.width = v; refresh(); }),
         select('Dialogue', [['both', 'Yarn and Ink'], ['yarn', 'Yarn Spinner'], ['ink', 'Ink']], game.dialogue, (v) => (game.dialogue = v))),
       info,
-      h('div', { style: 'display:flex;justify-content:flex-end;margin-top:6px' },
+      h('div', { class: 'xd-end-top' },
         btn('Export', () => void run('Game package', () => exportGamePackage(studio, { range: { from: Math.min(game.from, game.to), to: Math.max(game.from, game.to) }, width: game.width, dialogue: game.dialogue }, (m) => (progress.textContent = m)), `${name}-game.zip`), true)));
   }
 
   function filesTab(): HTMLElement {
-    const sepBoxes = h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' },
+    const sepBoxes = h('div', { class: 'xd-row-gap10' },
       (Object.keys(SEPARATION_LABEL) as Separation[]).map((s) => check(SEPARATION_LABEL[s], fo.seps.includes(s), (on) => {
         fo.seps = on ? [...fo.seps, s] : fo.seps.filter((x) => x !== s);
       })));
-    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.from, 'aria-label': 'From page', style: 'width:60px' });
-    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.to, 'aria-label': 'To page', style: 'width:60px' });
+    const from = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.from, 'aria-label': 'From page', class: 'xd-page' });
+    const to = h('input', { type: 'number', min: 1, max: book!.pages.length, value: fo.range!.to, 'aria-label': 'To page', class: 'xd-page' });
     from.addEventListener('change', () => (fo.range = { from: Number(from.value) || 1, to: fo.range!.to }));
     to.addEventListener('change', () => (fo.range = { from: fo.range!.from, to: Number(to.value) || book!.pages.length }));
     const range = h('label', { class: 'field' }, 'Pages', h('span', { class: 'page-range' }, from, h('span', {}, 'to'), to));
@@ -539,19 +540,19 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         filesPreview.replaceChildren(...(figs.length ? figs : [h('p', { class: 'note' }, 'Tick at least one kind of page to preview it.')]));
       });
     };
-    const pageImages = h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
+    const pageImages = h('div', { class: 'option xd-stack' },
         h('b', {}, 'Page images'),
         h('p', {}, 'Finished pages, or separations for colourists, inkers and letterers: inks only, colours only, pencils only, lettering only. Each kind goes in its own folder.'),
         sepBoxes,
-        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px' },
+        h('div', { class: 'xd-grid8' },
           select('Format', [['png', 'PNG'], ['jpg', 'JPG'], ['webp', 'WebP']], fo.format, (v) => (fo.format = v)),
           select('Resolution', [[book!.dpi, `${book!.dpi} dpi (book)`], ...([150, 72] as const).filter((d) => d !== book!.dpi).map((d): [number, string] => [d, `${d} dpi (screen)`])], dpi, (v) => (dpi = v)),
           select('Separations on', [['white', 'White'], ['transparent', 'Transparent']], fo.background, (v) => (fo.background = v)),
           select('Colour', [['colour', 'Colour'], ['grey', 'Greyscale'], ['hard', 'Inks: hard black']], fo.colour, (v) => (fo.colour = v)),
           range),
-        h('div', { style: 'display:flex;gap:10px;align-items:center;margin-top:8px' },
+        h('div', { class: 'xd-row-center' },
           check('Panel borders on inks', fo.borders, (v) => (fo.borders = v)),
-          h('span', { style: 'flex:1' }),
+          h('span', { class: 'spacer' }),
           btn('Export', () => {
             if (!fo.seps.length) {
               progress.textContent = 'Tick at least one kind of page.';
@@ -577,12 +578,12 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         btn('Export', () => void run('Layers', () => exportLayerFiles(studio, fo.range, (m) => (progress.textContent = m)), `${name}-layers.zip`))),
       twoInkOptions(from, to)],
       apps: () => [
-      h('div', { class: 'option', style: 'flex-direction:column;align-items:stretch' },
-        h('div', { style: 'display:flex;gap:12px;align-items:flex-start' },
+      h('div', { class: 'option xd-stack' },
+        h('div', { class: 'xd-row-start' },
           h('div', {}, h('b', {}, 'Motion comic for 2Dope (.2dope)'),
             h('p', {}, 'A 2Dope project: each page a comp with one layer per panel and balloon, and a camera that reads the book panel by panel.')),
           btn('Export', () => void run('Motion comic', () => exportMotionComic(studio, motion, (m) => (progress.textContent = m)), `${name}-motion.2dope`))),
-        h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px' },
+        h('div', { class: 'xd-grid10' },
           select('Frame', [['wide', '16:9 video'], ['page', 'Page shape']], motion.frame, (v) => (motion.frame = v)),
           select('Resolution', [[100, '100 dpi'], [150, '150 dpi'], [200, '200 dpi']], motion.dpi, (v) => (motion.dpi = v)),
           select('Per panel', [[1.2, '1.2 s'], [2, '2 s'], [3, '3 s'], [4, '4 s']], motion.panelHold, (v) => (motion.panelHold = v)),
@@ -601,12 +602,16 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
         try { localStorage.setItem('inkflo:export-group', v); } catch { /* private mode */ }
         render();
       }, 'Kind of export'),
-      h('p', { class: 'note', style: 'margin:0' }, FILES_NOTE[filesGroup]),
+      h('p', { class: 'note flush' }, FILES_NOTE[filesGroup]),
       ...groups[filesGroup](),
     );
   }
 
-  const body = h('div', { class: 'content' });
+  const modal = openModal<'close' | 'closed'>({
+    title: `Export “${book.title}”`, className: 'exportcenter', ariaLabel: 'Export center', cancelId: 'close', actions: [{ id: 'close', label: 'Close' }],
+    onClose: () => { for (const image of breakImages.values()) image.close(); breakImages.clear(); },
+  });
+  const body = modal.content;
   function render(): void {
     buttons.length = 0;
     body.replaceChildren(
@@ -616,13 +621,5 @@ export function openExport(studio: Studio, start: Tab = 'files', open: ExportOpe
     );
   }
 
-  const d = h('dialog', { class: 'exportcenter', 'aria-label': 'Export center' },
-    h('header', {}, h('h2', {}, `Export “${book.title}”`)),
-    body,
-    h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')),
-  );
-  d.addEventListener('close', () => { d.remove(); for (const image of breakImages.values()) image.close(); breakImages.clear(); });
-  document.body.append(d);
   render();
-  d.showModal();
 }
