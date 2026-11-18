@@ -274,6 +274,7 @@ dialog.brushstudio { width: min(600px, calc(100vw - 32px)); }
 .knobs { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .brush-dynamics { display: grid; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .tone-preview { display: block; width: 100%; height: auto; border-radius: 8px; }
+.tone-dialog .note.flush { margin: 0; }
 .tone-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .adjust-preview { display: block; margin-inline: auto; max-width: 100%; height: auto; background: var(--paper-lift); border: 1px solid var(--line); border-radius: 8px; }
 .screen[data-desk='draw'] .tool { min-height: 44px; padding-block: 6px; }

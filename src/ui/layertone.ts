@@ -4,6 +4,7 @@ import { touchLayer, type PageArt } from '../draw/residency';
 import { drawLayerBitmap } from '../render/page';
 import { drawLayerAsTone } from '../render/tone';
 import { h, slider, toast } from './dom';
+import { openModal } from './modal';
 
 /**
  * Show as tone: a painted layer's greys print as halftone dots of one ink (Clip Studio's layer
@@ -56,22 +57,21 @@ export function openLayerTone(studio: Studio, page: Page, art: PageArt, layerId:
   shape.addEventListener('change', () => { value.shape = shape.value as ToneScreen['shape']; redraw(); });
   const color = h('input', { type: 'color', value: value.color, 'aria-label': 'Ink colour' });
   color.addEventListener('input', () => { value.color = color.value; redraw(); });
-  const dialog = h('dialog', { class: 'tone-dialog', 'aria-label': 'Show as tone' },
-    h('header', {}, h('h2', {}, 'Show as tone'), h('p', { class: 'note' }, `${found.layer.name}: each dot carries the average grey of its cell, in one ink. Your painting stays as it is.`)),
-    h('div', { class: 'content' }, preview, h('p', { class: 'note', style: 'margin:0' }, 'Preview at 200 dpi, centred on the paint. Exports screen at their own resolution.'),
+  openModal<'painted' | 'cancel' | 'apply'>({
+    title: 'Show as tone', className: 'tone-dialog', ariaLabel: 'Show as tone',
+    detail: h('p', { class: 'note' }, `${found.layer.name}: each dot carries the average grey of its cell, in one ink. Your painting stays as it is.`),
+    content: [preview, h('p', { class: 'note flush' }, 'Preview at 200 dpi, centred on the paint. Exports screen at their own resolution.'),
       h('div', { class: 'knobs' },
         h('label', { class: 'mini' }, 'Shape', shape),
         slider('Frequency', 5, 120, 1, value.frequency, (v) => `${v} lpi`, (v) => { value.frequency = v; redraw(); }),
         slider('Angle', 0, 180, 1, value.angle, (v) => `${v}°`, (v) => { value.angle = v; redraw(); }),
-        h('label', { class: 'mini' }, 'Ink colour', color))),
-    h('footer', {},
-      was ? h('button', { class: 'btn', type: 'button', onclick: () => { set('Show layer as painted', undefined); dialog.close(); } }, 'Show as painted') : null,
-      h('span', { class: 'spacer', style: 'flex:1' }),
-      h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel'),
-      h('button', { class: 'btn primary', type: 'button', onclick: () => { set(was ? 'Tone settings' : 'Show layer as tone', value); dialog.close(); } }, was ? 'Apply' : 'Show as tone')));
-  dialog.addEventListener('close', () => dialog.remove());
-  document.body.append(dialog);
-  dialog.showModal();
+        h('label', { class: 'mini' }, 'Ink colour', color))],
+    actions: [
+      ...(was ? [{ id: 'painted' as const, label: 'Show as painted', run: () => { set('Show layer as painted', undefined); } }] : []),
+      { id: 'cancel', label: 'Cancel', spaceBefore: true },
+      { id: 'apply', label: was ? 'Apply' : 'Show as tone', primary: true, run: () => { set(was ? 'Tone settings' : 'Show layer as tone', value); } },
+    ],
+  });
   redraw();
 }
 

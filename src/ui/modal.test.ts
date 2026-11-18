@@ -102,6 +102,8 @@ describe('openModal', () => {
     const header = fake(h.dialog).children[0] as FakeEl;
     expect(tags(header)).toEqual(['h2', 'p']);
     expect(fake(h.content).className).toBe('content stack');
+    const f = openModal({ title: 'T', actions: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B', spaceBefore: true }] });
+    expect(tags(fake(f.footer))).toEqual(['button', 'span', 'button']);
   });
 
   it('marks danger buttons, and has no footer without actions', () => {

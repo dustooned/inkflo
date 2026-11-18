@@ -18,6 +18,8 @@ export interface ModalAction<Id extends string = string> {
   primary?: boolean;
   /** `.btn.danger` */
   danger?: boolean;
+  /** Pushes this button and the ones after it to the right edge of the footer. */
+  spaceBefore?: boolean;
   /** Runs on click before the dialog closes. Return false to keep it open (validation, async work). */
   run?: () => boolean | void;
 }
@@ -79,6 +81,7 @@ export function openModal<Id extends string = string>(options: ModalOptions<Id>)
   if (options.actions?.length) {
     footer = h('footer', {});
     for (const a of options.actions) {
+      if (a.spaceBefore) footer.append(h('span', { class: 'spacer' }));
       const b = h('button', { class: `btn${a.primary ? ' primary' : ''}${a.danger ? ' danger' : ''}`, type: 'button' }, a.label);
       b.addEventListener('click', () => { if (a.run?.() !== false) close(a.id); });
       buttons[a.id] = b;
