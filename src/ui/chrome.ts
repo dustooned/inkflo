@@ -36,4 +36,6 @@ export interface ChromeAction {
   run: (trigger: HTMLElement) => void;
   disabled?: () => boolean;
   pressed?: () => boolean;
+  /** Gesture registry id of the key that does the same thing; its KeyCap shows in menus. */
+  keyId?: string;
 }

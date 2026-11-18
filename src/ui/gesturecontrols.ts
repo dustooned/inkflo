@@ -1,6 +1,7 @@
 import { gesturePrefs, type Binding } from '../app/gestureprefs';
 import { ACTIONS, chordOf, formatSpec, type Surface } from '../app/gestures';
 import { h } from './dom';
+import { isMac } from './keycap';
 import { openModal } from './modal';
 
 /**
@@ -18,8 +19,6 @@ const GROUPS: { id: Surface; label: string }[] = [
   { id: 'caption', label: 'Caption' },
   { id: 'print', label: 'Print' },
 ];
-
-const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 
 export function openGestureControls(): void {
   const mac = isMac();

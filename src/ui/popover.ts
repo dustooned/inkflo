@@ -1,5 +1,6 @@
 import { h, seg, slider } from './dom';
 import { openGestureControls } from './gesturecontrols';
+import { keyText } from './keycap';
 import { prefs, setPrefs, type Backdrop, type Layout, type Theme } from './prefs';
 
 let open: { el: HTMLElement; close: () => void } | null = null;
@@ -99,7 +100,7 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
               setPrefs({ handed: (e.target as HTMLSelectElement).value === 'left' ? 'left' : 'right' });
             } }, h('option', { value: 'right', selected: p.handed === 'right' }, 'Right-handed'),
               h('option', { value: 'left', selected: p.handed === 'left' }, 'Left-handed')))) : null,
-          h('p', { class: 'note', style: 'margin:0 8px 6px' }, opts.shell ? h('kbd', {}, 'Tab') : 'Tab', ' switches between Studio and Focus.')]
+          keyText('key.layout') ? h('p', { class: 'note', style: 'margin:0 8px 6px' }, opts.shell ? h('kbd', {}, keyText('key.layout')!) : keyText('key.layout')!, ' switches between Studio and Focus.') : null]
         : null,
       h('div', { class: 'sep' }),
       h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); openGestureControls(); } }, 'Gestures & shortcuts…'),

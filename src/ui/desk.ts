@@ -15,6 +15,7 @@ import { openManual } from './manual';
 import { MARK_EVENT } from '../render/marks';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
 import { gesturePrefs } from '../app/gestureprefs';
+import { keyCap, keyText, titleWithKey } from './keycap';
 import { h, slider, toast } from './dom';
 import { openModal } from './modal';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
@@ -642,15 +643,15 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const items: MenuItem[] = [
       ...(mode.contextMenu?.(p) ?? []),
       'sep',
-      ...(mode.copy ? [{ label: 'Copy', key: 'Ctrl+C', run: () => void copyNow() }] : []),
-      ...(mode.paste ? [{ label: 'Paste here', key: 'Ctrl+V', run: () => void pasteFromSystem().then((clip) => pasteNow(clip, p)) }] : []),
+      ...(mode.copy ? [{ label: 'Copy', key: keyText('key.copy'), run: () => void copyNow() }] : []),
+      ...(mode.paste ? [{ label: 'Paste here', key: keyText('key.paste'), run: () => void pasteFromSystem().then((clip) => pasteNow(clip, p)) }] : []),
       'sep',
-      { label: 'Undo', key: 'Ctrl+Z', disabled: !studio.history.canUndo, run: () => studio.undo() },
-      { label: 'Redo', key: 'Ctrl+Shift+Z', disabled: !studio.history.canRedo, run: () => studio.redo() },
+      { label: 'Undo', key: keyText('key.undo'), disabled: !studio.history.canUndo, run: () => studio.undo() },
+      { label: 'Redo', key: keyText('key.redo', 'key.redo.alt'), disabled: !studio.history.canRedo, run: () => studio.redo() },
       'sep',
-      { label: 'Fit page', key: '0', run: resetView },
+      { label: 'Fit page', key: keyText('key.fit'), run: resetView },
       { label: 'Reset rotation', disabled: !view.angle, run: () => { view.angle = 0; ctx.request(); } },
-      { label: prefs().layout === 'focus' ? 'Studio layout' : 'Focus layout', key: 'Tab', run: () => toggleLayout() },
+      { label: prefs().layout === 'focus' ? 'Studio layout' : 'Focus layout', key: keyText('key.layout'), run: () => toggleLayout() },
       'sep',
       ...(stage === 'layout' || stage === 'caption' ? [{ label: 'Export for drawing…', run: () => openExport(studio, 'apps', { page: idx + 1 }) }] : []),
       { label: 'Export…', run: () => openExport(studio, stage === 'print' ? 'print' : 'files') },
@@ -881,12 +882,12 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const undoBtns: HTMLButtonElement[] = [];
   const redoBtns: HTMLButtonElement[] = [];
   const undoBtn = () => {
-    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Undo', title: 'Undo (Ctrl+Z)', onclick: () => studio.undo() }, '↶');
+    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Undo', title: titleWithKey('Undo', 'key.undo'), onclick: () => studio.undo() }, '↶');
     undoBtns.push(b);
     return b;
   };
   const redoBtn = () => {
-    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: 'Redo (Ctrl+Shift+Z)', onclick: () => studio.redo() }, '↷');
+    const b = h('button', { class: 'icon', type: 'button', 'aria-label': 'Redo', title: titleWithKey('Redo', 'key.redo', 'key.redo.alt'), onclick: () => studio.redo() }, '↷');
     redoBtns.push(b);
     return b;
   };
@@ -902,7 +903,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   const rail = h('nav', { class: 'stagerail', 'aria-label': 'Desks' },
     STAGES.map((s, i) =>
-      h('button', { type: 'button', 'aria-current': String(s === stage), title: `${DESK_META[s].label} (${i + 1})`, onclick: () => go(`#desk/${book.id}/${page.id}/${s}`) },
+      h('button', { type: 'button', 'aria-current': String(s === stage), title: titleWithKey(DESK_META[s].label, `key.desk.${s}`), onclick: () => go(`#desk/${book.id}/${page.id}/${s}`) },
         glyphEl(DESK_META[s].label, DESK_META[s].glyph, 18), h('b', {}, DESK_META[s].label), h('small', {}, STATE_LABEL[page.state[s]]))),
   );
 
@@ -914,7 +915,20 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     rail.querySelector('[aria-current="true"] small')!.textContent = STATE_LABEL[next]!;
   } }, page.state[stage] === 2 ? 'Done ✓' : 'Mark done');
 
-  const layoutBtn = (glyph: string, label: string) => h('button', { class: 'icon', type: 'button', 'aria-label': label, title: `${label} (Tab)`, onclick: () => toggleLayout() }, glyph);
+  const layoutBtns: [HTMLButtonElement, string][] = [];
+  const layoutBtn = (glyph: string, label: string) => {
+    const b = h('button', { class: 'icon', type: 'button', 'aria-label': label, title: titleWithKey(label, 'key.layout'), onclick: () => toggleLayout() }, glyph);
+    layoutBtns.push([b, label]);
+    return b;
+  };
+  // tooltips follow a rebind without reloading the desk
+  const retitle = () => {
+    for (const b of undoBtns) b.title = titleWithKey('Undo', 'key.undo');
+    for (const b of redoBtns) b.title = titleWithKey('Redo', 'key.redo', 'key.redo.alt');
+    for (const [b, label] of layoutBtns) b.title = titleWithKey(label, 'key.layout');
+    rail.querySelectorAll('button').forEach((b, i) => { b.title = titleWithKey(DESK_META[STAGES[i]!].label, `key.desk.${STAGES[i]}`); });
+  };
+  const offGestures = gesturePrefs.onChange(retitle);
   const narrowInspector = h('button', { class: 'btn studio-inspector-toggle', type: 'button', 'aria-label': 'Show inspector', 'aria-pressed': 'false' }, 'Inspector');
   const deskSelect = h('select', { 'aria-label': 'Desk' }, STAGES.map((s) => h('option', { value: s, selected: s === stage }, DESK_META[s].label)));
   deskSelect.addEventListener('change', () => go(`#desk/${book.id}/${page.id}/${deskSelect.value}`));
@@ -952,11 +966,11 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   doneBtn.classList.add('bar-done');
   const viewMenu = h('button', { class: 'btn bar-view', type: 'button', 'aria-haspopup': 'menu', title: 'Spread preview, display, focus layout and the manual' }, 'View ▾');
   viewMenu.addEventListener('click', () => {
-    const item = (label: string, run: () => void) => h('button', { class: 'item', type: 'button', role: 'menuitem', onclick: () => { close(); run(); } }, label);
+    const item = (label: string, run: () => void, keyId?: string) => h('button', { class: 'item', type: 'button', role: 'menuitem', onclick: () => { close(); run(); } }, label, keyId ? keyCap(keyId) : null);
     const close = popover(viewMenu, h('div', { class: 'chrome-menu', role: 'menu', 'aria-label': 'View' },
       item(headerSpread.getAttribute('aria-label') ?? 'Spread preview', () => headerSpread.click()),
       item('Display settings…', () => displayMenu(viewMenu, { layout: true, composition, shell: true })),
-      item('Focus layout', () => toggleLayout()),
+      item('Focus layout', () => toggleLayout(), 'key.layout'),
       ...(headerSimple ? [item(prefs().layout === 'simple' ? 'Studio layout' : 'Simple layout', () => headerSimple.click())] : []),
       item('Manual: ' + DESK_META[stage].label + ' desk', () => openManual(stage)),
       ...(doneBtn.offsetWidth === 0 ? [item(page.state[stage] === 2 ? 'Page done ✓ (mark in progress)' : 'Mark page done', () => doneBtn.click())] : [])), 'below', 'View');
@@ -969,7 +983,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ...(drawingExport ? [drawingAction] : []),
     { label: 'Previous page', disabled: () => idx === 0, run: () => go(pageHash(idx - 1)) },
     { label: 'Next page', disabled: () => idx === book.pages.length - 1, run: () => go(pageHash(idx + 1)) },
-    ...(stage !== 'script' ? [{ label: 'Fit page', run: resetView }] : []),
+    ...(stage !== 'script' ? [{ label: 'Fit page', keyId: 'key.fit', run: resetView }] : []),
     { label: 'Studio layout', run: () => { setPrefs({ layout: 'studio' }); screen.querySelector<HTMLElement>('.bar [aria-label="Focus layout"]')?.focus(); } },
     ...(stage === 'draw' ? [{ label: 'Simple / Focus', run: () => { setPrefs({ layout: prefs().layout === 'simple' ? 'focus' : 'simple' }); moreButton().focus(); } }] : []),
     { label: 'Mark page done', run: () => doneBtn.click(), pressed: () => page.state[stage] === 2 },
@@ -1137,6 +1151,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     ro.disconnect();
     offStudio();
     offPrefs();
+    offGestures();
     offHistory();
     closePopover();
     window.removeEventListener('keydown', onKey);

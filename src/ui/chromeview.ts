@@ -1,5 +1,6 @@
 import { overflowActions, type ChromeAction } from './chrome';
 import { h } from './dom';
+import { keyCap } from './keycap';
 import { popover, popoverIsOpen } from './popover';
 import { prefs } from './prefs';
 
@@ -15,7 +16,7 @@ export function chromeActions(actions: ChromeAction[], extra: () => HTMLElement[
     const list = [...hidden, ...overflow].map((action) => h('button', {
       class: 'item', type: 'button', disabled: action.disabled?.(), 'aria-pressed': action.pressed ? String(action.pressed()) : null,
       onclick: () => { close(); more.focus(); action.run(more); },
-    }, action.label));
+    }, action.label, action.keyId ? keyCap(action.keyId) : null));
     const close = popover(more, h('div', { class: 'chrome-menu' }, list, extra()), 'below', 'Document actions');
   };
   const el = h('div', { class: 'chrome-actions', role: 'group', 'aria-label': 'Document actions' }, buttons, more);
