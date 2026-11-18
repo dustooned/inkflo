@@ -26,8 +26,8 @@ export function sizePicker(opts: { w: number; h: number; dpi: number; onChange?:
   const preset = h('select', { 'aria-label': 'Start from a preset' },
     h('option', { value: 'custom' }, 'Custom size'),
     [...groups.entries()].map(([g, ks]) => h('optgroup', { label: g }, ks.map((k) => h('option', { value: k.id }, k.label)))));
-  const wBox = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', 'aria-label': 'Width', style: 'width:84px' });
-  const hBox = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', 'aria-label': 'Height', style: 'width:84px' });
+  const wBox = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', 'aria-label': 'Width', class: 'w-84' });
+  const hBox = h('input', { type: 'number', min: 0, step: 'any', inputmode: 'decimal', 'aria-label': 'Height', class: 'w-84' });
   const unitSel = h('select', { 'aria-label': 'Unit' }, SIZE_UNITS.map((u) => h('option', { value: u.id }, u.label)));
   const swap = h('button', { class: 'btn', type: 'button', title: 'Swap width and height (portrait / landscape)', 'aria-label': 'Swap width and height' }, '⇄');
   const readout = h('p', { class: 'note', role: 'status' });

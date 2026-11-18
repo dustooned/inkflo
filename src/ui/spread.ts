@@ -70,7 +70,7 @@ function openSpread(studio: Studio, page: Page | undefined, stage: Stage, go: (h
             const canvas = await renderSeparation(p, art, Math.min(380 / p.widthIn, 2400 / p.heightIn), book, 'all');
             canvas.setAttribute('aria-label', 'Page ' + studio.pageNumber(p));
             if (id === revision) {
-              if (i) column.append(h('div', { 'aria-hidden': 'true', style: `flex:none;aspect-ratio:${SCROLL_WIDTH}/${DEFAULT_SCROLL_GAP}` }));
+              if (i) column.append(h('div', { 'aria-hidden': 'true', class: 'scroll-gap', style: `aspect-ratio:${SCROLL_WIDTH}/${DEFAULT_SCROLL_GAP}` }));
               column.append(canvas);
             }
           } finally { studio.residency.unpin(art); }

@@ -215,7 +215,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     return h('div', { class: 'layout-code' },
       h('div', { class: 'insp-head' }, h('div', { class: 'kick' }, 'Layout'), h('div', { class: 'ins-title' }, 'Layout as code')),
       h('div', { class: 'sec stack' }, layoutCode.editor, layoutCode.problems,
-        h('p', { class: 'note', style: 'margin:0' }, 'Inches from the top-left of the page. The page updates when every line reads, and each pause is one undo step. Draw on the canvas any time and the code follows.')),
+        h('p', { class: 'note flush' }, 'Inches from the top-left of the page. The page updates when every line reads, and each pause is one undo step. Draw on the canvas any time and the code follows.')),
       h('div', { class: 'sec' }, h('h4', {}, 'Panels'), livePanels),
       h('details', { class: 'sec' }, h('summary', {}, 'Legend'),
         h('dl', { class: 'code-legend' }, LAYOUT_LEGEND.flatMap((l) => [h('dt', {}, h('code', {}, l.code)), h('dd', {}, l.means)]))),
@@ -502,7 +502,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       const unused = page.cuts.length - activeCuts.size;
       el.append(
         h('div', { class: 'sec stack' }, h('h4', {}, 'Grids and saved layouts'),
-          h('p', { class: 'note', style: 'margin:0' }, 'Tap a grid to lay out the page, or drag it onto a panel to split just that panel.'),
+          h('p', { class: 'note flush' }, 'Tap a grid to lay out the page, or drag it onto a panel to split just that panel.'),
           h('button', { class: 'btn', type: 'button', onclick: () => side.open('bins') }, 'Open layout bins')),
       );
       const grid = page.grid ?? book.fixedGrid;

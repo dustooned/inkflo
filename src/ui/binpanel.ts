@@ -54,7 +54,7 @@ export function binPanel<T extends BinItem>(src: BinSource<T>, stage: HTMLElemen
   const status = h('p', { class: 'note bin-status', role: 'status' });
   const find = h('input', { type: 'search', placeholder: 'Find', 'aria-label': `Find ${src.noun}s by name`, class: 'bin-find' });
   find.addEventListener('input', () => { search = find.value; paint(true); });
-  const head = h('div', { class: 'insp-head bin-head' }, h('div', { class: 'ins-title' }, src.title), h('span', { style: 'flex:1' }));
+  const head = h('div', { class: 'insp-head bin-head' }, h('div', { class: 'ins-title' }, src.title), h('span', { class: 'spacer' }));
   const el = h('div', { class: 'asset-bins' }, head, chips, find, grid, status);
 
   const state = () => src.read();
@@ -230,7 +230,7 @@ export function binPanel<T extends BinItem>(src: BinSource<T>, stage: HTMLElemen
     const bins = binList();
     if (current !== ALL && !bins.includes(current)) current = ALL;
     const items = all();
-    head.replaceChildren(h('div', { class: 'ins-title' }, src.title), h('span', { style: 'flex:1' }), ...(src.head?.() ?? []));
+    head.replaceChildren(h('div', { class: 'ins-title' }, src.title), h('span', { class: 'spacer' }), ...(src.head?.() ?? []));
     chips.replaceChildren(chip(ALL, 'All', items.length, true),
       ...bins.map((b) => chip(b, b, inBin(b).length, b === UNSORTED || b === src.builtIn?.bin)),
       h('button', { class: 'bin-chip add', type: 'button', title: 'New bin', 'aria-label': 'New bin', onclick: () => void newBin() }, '+'));

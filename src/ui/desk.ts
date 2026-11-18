@@ -700,7 +700,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         setToolPrefs(stage, { order: ids });
         holder.replaceChildren(build());
       };
-      return h('div', { style: 'width:250px' },
+      return h('div', { class: 'w-250' },
         h('h4', {}, `${DESK_META[stage].label} tools`),
         list.map((t, i) => {
           const box = h('input', { type: 'checkbox', checked: !hidden.has(t.id), 'aria-label': `Show ${t.label}` });
@@ -717,7 +717,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
         }),
         h('div', { class: 'sep' }),
         h('button', { class: 'item', type: 'button', onclick: () => { setToolPrefs(stage, null); holder.replaceChildren(build()); } }, h('span', { 'aria-hidden': 'true' }, '↺'), 'Restore defaults'),
-        h('p', { class: 'note', style: 'margin:4px 8px' }, 'Hidden tools keep their shortcut keys.'));
+        h('p', { class: 'note m-4-8' }, 'Hidden tools keep their shortcut keys.'));
     };
     const railToolsAll = () => {
       const order = toolPrefs(stage).order ?? [];
@@ -1002,7 +1002,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const top = h('div', { class: 'chrome-top', role: 'toolbar', 'aria-label': 'Canvas navigation and actions' }, nav, actions);
   const compactStatus = h('div', { class: 'chrome-status' }, compactSave, stage !== 'script' ? viewButton() : null);
   const screen = h('div', { class: 'screen', 'data-desk': stage },
-    h('header', { class: 'bar', style: 'height:52px' },
+    h('header', { class: 'bar desk-bar' },
       h('button', { class: 'icon', type: 'button', 'aria-label': 'Back to book', onclick: () => go(`#book/${book.id}`) }, '←'),
       h('div', { class: 'crumb' }, h('a', { href: `#book/${book.id}` }, book.title), h('b', {}, '/'), h('strong', {}, `Page ${idx + 1}`), h('b', {}, '/'), h('span', {}, DESK_META[stage].label)),
       h('span', { class: 'spacer' }),

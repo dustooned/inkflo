@@ -109,7 +109,7 @@ export function brushPicker(anchor: HTMLElement, studio: Studio, pass: LinePass,
     }
   }
   const cur = allBrushes().find((e) => e.id === current);
-  popover(anchor, h('div', { style: 'width:300px' }, list,
+  popover(anchor, h('div', { class: 'w-300' }, list,
     h('div', { class: 'sep' }),
     vector ? null : h('button', { type: 'button', class: 'item', disabled: importingBrush, onclick: () => { closePopover(); void importBrushes(studio, onPick); } }, h('span', {}, '↓'), 'Import brush…'),
     h('button', { type: 'button', class: 'item', onclick: () => { closePopover(); anchor.focus(); if (cur) brushStudio(studio, cur, onPick, vector, anchor); } }, h('span', {}, '✎'), 'Edit in Brush Studio…')), 'below', 'Brushes', () => observer.disconnect());
@@ -268,17 +268,17 @@ export function brushStudio(studio: Studio, start: BrushEntry, onPick: (e: Brush
   const { dialog: d, open } = card({
     title: 'Brush Studio',
     className: 'brushstudio',
-    detail: h('p', { class: 'note', style: 'margin:4px 0 0' }, mine ? 'Changes apply to new strokes. Finished art keeps the brush it was drawn with.' : 'Library brushes stay as they are: saving makes a copy in My brushes.'),
+    detail: h('p', { class: 'note tight-top' }, mine ? 'Changes apply to new strokes. Finished art keeps the brush it was drawn with.' : 'Library brushes stay as they are: saving makes a copy in My brushes.'),
     preview: big,
     sections: [
-      h('div', { class: 'row', style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' },
-        h('label', { class: 'field', style: 'flex:1' }, 'Name', name),
+      h('div', { class: 'row flex-center-wrap-10' },
+        h('label', { class: 'field grow' }, 'Name', name),
         h('label', { class: 'mini' }, 'Width', width, widthOut),
         h('label', { class: 'mini' }, 'Colour', passSel)),
       tabs, panel,
     ],
     footer: [
-      mine ? h('button', { class: 'btn danger', type: 'button', style: 'margin-right:auto', onclick: async () => {
+      mine ? h('button', { class: 'btn danger mr-auto', type: 'button', onclick: async () => {
         if (!(await confirmDialog('Delete this brush?', `“${draft.name}” is removed from My brushes on this device. Art already drawn with it is not changed.`, 'Delete'))) return;
         await studio.saveUserBrushes(getUserBrushes().filter((b) => b.id !== draft.id));
         d.close();

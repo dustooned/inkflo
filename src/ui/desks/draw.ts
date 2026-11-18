@@ -1127,7 +1127,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       h('div', { class: 'field' }, 'Area', gradAreaSeg()),
       h('div', { class: 'field' }, 'Blend', seg<'normal' | 'multiply' | 'screen'>([{ id: 'normal', label: 'Normal' }, { id: 'multiply', label: 'Shadow' }, { id: 'screen', label: 'Light' }], grad.blend, (v) => { grad.blend = v; ctx.chrome(); }, 'Gradient blend')),
       opacity,
-      h('p', { class: 'note', style: 'margin:0' }, note));
+      h('p', { class: 'note flush' }, note));
   }
 
   function autoFlats(p: Pt): void {
@@ -1377,9 +1377,9 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
           : r.kind === 'parallel' ? 'Strokes run at the ruler angle.'
           : r.kind === 'radial' ? 'Strokes aim at the centre. Drag the handle to move it.'
           : 'Strokes pick the vanishing point that matches their direction. Drag the handles; they can sit off the page.';
-        kids.push(h('p', { class: 'note', style: 'margin:4px 8px' }, tip));
+        kids.push(h('p', { class: 'note m-4-8' }, tip));
       }
-      return h('div', { style: 'width:250px' }, ...kids);
+      return h('div', { class: 'w-250' }, ...kids);
     };
     const holder = h('div', {}, build());
     const rebuildMenu = () => holder.replaceChildren(build());

@@ -103,12 +103,12 @@ export function typeTool(ctx: DeskCtx) {
     const layout = layoutType(f, 72, measure(f));
     el.append(
       h('div', { class: 'insp-head' }, h('div', { class: 'ins-title' }, 'Type frame'),
-        layout.overset ? h('p', { class: 'warnline', style: 'margin:4px 0 0' }, 'More text than fits. Enlarge the frame, add a column or reduce the size.') : null),
+        layout.overset ? h('p', { class: 'warnline tight-top' }, 'More text than fits. Enlarge the frame, add a column or reduce the size.') : null),
       h('div', { class: 'sec stack' },
         h('h4', {}, 'Style'),
         h('div', { class: 'type-presets' }, TYPE_PRESETS.map((p) => h('button', { class: 'btn', type: 'button', onclick: () => live(p.style, true, 'Type style: ' + p.label) }, p.label))),
         h('label', { class: 'field' }, 'Text', text),
-        h('p', { class: 'note', style: 'margin:0' }, 'Each line break starts a new paragraph. An empty line adds space.')),
+        h('p', { class: 'note flush' }, 'Each line break starts a new paragraph. An empty line adds space.')),
       h('div', { class: 'sec stack' },
         h('h4', {}, 'Characters'),
         h('label', { class: 'field' }, 'Typeface', font),

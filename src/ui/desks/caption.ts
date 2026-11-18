@@ -895,7 +895,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     el.append(sec('Words', text, destination ? h('label', { class: 'field' }, 'Script panel', destination) : null,
       c.style !== 'sfx' ? splitButton : null,
       h('p', { class: 'note' }, beatIdx >= 0 ? `Beat ${beatIdx + 1}, line ${root.src!.line + 1}${panel ? ' · Panel ' + (panel.index + 1) : ''}. Text edits update the script.` : 'Free text.'),
-      h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
+      h('div', { class: 'flex-wrap-6' },
         l.src && group.length === 1 ? h('button', { class: 'btn', type: 'button', onclick: () => cycleLine(l) }, 'Next line') : null,
         l.src ? h('button', { class: 'btn', type: 'button', onclick: () => edit('Unlink from script', () => { omitDialogue(page, l); delete l.src; delete l.generated; delete l.keptScriptLine; }) }, 'Unlink') : null,
         h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete balloon', () => removeLetter(l)); selId = null; ctx.chrome(); } }, 'Delete'))));
@@ -911,7 +911,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     }));
     const st = characterStyle(sh, l.speaker);
     el.append(sec('Speaker', h('datalist', { id: 'inkflo-speakers' }, names.map((n) => h('option', { value: n }))), who,
-      l.speaker ? h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
+      l.speaker ? h('div', { class: 'flex-wrap-6' },
         h('button', { class: 'btn', type: 'button', onclick: () => {
           const next = withCharacterStyle(sh, l.speaker!, l.cap);
           const prev = structuredClone(book.lettering);
@@ -947,7 +947,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       row('Font', font),
       seg<LetterSize>(LETTER_SIZES.map((s) => ({ id: s, label: `${s[0]!.toUpperCase()}${s.slice(1)} ${sh.sizes[s]}pt` })), c.size, (v) => editCap('Size', (x) => ({ ...x, size: v })), 'Size'),
       h('label', { class: 'mini' }, 'Scale', scale, scaleOut),
-      h('div', { style: 'display:flex;gap:8px;align-items:center' }, toggles, h('label', { class: 'mini' }, 'Colour', textColor)),
+      h('div', { class: 'flex-center-8' }, toggles, h('label', { class: 'mini' }, 'Colour', textColor)),
       seg(['left', 'center', 'right'].map((a) => ({ id: a, label: a === 'center' ? 'Centre' : a[0]!.toUpperCase() + a.slice(1) })), c.align, (v) => editCap('Align', (x) => ({ ...x, align: v as CaptionSpec['align'] })), 'Align'),
       c.style === 'sfx' ? h('p', { class: 'note' }, 'Markup: *bold*, _italic_.') : null));
 
@@ -1006,7 +1006,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     el.append(sec('Balloon',
       kinds,
       lookPicker,
-      c.style !== 'sfx' ? h('div', { style: 'display:flex;gap:10px' }, h('label', { class: 'mini' }, 'Fill', fill), h('label', { class: 'mini' }, 'Ink', ink)) : null,
+      c.style !== 'sfx' ? h('div', { class: 'flex-10' }, h('label', { class: 'mini' }, 'Fill', fill), h('label', { class: 'mini' }, 'Ink', ink)) : null,
       // the presets above cover most needs; every number stays one fold away
       fineTune('Fine-tune the shape',
         c.style !== 'sfx' ? slider('Border', 0, 0.4, 0.01, c.inkWidth, (x, v) => ({ ...x, inkWidth: v })) : slider('Outline', 0, 0.5, 0.01, c.textOutlineWidth, (x, v) => ({ ...x, textOutlineWidth: v, textOutline: x.textOutline ?? '#111111' })),
@@ -1035,7 +1035,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
           const bolt = h('input', { type: 'checkbox', checked: !!t.bolt });
           bolt.addEventListener('change', () => editCap('Lightning bolt', setTail((y) => ({ ...y, bolt: bolt.checked || undefined }))));
           return h('div', { class: 'tail-row' },
-            h('div', { style: 'display:flex;gap:6px;align-items:center' }, h('span', { class: 'hint' }, `Tail ${i + 1}`), join,
+            h('div', { class: 'flex-center-6' }, h('span', { class: 'hint' }, `Tail ${i + 1}`), join,
               h('button', { class: 'btn', type: 'button', 'aria-label': `Remove tail ${i + 1}`, onclick: () => editCap('Remove tail', (x) => ({ ...x, tails: x.tails.filter((_, k) => k !== i) })) }, '✕')),
             h('div', { class: 'field' }, 'Curve', seg<'-1' | '0' | '1'>([{ id: '-1', label: 'Left' }, { id: '0', label: 'Straight' }, { id: '1', label: 'Right' }], String(side) as '-1' | '0' | '1',
               (v) => editCap(v === '0' ? 'Straighten tail' : 'Curve tail', setTail((y) => curveTail(base, y, Number(v) as -1 | 0 | 1))), `Tail ${i + 1} curve`)),
@@ -1062,7 +1062,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       ...all.byTarget.filter((t) => t.r.issues.length).map((t) =>
         h('div', {}, h('div', { class: 'hint' }, t.target.name),
           h('ul', { class: 'check' }, t.r.issues.map((i) => h('li', { class: 'warn' }, i.text,
-            i.fix ? h('button', { class: 'btn', type: 'button', style: 'margin-left:auto;min-height:24px;padding:2px 8px', onclick: () => editCap(FIX_LABEL[i.fix!], (x) => applyFix(x, sh, i.fix!)) }, FIX_LABEL[i.fix]) : null))))),
+            i.fix ? h('button', { class: 'btn fix-btn', type: 'button', onclick: () => editCap(FIX_LABEL[i.fix!], (x) => applyFix(x, sh, i.fix!)) }, FIX_LABEL[i.fix]) : null))))),
       h('label', { class: 'mini' }, small, 'Small on purpose (whisper, chatter)')));
   }
 

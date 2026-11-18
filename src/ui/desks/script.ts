@@ -163,7 +163,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       jsonButtons(`${book.title} page ${book.pages.indexOf(page) + 1}`, () => pageData(book, page)),
       jsonButtons(book.title, () => bookData(book), 'Whole book (JSON)'));
     el.replaceChildren(h('div', { class: 'script-code' }, h('div', { class: 'script-code-main' }, editor, problems,
-      h('div', { class: 'beat-actions' }, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('span', { class: 'spacer' }),
+      h('div', { class: 'beat-actions' }, h('div', { class: 'flex-wrap-8' }, h('span', { class: 'spacer' }),
         // enabled from the start: the click applies what was typed, so a new page's first script can go straight to Layout
         h('button', { class: 'btn primary', type: 'button', onclick: () => { applyCode(); commit('Edit script'); sendToLayout(); } }, 'Send to Layout →')))), legend));
   }
@@ -212,7 +212,7 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
         list.append(section);
       });
       const actions = h('div', { class: 'beat-actions' },
-        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+        h('div', { class: 'flex-wrap-8' },
           h('button', { class: 'btn', type: 'button', onclick: () => {
             addPanel(page.beats.length);
           } }, '+ Add panel beat'),

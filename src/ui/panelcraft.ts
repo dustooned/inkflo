@@ -15,7 +15,7 @@ export function panelCraftSection(
 ): HTMLElement {
   const beat = page.beats[index];
   const dots = intentDots(beat);
-  const dotRow = h('span', { 'aria-label': `${dots.filter(Boolean).length} of 5 prompts answered`, style: 'letter-spacing:2px;margin-left:8px' }, dots.map((on) => (on ? '●' : '○')).join(''));
+  const dotRow = h('span', { 'aria-label': `${dots.filter(Boolean).length} of 5 prompts answered`, class: 'dots-run' }, dots.map((on) => (on ? '●' : '○')).join(''));
   const fields = INTENT_KEYS.map(({ id, label, ask }) => {
     const input = h('input', { type: 'text', maxlength: MAX_INTENT_CHARS, value: beat?.intent?.[id] ?? '', placeholder: ask, 'aria-label': `${label}: ${ask}`, 'data-intent': id });
     input.addEventListener('change', () => onIntent(id, input.value.trim()));
@@ -26,8 +26,8 @@ export function panelCraftSection(
   const notes = turnNotes(page.beats, panelCount);
   return h('div', { class: 'sec stack' },
     h('h4', {}, `Panel ${index + 1} intent`, dotRow),
-    h('p', { class: 'note', style: 'margin:0' }, 'Five quick prompts, all optional. Skip any you like.'),
+    h('p', { class: 'note flush' }, 'Five quick prompts, all optional. Skip any you like.'),
     ...fields,
     h('button', { class: 'btn', type: 'button', 'aria-pressed': String(isTurn), onclick: () => onTurn(!isTurn) }, isTurn ? 'Clear page turn' : turn !== null ? `Move page turn here (now panel ${turn + 1})` : 'Mark as page turn'),
-    ...notes.map((n) => h('p', { class: 'note', style: 'margin:0' }, n)));
+    ...notes.map((n) => h('p', { class: 'note flush' }, n)));
 }

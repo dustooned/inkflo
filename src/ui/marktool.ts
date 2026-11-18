@@ -98,7 +98,7 @@ export function markTool(ctx: DeskCtx) {
       const width = m?.width ?? Math.min(1, Math.max(0.35, page.widthIn * 0.12));
       const dpi = Math.round(current.width / width);
       const low = dpi < book.dpi;
-      return h('p', { class: low ? 'warnline' : 'note', style: 'margin:0' },
+      return h('p', { class: low ? 'warnline' : 'note flush' },
         `${current.width} × ${current.height} px · ${dpi} dpi at ${width.toFixed(2)}″ wide` + (low ? ` (below this book's ${book.dpi} dpi; may print soft)` : ''));
     })();
     const parts: (HTMLElement | null)[] = [
@@ -106,7 +106,7 @@ export function markTool(ctx: DeskCtx) {
       h('div', { class: 'sec stack' },
         current
           ? h('div', { class: 'mark-current' }, thumb(current), h('div', {}, h('b', {}, current.name), h('small', {}, 'Your mark for this book')))
-          : h('p', { class: 'note', style: 'margin:0' }, 'Your signature, monogram or symbol, stored once and placed on any page. A transparent PNG or WebP works best.'),
+          : h('p', { class: 'note flush' }, 'Your signature, monogram or symbol, stored once and placed on any page. A transparent PNG or WebP works best.'),
         assets.length ? h('details', { class: 'mark-pick', open: !current },
           h('summary', {}, current ? 'Choose another image' : 'Choose from this book’s images'),
           h('div', { class: 'mark-grid' }, assets.map((a) => h('button', { type: 'button', class: 'mark-option', 'aria-pressed': String(a.key === book.artistMark), title: a.name, onclick: () => void chooseMark(a.key) }, thumb(a), h('small', {}, a.name))))) : null,
@@ -126,7 +126,7 @@ export function markTool(ctx: DeskCtx) {
         h('div', { class: 'type-toggles' },
           h('button', { class: 'btn', type: 'button', 'aria-pressed': String(!!m.hidden), onclick: () => edit(m.hidden ? 'Show Artist mark' : 'Hide Artist mark', (list) => { const x = list.find((y) => y.id === m.id); if (x) { if (x.hidden) delete x.hidden; else x.hidden = true; } }) }, m.hidden ? 'Show' : 'Hide'),
           h('button', { class: 'btn danger', type: 'button', onclick: () => { edit('Delete Artist mark', (list) => list.splice(list.findIndex((y) => y.id === m.id), 1)); selectedId = null; ctx.chrome(); } }, 'Delete')),
-        h('p', { class: 'note', style: 'margin:0' }, m.hidden ? 'Hidden: kept here but left out of the page and every export.' : 'Drag it on the page; drag its corner to resize.')) : null,
+        h('p', { class: 'note flush' }, m.hidden ? 'Hidden: kept here but left out of the page and every export.' : 'Drag it on the page; drag its corner to resize.')) : null,
     ];
     el.append(...parts.filter((x): x is HTMLElement => !!x));
   }

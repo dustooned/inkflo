@@ -78,7 +78,7 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
     guide.addEventListener('change', () => setPrefs({ guide: guide.value as Guide }));
     const snap = h('input', { type: 'checkbox', checked: p.snapGuide });
     snap.addEventListener('change', () => setPrefs({ snapGuide: snap.checked }));
-    return h('div', { style: 'width:240px' },
+    return h('div', { class: 'w-240' },
       h('h4', {}, 'Theme'),
       seg<Theme>([{ id: 'system', label: 'System' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }], p.theme, (v) => { setPrefs({ theme: v }); rebuild(); }, 'Theme'),
       h('h4', {}, 'Canvas backdrop'),
@@ -100,7 +100,7 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
               setPrefs({ handed: (e.target as HTMLSelectElement).value === 'left' ? 'left' : 'right' });
             } }, h('option', { value: 'right', selected: p.handed === 'right' }, 'Right-handed'),
               h('option', { value: 'left', selected: p.handed === 'left' }, 'Left-handed')))) : null,
-          keyText('key.layout') ? h('p', { class: 'note', style: 'margin:0 8px 6px' }, opts.shell ? h('kbd', {}, keyText('key.layout')!) : keyText('key.layout')!, ' switches between Studio and Focus.') : null]
+          keyText('key.layout') ? h('p', { class: 'note m-0-8-6' }, opts.shell ? h('kbd', {}, keyText('key.layout')!) : keyText('key.layout')!, ' switches between Studio and Focus.') : null]
         : null,
       h('div', { class: 'sep' }),
       h('button', { class: 'item', type: 'button', onclick: () => { closePopover(); openGestureControls(); } }, 'Gestures & shortcuts…'),

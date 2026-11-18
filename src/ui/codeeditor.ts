@@ -66,7 +66,7 @@ export function jsonButtons(title: string, data: () => unknown, label = 'Page da
   const text = () => JSON.stringify(data(), null, 2);
   return h('div', { class: 'json-export' },
     h('h4', {}, label),
-    h('p', { class: 'note', style: 'margin:0' }, 'Panel shapes in reading order with each panel’s lines, for game engines, visual novels and custom readers.'),
+    h('p', { class: 'note flush' }, 'Panel shapes in reading order with each panel’s lines, for game engines, visual novels and custom readers.'),
     h('div', { class: 'type-toggles' },
       h('button', { class: 'btn', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(text()); status.textContent = 'Copied.'; } catch { status.textContent = 'Copy was blocked; use Download.'; } } }, 'Copy JSON'),
       h('button', { class: 'btn', type: 'button', onclick: () => download(new Blob([text()], { type: 'application/json' }), slug(title) + '.json') }, 'Download')),

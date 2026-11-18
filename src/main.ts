@@ -16,12 +16,12 @@ async function boot(): Promise<void> {
   installAffordances();
   registerOffline();
   const root = document.getElementById('app')!;
-  root.replaceChildren(h('p', { style: 'padding:2rem' }, 'Opening your library…'));
+  root.replaceChildren(h('p', { class: 'boot-note' }, 'Opening your library…'));
   let studio: Studio;
   try {
     studio = await Studio.open();
   } catch (e) {
-    root.replaceChildren(h('p', { style: 'padding:2rem' }, `inkflo could not start: ${e instanceof Error ? e.message : String(e)}`));
+    root.replaceChildren(h('p', { class: 'boot-note' }, `inkflo could not start: ${e instanceof Error ? e.message : String(e)}`));
     return;
   }
   window.addEventListener('inkflo:toast', (e) => toast((e as CustomEvent<string>).detail, 5000));

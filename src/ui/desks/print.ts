@@ -92,7 +92,7 @@ export function printDesk(ctx: DeskCtx): DeskMode {
         ctx.request();
       };
       const num = (label: string, v: number, onSet: (x: number) => void, max: number) => {
-        const i = h('input', { type: 'number', min: 0, max, step: 0.025, value: v, 'aria-label': label, style: 'width:76px' });
+        const i = h('input', { type: 'number', min: 0, max, step: 0.025, value: v, 'aria-label': label, class: 'w-76' });
         i.addEventListener('change', () => {
           const x = Number(i.value);
           if (Number.isFinite(x) && x >= 0 && x <= max) onSet(x);
