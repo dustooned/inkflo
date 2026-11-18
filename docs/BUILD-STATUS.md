@@ -5,6 +5,15 @@ Where the app stands against [BUILD-HANDOFF.md](BUILD-HANDOFF.md). Updated 2026-
 Run it with `npm run dev`, then open `http://localhost:5190`. The engine self-check is at
 `/selfcheck.html`. Checks: `npm test` (291 tests), `npx tsc --noEmit`, `npx vite build`.
 
+## UI refinement: shared dialog shell, 2026-11-18 (branch `ui-refine`, not merged, not pushed)
+
+- New `src/ui/modal.ts`: `openModal({title, content, actions, ...})` builds the header / `.content` / footer structure `app.css` already styles, and owns showModal, Escape, close, removal and the single answer. `modal.test.ts` has 7 tests on a fake DOM.
+- Moved onto it, one commit each: `offlinedialog` (UI only; worker and caching untouched), `layertone`, `grid`, `stylesheet`, `pagetemplates`, `dialogue`, `screentone`, `dom.ts` (`confirmDialog`, `askText`), `exportdialog`, `desk.ts` (Jump to page), `bookassets`. Function signatures and return types are unchanged.
+- Inline `style:` literals moved to classes in `app.css` with the same values: `layertone` (2), `stylesheet` (7), `exportdialog` (26). Left inline: dynamic values (swatch colours, popup positions) in `exportdialog`, `rhythm`, `desks/caption`, `brushui`, `desk` (about 40 more sites, several static and convertible next).
+- Not moved (dialog wraps a native `<form>` submit, or has a custom footer, or is a shared factory): `bookdetails`, `imageplacement`, `home` (4 dialogs), `spread`, `card`.
+- No `.inkflo`, IndexedDB, `localStorage` or service-worker change.
+- Checks at the last commit: `npx vitest run` 75 files, 515 tests passed (508 before plus the 7 new); `npm run build` passed. Not run: any browser check of the converted dialogs (this repo has no fixtures in the workflow used here), iPad. The restyled dialogs (`exportdialog`, `stylesheet`, `layertone`) should be looked at by eye before release.
+
 ## Tone colour, blend and fills, 2026-11-16
 
 - **Colour:** the Tone tool bar has a colour swatch, an **Eyedropper** (tap the page to take its
