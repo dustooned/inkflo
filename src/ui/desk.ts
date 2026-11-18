@@ -15,6 +15,7 @@ import { openManual } from './manual';
 import { MARK_EVENT } from '../render/marks';
 import { copyToClipboard, pasteFromSystem, readClipboard, type ClipPayload } from '../app/clipboard';
 import { h, slider, toast } from './dom';
+import { openModal } from './modal';
 import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
 import { autoHideChrome, chromeActions } from './chromeview';
@@ -839,15 +840,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const list = h('div', { class: 'page-jump' }, book.pages.map((item, i) => h('button', {
       class: i === idx ? 'btn primary' : 'btn', type: 'button', 'aria-current': i === idx ? 'page' : null,
-      onclick: () => { d.close(); if (i !== idx) go(pageHash(i)); },
+      onclick: () => { modal.close('go'); if (i !== idx) go(pageHash(i)); },
     }, h('strong', {}, 'Page ' + (i + 1)), item.beats[0]?.desc ? h('small', {}, item.beats[0].desc) : null)));
-    const d = h('dialog', { 'aria-label': 'Jump to page' },
-      h('header', {}, h('h2', {}, 'Jump to page')),
-      h('div', { class: 'content' }, list),
-      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Close')));
-    d.addEventListener('close', () => { d.remove(); trigger?.focus(); });
-    document.body.append(d);
-    d.showModal();
+    const modal = openModal<'close' | 'go'>({ title: 'Jump to page', ariaLabel: 'Jump to page', content: list, cancelId: 'close', actions: [{ id: 'close', label: 'Close' }], onClose: () => trigger?.focus() });
     list.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
   };
   const save = h('span', { class: 'save', 'aria-live': 'polite' });
