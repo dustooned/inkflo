@@ -6,6 +6,7 @@ import { parseBookFile } from '../doc/schema';
 import { exportAssets, IMAGE_ACCEPT, importAssets, prepareAsset } from '../io/bookassets';
 import { makePaperAsset, PAPER_PRESETS } from '../io/paperassets';
 import { download, h, slug } from './dom';
+import { openModal } from './modal';
 
 export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => void): void {
   if (!studio.book) return;
@@ -48,13 +49,17 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
     download(blob, `${slug(book.title)}.inkassets`);
     return 'Asset pack exported.';
   }) }, 'Export asset pack');
-  const dialog = h('dialog', { class: 'asset-dialog', 'aria-label': 'Book assets' },
-    h('header', {}, h('h2', {}, 'Book assets'), h('p', { class: 'note' }, book.title)),
-    h('div', { class: 'content' },
+  const modal = openModal<'done'>({
+    title: 'Book assets', className: 'asset-dialog', ariaLabel: 'Book assets', detail: h('p', { class: 'note' }, book.title), cancelId: 'done',
+    content: [
       h('div', { class: 'asset-actions' }, h('label', { class: 'field' }, 'Add images', imageInput), h('label', { class: 'field' }, 'Import asset pack', packInput)),
       h('div', { class: 'asset-actions' }, h('label', { class: 'field' }, 'Paper preset', paperPreset), addPaper),
-      h('div', { class: 'asset-actions' }, other, copy, pack), status, grid),
-    h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Done')));
+      h('div', { class: 'asset-actions' }, other, copy, pack), status, grid,
+    ],
+    actions: [{ id: 'done', label: 'Done' }],
+    onClose: () => { revision++; for (const url of urls) URL.revokeObjectURL(url); },
+  });
+  const dialog = modal.dialog;
   async function task(run: () => Promise<string>): Promise<void> {
     if (busy || studio.book !== book) return;
     busy = true;
@@ -121,7 +126,6 @@ export function openBookAssets(studio: Studio, place?: (asset: BookAsset) => voi
     const file = packInput.files?.[0]; packInput.value = '';
     if (file) void task(async () => { const data = await importAssets(file); ensureOpen(); return `Imported ${await studio.addAssets(data.assets, data.bytes)} images.`; });
   });
-  dialog.addEventListener('close', () => { revision++; for (const url of urls) URL.revokeObjectURL(url); dialog.remove(); });
-  document.body.append(dialog); dialog.showModal(); render();
+  render();
   void studio.listBooks().then((list) => other.append(...list.filter((item) => item.id !== book.id).map((item) => h('option', { value: item.id }, item.title))));
 }
