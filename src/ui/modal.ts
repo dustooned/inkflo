@@ -27,6 +27,10 @@ export interface ModalOptions<Id extends string = string> {
   /** Extra classes on the <dialog> (a width class, say). */
   className?: string;
   ariaLabel?: string;
+  /** Sits under the title inside the header (a one-line description). */
+  detail?: Node;
+  /** Extra classes on the `.content` area (`stack`, say). */
+  contentClass?: string;
   /** A string becomes a `<p class="note">`; nodes are appended as they are. */
   content?: string | Node | (string | Node)[];
   actions?: ModalAction<Id>[];
@@ -53,10 +57,10 @@ export interface ModalHandle<Id extends string = string> {
 
 export function openModal<Id extends string = string>(options: ModalOptions<Id>): ModalHandle<Id> {
   const cancelId = (options.cancelId ?? 'cancel') as Id;
-  const content = h('div', { class: 'content' });
+  const content = h('div', { class: options.contentClass ? `content ${options.contentClass}` : 'content' });
   const parts = options.content === undefined ? [] : Array.isArray(options.content) ? options.content : [options.content];
   for (const c of parts) content.append(typeof c === 'string' ? h('p', { class: 'note' }, c) : c);
-  const dialog = h('dialog', { class: options.className, 'aria-label': options.ariaLabel }, h('header', {}, h('h2', {}, options.title)), content);
+  const dialog = h('dialog', { class: options.className, 'aria-label': options.ariaLabel }, h('header', {}, h('h2', {}, options.title), options.detail), content);
 
   let resolve!: (id: Id) => void;
   const done = new Promise<Id>((r) => { resolve = r; });

@@ -96,6 +96,14 @@ describe('openModal', () => {
     expect(await h.done).toBe('ok');
   });
 
+  it('puts a detail line in the header and extra classes on the content', () => {
+    const note = document.createElement('p');
+    const h = openModal({ title: 'T', detail: note, contentClass: 'stack' });
+    const header = fake(h.dialog).children[0] as FakeEl;
+    expect(tags(header)).toEqual(['h2', 'p']);
+    expect(fake(h.content).className).toBe('content stack');
+  });
+
   it('marks danger buttons, and has no footer without actions', () => {
     const h = openModal({ title: 'Delete', content: 'Gone for good.', actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'go', label: 'Delete', danger: true }] });
     expect(fake(h.buttons.go).className).toBe('btn danger');
