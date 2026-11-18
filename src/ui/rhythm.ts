@@ -29,7 +29,7 @@ export function rhythmSection(
         title: `Panel ${s.index + 1}: ${t ? t.label : 'transition not set'}`,
         'aria-label': `Panel ${s.index + 1}: ${t ? t.label : 'not set'}`,
         'aria-pressed': String(s.index === selected),
-        style: `flex:1;min-width:10px;border-radius:4px;padding:0;cursor:pointer;font-size:11px;color:${t ? '#fff' : 'inherit'};background:${t ? colour(t.hue) : 'transparent'};border:${s.index === selected ? '2px solid currentColor' : '1px dashed currentColor'}`,
+        style: `flex:1;min-width:10px;border-radius:4px;padding:0;cursor:pointer;font-size:var(--fs-xs);color:${t ? '#fff' : 'inherit'};background:${t ? colour(t.hue) : 'transparent'};border:${s.index === selected ? '2px solid currentColor' : '1px dashed currentColor'}`,
         onclick: () => onSelect(s.index),
       }, String(s.index + 1) + (s.index === turn ? '↷' : ''));
     }),

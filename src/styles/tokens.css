@@ -28,6 +28,14 @@
   --msg-tool: 32px;
   --radius: 12px;
   --blur: 20px;
+  /* type ramp: the only sizes the interface uses */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 17px;
+  --fs-2xl: 20px;
+  --fs-3xl: 24px;
   --type-1: 12px;
   --type-2: 13px;
   --type-3: 15px;
