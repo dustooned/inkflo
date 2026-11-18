@@ -29,7 +29,7 @@ export function rhythmSection(
         title: `Panel ${s.index + 1}: ${t ? t.label : 'transition not set'}`,
         'aria-label': `Panel ${s.index + 1}: ${t ? t.label : 'not set'}`,
         'aria-pressed': String(s.index === selected),
-        style: `flex:1;min-width:10px;border-radius:4px;padding:0;cursor:pointer;font-size:var(--fs-xs);color:${t ? '#fff' : 'inherit'};background:${t ? colour(t.hue) : 'transparent'};border:${s.index === selected ? '2px solid currentColor' : '1px dashed currentColor'}`,
+        style: `flex:1;min-width:10px;border-radius:var(--r-1);padding:0;cursor:pointer;font-size:var(--fs-xs);color:${t ? '#fff' : 'inherit'};background:${t ? colour(t.hue) : 'transparent'};border:${s.index === selected ? '2px solid currentColor' : '1px dashed currentColor'}`,
         onclick: () => onSelect(s.index),
       }, String(s.index + 1) + (s.index === turn ? '↷' : ''));
     }),
@@ -53,7 +53,7 @@ export function rhythmSection(
       chosen ? h('button', { class: 'btn', type: 'button', onclick: () => onSet(selected, null) }, 'Clear') : null);
   const legend = Object.keys(r.counts).length
     ? h('div', { class: 'note', style: 'margin:0;display:flex;flex-wrap:wrap;gap:8px' },
-      (Object.entries(r.counts) as [TransitionId, number][]).map(([id, n]) => h('span', {}, h('span', { 'aria-hidden': 'true', style: `display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;background:${colour(hue(id))}` }), `${TRANSITIONS.find((t) => t.id === id)!.short} ${n}`)))
+      (Object.entries(r.counts) as [TransitionId, number][]).map(([id, n]) => h('span', {}, h('span', { 'aria-hidden': 'true', style: `display:inline-block;width:8px;height:8px;border-radius:var(--r-pill);margin-right:4px;background:${colour(hue(id))}` }), `${TRANSITIONS.find((t) => t.id === id)!.short} ${n}`)))
     : null;
   return h('div', { class: 'sec stack' }, h('h4', {}, 'Rhythm'), strip, legend, note ? h('p', { class: 'note', style: 'margin:0' }, note) : null, picker);
 }

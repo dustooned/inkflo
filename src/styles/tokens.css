@@ -46,6 +46,13 @@
   --ctl-sm: 32px;
   --ctl: 36px;
   --ctl-touch: 44px;
+  /* radius ramp: the only corner sizes the interface uses */
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 8px;
+  --r-4: 12px;
+  --r-5: 16px;
+  --r-pill: 999px;
   --r: 8px;
   --r-lg: 12px;
   --t-xs: 11px;
