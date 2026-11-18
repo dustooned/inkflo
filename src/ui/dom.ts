@@ -1,5 +1,6 @@
 /** Tiny DOM helpers: no framework (CLAUDE.md rule 6). */
 import { icon, type IconName } from './icons';
+import { openModal } from './modal';
 
 type Attrs = Record<string, string | number | boolean | null | undefined | ((e: Event) => void)>;
 type Child = Node | string | null | undefined | false;
@@ -68,47 +69,19 @@ export function seg<T extends string>(options: { id: T; label: string; icon?: Ic
 }
 
 export function confirmDialog(title: string, body: string, ok = 'OK'): Promise<boolean> {
-  return new Promise((resolve) => {
-    const d = h('dialog', {},
-      h('header', {}, h('h2', {}, title)),
-      h('div', { class: 'content' }, h('p', { class: 'note' }, body)),
-      h('footer', {},
-        h('button', { class: 'btn', type: 'button', onclick: () => { d.close(); resolve(false); } }, 'Cancel'),
-        h('button', { class: 'btn primary', type: 'button', onclick: () => { d.close(); resolve(true); } }, ok)));
-    d.addEventListener('close', () => { d.remove(); resolve(false); });
-    document.body.append(d);
-    d.showModal();
-  });
+  const modal = openModal<'cancel' | 'ok'>({ title, content: body, actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'ok', label: ok, primary: true }] });
+  return modal.done.then((id) => id === 'ok');
 }
 
 /** Ask for one line of text in a dialog. Resolves null on cancel. */
 export function askText(title: string, label: string, value: string, ok = 'OK', allowEmpty = false): Promise<string | null> {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (v: string | null) => {
-      if (done) return;
-      done = true;
-      d.close();
-      resolve(v);
-    };
-    const input = h('input', { value, 'aria-label': label, required: !allowEmpty });
-    const form = h('form', { method: 'dialog' },
-      h('header', {}, h('h2', {}, title)),
-      h('div', { class: 'content' }, h('label', { class: 'field' }, label, input)),
-      h('footer', {},
-        h('button', { class: 'btn', type: 'button', onclick: () => finish(null) }, 'Cancel'),
-        h('button', { class: 'btn primary', type: 'submit' }, ok)));
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      finish(allowEmpty ? input.value.trim() : input.value.trim() || value);
-    });
-    const d = h('dialog', {}, form);
-    d.addEventListener('close', () => {
-      d.remove();
-      finish(null);
-    });
-    document.body.append(d);
-    d.showModal();
-    input.select();
+  const input = h('input', { value, 'aria-label': label, required: !allowEmpty });
+  // an empty field blocks Save (as the form's `required` did); Enter in the field saves
+  const modal = openModal<'cancel' | 'ok'>({
+    title, content: h('label', { class: 'field' }, label, input), focus: input,
+    actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'ok', label: ok, primary: true, run: () => { if (!allowEmpty && input.value === '') { input.focus(); return false; } } }],
   });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); modal.buttons.ok.click(); } });
+  input.select();
+  return modal.done.then((id) => (id === 'ok' ? (allowEmpty ? input.value.trim() : input.value.trim() || value) : null));
 }
