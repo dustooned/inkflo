@@ -186,7 +186,7 @@ input, textarea, select { font: inherit; color: inherit; }
 .beat { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--surface); padding: 12px 14px; }
 .beat header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .beat h4 { margin: 0; font: 650 var(--fs-xs)/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); flex: 1; }
-.beat input, .beat textarea { width: 100%; border: 1px solid var(--line-2); border-radius: var(--r-3); background: var(--field); padding: 7px 9px; font-size: var(--fs-sm); outline: 0; color: var(--text); }
+.beat input, .beat textarea { width: 100%; border: 1px solid var(--line-2); border-radius: var(--r-3); background: var(--field); padding: 7px 9px; font-size: var(--fs-sm); color: var(--text); }
 .beat input { font-family: var(--serif); }
 .beat textarea { min-height: 58px; resize: vertical; margin-top: 7px; }
 .beat header button { color: var(--text-faint); font-size: var(--fs-md); padding: 2px 6px; border-radius: var(--r-2); }
