@@ -321,7 +321,7 @@ export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: s
   root.replaceChildren(
     h('div', { class: 'screen' },
       h('header', { class: 'bar' },
-        h('span', { class: 'brand' }, 'inkflo', h('i')),
+        h('span', { class: 'brand' }, h('img', { class: 'brand-logo', src: import.meta.env.BASE_URL + 'icons/icon-192.png', alt: '', 'aria-hidden': 'true' }), 'inkflo'),
         h('span', { class: 'spacer' }),
         studio.persistent ? null : h('span', { class: 'meta' }, 'Not saving: this browser has no local storage'),
         displayButton(),

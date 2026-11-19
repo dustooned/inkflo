@@ -27,8 +27,8 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* bars */
 .bar { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--surface); flex: none; }
-.brand { font-family: var(--serif); font-style: italic; font-size: 25px; letter-spacing: -.4px; }
-.brand i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--acc-layout); transform: translateY(-7px); margin-left: 8px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; font-family: var(--serif); font-style: italic; font-size: 25px; letter-spacing: -.4px; }
+.brand-logo { display: block; width: 26px; height: 26px; border-radius: 6px; }
 .title { font-family: var(--serif); font-size: 20px; }
 .meta { color: var(--text-soft); font-size: 11.5px; }
 
