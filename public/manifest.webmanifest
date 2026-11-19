@@ -1,0 +1,15 @@
+{
+  "name": "inkflo",
+  "short_name": "inkflo",
+  "description": "Script, draw, letter and print comics. Works offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDE6D8",
+  "theme_color": "#EDE6D8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
