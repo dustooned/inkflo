@@ -1,13 +1,353 @@
-{
-  "name": "inkflo",
-  "short_name": "inkflo",
-  "description": "Script, draw, letter and print comics. Works offline.",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#EDE6D8",
-  "theme_color": "#EDE6D8",
-  "icons": [
-    { "src": "icons/inkflofavcon.png", "sizes": "1024x1024", "type": "image/png" }
-  ]
+import { openManual } from './manual';
+
+/** Who made inkflo (the manual's About section says more). The college's name links to its Digital Media Arts program. */
+export const ABOUT_CREDIT = 'Designed, programmed and developed by Professor T';
+export const LBCC_URL = 'https://www.lbcc.edu/digitalmedia';
+import type { Studio } from '../app/studio';
+import { newId, STAGES } from '../doc/model';
+import type { BookMeta } from '../io/persist';
+import { publicationLabel } from '../io/publication';
+import { askText, confirmDialog, h, pickFile, toast } from './dom';
+import { closePopover, displayButton, popover } from './popover';
+import { confirmDeleteBook, openBookDetails } from './bookdetails';
+import { openOfflineDialog } from './offlinedialog';
+import { DEFAULT_PRINT, kindById, specFor } from '../geom/printkinds';
+import { sizePicker } from './sizepicker';
+import { DEFAULT_LAYOUT, stripCuts } from '../geom/carve';
+
+/** Home: the library of books on this device. */
+export async function renderHome(root: HTMLElement, studio: Studio, go: (hash: string) => void, binId?: string): Promise<void> {
+  const [books, folders] = await Promise.all([studio.listBooks(), studio.store.listFolders()]);
+  const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  folders.sort((a, b) => byName.compare(a.name, b.name));
+  const bin = folders.find((folder) => folder.id === binId);
+  const filter = bin?.id ?? (binId === 'unsorted' ? 'unsorted' : '');
+  const folderOf = (b: BookMeta) => folders.some(({ id }) => id === b.folder) ? b.folder : null;
+  const folderRoute = (id: string) => id ? `#home/${id}` : '#home';
+  const reload = () => go(folderRoute(filter));
+  const report = (error: unknown) => toast(error instanceof Error ? error.message : String(error), 5000);
+  const visible = books.filter((b) => !filter || folderOf(b) === (bin?.id ?? null)).sort((a, b) => {
+    if (bin) {
+      for (const field of ['series', 'volume', 'chapter'] as const) {
+        const x = a.publication?.[field] ?? '';
+        const y = b.publication?.[field] ?? '';
+        const order = Number(!x) - Number(!y) || byName.compare(x, y);
+        if (order) return order;
+      }
+    }
+    return b.modified - a.modified;
+  });
+  const urls: string[] = [];
+  const cover = (bytes: Uint8Array | null) => {
+    if (!bytes) return h('span', { 'aria-hidden': 'true' }, '◰');
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'image/png' }));
+    urls.push(url);
+    return h('img', { src: url, alt: '' });
+  };
+  /** New book: a title and a page size, from a preset or typed in. Opens ready to script. */
+  const newBook = () => {
+    const title = h('input', { value: 'Untitled book', 'aria-label': 'Title', maxlength: 120 });
+    const create = h('button', { class: 'btn primary', type: 'submit' }, 'Create book');
+    const first = kindById('us-comic')!;
+    const sizeBox = sizePicker({ w: first.w, h: first.h, dpi: first.dpi, onChange: (v) => { create.disabled = !!v.problem; } });
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New book')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), h('h4', {}, 'Page size'), sizeBox.el,
+        h('p', { class: 'note' }, 'Pick a preset or type your own. You can change bleed, safe area and binding in Print, and the size too until you start drawing.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), create));
+    const d = h('dialog', { 'aria-label': 'New book' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = sizeBox.value();
+      if (v.problem) return;
+      d.close();
+      const kind = v.kind ? kindById(v.kind) : null;
+      const book = await studio.createBook(title.value.trim() || 'Untitled book', '', (b) => {
+        b.print = kind ? specFor(kind) : { ...DEFAULT_PRINT, kind: 'custom', binding: 'none', bleed: 0.125, safe: 0.25, rtl: false };
+        b.dpi = kind?.dpi ?? 300;
+        b.pages[0]!.widthIn = v.w;
+        b.pages[0]!.heightIn = v.h;
+      }, bin?.id);
+      go(`#book/${book.id}`);
+    });
+    document.body.append(d);
+    d.showModal();
+    title.select();
+  };
+  const importBook = async () => {
+    const f = await pickFile('.inkflo,.zip');
+    if (!f) return;
+    try {
+      const meta = await studio.importInkflo(new Uint8Array(await f.arrayBuffer()), false, bin?.id);
+      toast(`Imported “${meta.title}”.`);
+      go(`#book/${meta.id}`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 5000);
+    }
+  };
+
+  /** New vertical comic: a title and a page size (starts as the 8 x 32 in Webtoon page, 800 px wide), with a short guide. */
+  const newScroll = () => {
+    const title = h('input', { value: 'Untitled episode', 'aria-label': 'Title', maxlength: 120 });
+    const kind = kindById('webtoon')!;
+    const create = h('button', { class: 'btn primary', type: 'submit' }, 'Create episode');
+    const sizeBox = sizePicker({ w: kind.w, h: kind.h, dpi: kind.dpi, onChange: (v) => { create.disabled = !!v.problem; } });
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New vertical comic')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), h('h4', {}, 'Page size'), sizeBox.el,
+        h('details', { class: 'note' },
+          h('summary', {}, 'How do these numbers work?'),
+          h('ul', {},
+            h('li', {}, 'inkflo draws vertical pages at 100 pixels per inch, so 8 in wide is 800 px wide: a common width for web comics.'),
+            h('li', {}, 'A page is one long chunk of your episode. Add more pages as you go; they stack into one scroll.'),
+            h('li', {}, 'When you are done, Export → Vertical scroll lets you pick the final width, image format and file size for the site you publish on.'))),
+        h('p', { class: 'note' }, 'Not sure? Keep the defaults. You can change the size in Print until you start drawing.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), create));
+    const d = h('dialog', { 'aria-label': 'New vertical comic' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const v = sizeBox.value();
+      if (v.problem) return;
+      d.close();
+      const book = await studio.createBook(title.value.trim() || 'Untitled episode', '', (b) => {
+        b.print = { ...specFor(kind), kind: v.kind ?? 'custom' };
+        b.dpi = kind.dpi;
+        b.pages[0]!.widthIn = v.w;
+        b.pages[0]!.heightIn = v.h;
+        b.pages[0]!.layout = { ...DEFAULT_LAYOUT, gutter: 0.6, border: 0, gutterPaper: '#ffffff' };
+      }, bin?.id);
+      go(`#desk/${book.id}/${book.pages[0]!.id}/script`);
+    });
+    document.body.append(d);
+    d.showModal();
+    title.select();
+  };
+  /** Comic strip: three or four panels side by side, or three stacked; opens in Draw, ready to ink. */
+  const newStrip = () => {
+    type StripLayout = '3' | '4' | 'stacked';
+    let layout: StripLayout = '3';
+    const title = h('input', { value: 'Untitled strip', 'aria-label': 'Title', maxlength: 120 });
+    const choice = (id: StripLayout, label: string, note: string, cells: number, stacked: boolean) =>
+      h('button', { type: 'button', class: 'strip-choice', role: 'radio', 'aria-checked': String(id === layout), onclick: () => { layout = id; pick.querySelectorAll('[role=radio]').forEach((b) => b.setAttribute('aria-checked', String(b === pick.querySelector(`[data-id="${id}"]`)))); }, 'data-id': id },
+        h('span', { class: 'strip-mini' + (stacked ? ' stacked' : ''), 'aria-hidden': 'true' }, Array.from({ length: cells }, () => h('i'))),
+        h('b', {}, label), h('small', {}, note));
+    const pick = h('div', { class: 'strip-choices', role: 'radiogroup', 'aria-label': 'Strip layout' },
+      choice('3', '3 panels', '13 × 4 in daily strip', 3, false),
+      choice('4', '4 panels', '13 × 4 in daily strip', 4, false),
+      choice('stacked', 'Stacked strip', '4 × 12 in, phone-friendly', 3, true));
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, 'New comic strip')),
+      h('div', { class: 'content' }, h('label', { class: 'field' }, 'Title', title), pick,
+        h('p', { class: 'note' }, 'Opens in Draw with the panels cut. Change the cuts in Layout and the size in Print any time.')),
+      h('footer', {}, h('button', { class: 'btn', type: 'button', onclick: () => d.close() }, 'Cancel'), h('button', { class: 'btn primary', type: 'submit' }, 'Create strip')));
+    const d = h('dialog', { 'aria-label': 'New comic strip' }, form);
+    d.addEventListener('close', () => d.remove());
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const stacked = layout === 'stacked';
+      const kind = kindById(stacked ? 'stacked-strip' : 'daily-strip')!;
+      d.close();
+      const book = await studio.createBook(title.value.trim() || 'Untitled strip', '', (b) => {
+        b.print = specFor(kind);
+        b.dpi = kind.dpi;
+        const pg = b.pages[0]!;
+        pg.widthIn = kind.w;
+        pg.heightIn = kind.h;
+        pg.layout = { ...DEFAULT_LAYOUT, gutter: 0.18 };
+        pg.cuts = stripCuts(pg, layout === '4' ? 4 : 3, stacked);
+      }, bin?.id);
+      go(`#desk/${book.id}/${book.pages[0]!.id}/draw`);
+    });
+    document.body.append(d);
+    d.showModal();
+    title.select();
+  };
+  const starter = h('button', { class: 'card new', type: 'button', onclick: async () => {
+    starter.disabled = true;
+    try {
+      const response = await fetch(import.meta.env.BASE_URL + 'examples/the-last-train.inkflo');
+      if (!response.ok) throw new Error('The starter could not be loaded. Try again in a moment.');
+      const meta = await studio.importInkflo(new Uint8Array(await response.arrayBuffer()), true, bin?.id);
+      const book = await studio.openBook(meta.id);
+      if (starter.isConnected) go('#desk/' + book.id + '/' + book.pages[0]!.id + '/script');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 5000);
+    } finally {
+      starter.disabled = false;
+    }
+  } }, h('div', { class: 'sheet', 'aria-hidden': 'true' }, '▤'), h('h3', {}, 'Open starter comic'), h('small', {}, 'The Last Train · Two panels'));
+  // new work in its own short row; the library below it (UI audit P2 19)
+  const starts = h('div', { class: 'starts' },
+    h('button', { class: 'card new', type: 'button', onclick: newBook }, h('div', { class: 'sheet' }, '+'), h('h3', {}, 'New book'), h('small', {}, 'One page, ready to script')),
+    h('button', { class: 'card new', type: 'button', onclick: newScroll }, h('div', { class: 'sheet' }, '↧'), h('h3', {}, 'New vertical comic'), h('small', {}, 'Phone-width episode')),
+    h('button', { class: 'card new', type: 'button', onclick: newStrip }, h('div', { class: 'sheet' }, h('span', { class: 'strip-mini', 'aria-hidden': 'true' }, h('i'), h('i'), h('i'))), h('h3', {}, 'Comic strip'), h('small', {}, '3 or 4 panels, or stacked')),
+    starter);
+  function bookDestination(b: BookMeta, action: 'move' | 'duplicate'): void {
+    const current = folderOf(b) ?? '';
+    const duplicate = action === 'duplicate';
+    const heading = duplicate ? 'Duplicate book' : 'Move to project bin';
+    const picker = h('select', { 'aria-label': 'Project bin' },
+      h('option', { value: '', selected: !current }, 'Unsorted'),
+      folders.map(({ id, name }) => h('option', { value: id, selected: id === current }, name)));
+    const title = h('input', { value: b.title.slice(0, 113).trimEnd() + ' (copy)', maxlength: 120, required: true });
+    const status = h('p', { class: 'note', role: 'status', hidden: true });
+    const cancel = h('button', { class: 'btn', type: 'button', onclick: () => dialog.close() }, 'Cancel');
+    const submit = h('button', { class: 'btn primary', type: 'submit' }, duplicate ? 'Create copy' : 'Move book');
+    const form = h('form', { method: 'dialog' },
+      h('header', {}, h('h2', {}, heading)),
+      h('div', { class: 'content stack' }, duplicate ? h('label', { class: 'field' }, 'Copy title', title) : null,
+        h('label', { class: 'field' }, 'Project bin', picker), status),
+      h('footer', {}, cancel, submit));
+    const dialog = h('dialog', { 'aria-label': heading }, form);
+    let saving = false;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (saving) return;
+      const next = picker.value || null;
+      const copyTitle = title.value.trim();
+      if (duplicate && !copyTitle) {
+        status.textContent = 'Enter a title for the copy.';
+        status.hidden = false;
+        return;
+      }
+      if (!duplicate && next === (current || null)) {
+        dialog.close();
+        return;
+      }
+      saving = true;
+      status.hidden = true;
+      for (const control of [title, picker, cancel, submit]) control.disabled = true;
+      try {
+        if (duplicate) await studio.store.duplicateBook(b.id, copyTitle, next);
+        else await studio.store.updateBookMeta(b.id, { folder: next });
+        dialog.close();
+        const destination = next ?? 'unsorted';
+        if (duplicate) toast(`Created “${copyTitle}”.`);
+        if (duplicate && filter && filter !== destination) go(folderRoute(destination));
+        else reload();
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : String(error);
+        status.hidden = false;
+      } finally {
+        saving = false;
+        for (const control of [title, picker, cancel, submit]) control.disabled = false;
+      }
+    });
+    dialog.addEventListener('cancel', (event) => { if (saving) event.preventDefault(); });
+    dialog.addEventListener('close', () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+    if (duplicate) title.select();
+  }
+  const bookCard = (b: BookMeta) => {
+    const publication = publicationLabel(b.publication);
+    const binName = bin ? '' : folders.find(({ id }) => id === b.folder)?.name ?? '';
+    const actions = h('button', { class: 'icon library-actions', type: 'button', title: 'Book actions',
+      'aria-label': `Actions for ${b.title}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, '⋯');
+    actions.addEventListener('click', () => {
+      if (actions.getAttribute('aria-expanded') === 'true') {
+        closePopover();
+        return;
+      }
+      actions.setAttribute('aria-expanded', 'true');
+      const item = (label: string, run: () => void | Promise<void>, danger = false) =>
+        h('button', { class: danger ? 'item danger' : 'item', role: 'menuitem', type: 'button', onclick: () => {
+          closePopover();
+          actions.focus({ preventScroll: true });
+          void Promise.resolve().then(run).catch(report);
+        } }, label);
+      popover(actions, h('div', { class: 'chrome-menu', role: 'menu' },
+        item('Rename / edit details…', () => openBookDetails(b, async (details) => {
+          await studio.openBook(b.id);
+          studio.editBookDetails(details);
+          await studio.saver.flush();
+          if (studio.saver.state === 'error') throw new Error(studio.saver.error ?? 'The book could not be saved.');
+          reload();
+        })),
+        item('Duplicate…', () => bookDestination(b, 'duplicate')),
+        item('Move to project bin…', () => bookDestination(b, 'move')),
+        folderOf(b) ? item('Remove from project bin', async () => {
+          await studio.store.updateBookMeta(b.id, { folder: null });
+          reload();
+        }) : null,
+        item('Delete book…', async () => {
+          if (!await confirmDeleteBook(b.title, b.pages)) return;
+          await studio.deleteBook(b.id);
+          reload();
+        }, true)), 'below', 'Book actions', () => actions.setAttribute('aria-expanded', 'false'));
+    });
+    return h('article', { class: 'library-card', 'data-search': [b.title, b.author, publication, binName].join(' ').toLowerCase() },
+      h('button', { class: 'card', type: 'button', 'aria-label': `Open ${b.title}`, onclick: () => go(`#book/${b.id}`) },
+        h('div', { class: 'sheet' }, cover(b.cover)),
+        h('h3', {}, b.title),
+        publication || binName ? h('small', {}, [publication, binName].filter(Boolean).join(' · ')) : null,
+        h('small', {}, `${b.pages} page${b.pages === 1 ? '' : 's'} · ${b.lastStage} · ${new Date(b.modified).toLocaleDateString()}`),
+        h('div', { class: 'dots', 'aria-hidden': 'true' }, STAGES.map((s) => h('i', { class: STAGES.indexOf(s) <= STAGES.indexOf(b.lastStage) ? 'done' : '' })))),
+      actions);
+  };
+  const grid = h('div', { class: 'books' }, visible.map(bookCard));
+  const none = h('p', { class: 'empty', hidden: visible.length > 0 || !filter }, filter ? 'No books in this bin.' : 'No book matches.');
+  const search = h('input', { type: 'search', class: 'book-search', placeholder: 'Search title, series or chapter', 'aria-label': 'Search books' });
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const c of grid.children) { const hit = !q || (c as HTMLElement).dataset.search!.includes(q); (c as HTMLElement).hidden = !hit; if (hit) shown++; }
+    none.textContent = q ? 'No book matches.' : 'No books in this bin.';
+    none.hidden = shown > 0;
+  });
+  const selectBin = h('select', { 'aria-label': 'Project bin', onchange: () => go(folderRoute(selectBin.value)) },
+    h('option', { value: '', selected: !filter }, 'All books'),
+    h('option', { value: 'unsorted', selected: filter === 'unsorted' }, 'Unsorted'),
+    folders.map(({ id, name }) => h('option', { value: id, selected: filter === id }, name)));
+  const nameBin = async (existing?: typeof bin) => {
+    const name = (await askText(existing ? 'Rename project bin' : 'New project bin', 'Name', existing?.name ?? '', existing ? 'Rename bin' : 'Create bin'))?.slice(0, 80).trim();
+    if (!name) return;
+    if (folders.some((folder) => folder.id !== existing?.id && byName.compare(folder.name, name) === 0)) throw new Error('A project bin already uses that name.');
+    const folder = existing ? { ...existing, name } : { id: newId('bin'), name, created: Date.now() };
+    await studio.store.putFolder(folder);
+    go(folderRoute(folder.id));
+  };
+  const bins = h('div', { class: 'library-tools' },
+    h('label', { class: 'field' }, 'Project bin', selectBin),
+    h('button', { class: 'btn', type: 'button', onclick: () => void nameBin().catch(report) }, 'New bin'),
+    bin ? h('button', { class: 'btn', type: 'button', onclick: () => void nameBin(bin).catch(report) }, 'Rename bin') : null,
+    bin ? h('button', { class: 'btn', type: 'button', onclick: async () => {
+      if (!await confirmDialog('Delete project bin?', `Books in “${bin.name}” will move to Unsorted.`, 'Delete bin')) return;
+      await studio.store.deleteFolder(bin.id).then(() => go('#home/unsorted'), report);
+    } }, 'Delete bin…') : null);
+
+  root.replaceChildren(
+    h('div', { class: 'screen' },
+      h('header', { class: 'bar' },
+        h('span', { class: 'brand' }, h('img', { class: 'brand-logo', src: import.meta.env.BASE_URL + 'icons/inkflofavcon.png', alt: '', 'aria-hidden': 'true' }), 'inkflo'),
+        h('span', { class: 'spacer' }),
+        studio.persistent ? null : h('span', { class: 'meta' }, 'Not saving: this browser has no local storage'),
+        displayButton(),
+        h('button', { class: 'btn', type: 'button', onclick: openOfflineDialog }, 'Offline'),
+        h('button', { class: 'btn', type: 'button', onclick: () => openManual() }, 'Manual'),
+        h('button', { class: 'btn', type: 'button', onclick: importBook }, 'Import .inkflo'),
+        h('button', { class: 'btn primary', type: 'button', onclick: newBook }, 'New book')),
+      h('main', { class: 'body' },
+        h('div', { class: 'rowlabel' }, 'Start something'),
+        starts,
+        h('div', { class: 'rowlabel books-head' }, h('span', {}, 'Your books'), books.length ? search : null),
+        bins,
+        books.length ? null : h('p', { class: 'empty' }, 'Script a page, carve its panels, draw, letter, then export page images, a comic archive, or a motion comic that opens in 2Dope. Everything stays on this device.'),
+        grid, none),
+      h('footer', { class: 'home-credit' },
+        h('span', { class: 'credit-line' },
+          h('button', { class: 'credit', type: 'button', title: 'About inkflo', onclick: () => openManual('about') }, ABOUT_CREDIT),
+          ' at ',
+          h('a', { class: 'credit', href: LBCC_URL, target: '_blank', rel: 'noopener noreferrer', title: 'Digital Media Arts at Long Beach City College (opens in a new tab)' }, 'Long Beach City College')))),
+  );
+  // free cover URLs when the screen goes away
+  const off = new MutationObserver(() => {
+    if (!root.contains(grid)) {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+      off.disconnect();
+    }
+  });
+  off.observe(root, { childList: true });
 }
