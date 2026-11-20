@@ -8,6 +8,6 @@
   "background_color": "#EDE6D8",
   "theme_color": "#EDE6D8",
   "icons": [
-    { "src": "icons/inkflo-logo.png", "sizes": "1024x1024", "type": "image/png" }
+    { "src": "icons/inkflofavcon.png", "sizes": "1024x1024", "type": "image/png" }
   ]
 }
