@@ -29,8 +29,8 @@ input, textarea, select { font: inherit; color: inherit; }
 .bar { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--surface); flex: none; }
 /* the desk header is 52px; placed before the narrow-screen .bar rule so that one can still make it grow */
 .desk-bar { height: 52px; }
-.brand { font-family: var(--serif); font-style: italic; font-size: var(--fs-3xl); letter-spacing: -.4px; }
-.brand i { display: inline-block; width: 7px; height: 7px; border-radius: var(--r-pill); background: var(--acc-layout); transform: translateY(-7px); margin-left: 8px; }
+.brand { display: inline-flex; align-items: center; gap: 9px; font-family: var(--serif); font-style: italic; font-size: var(--fs-3xl); letter-spacing: -.4px; }
+.brand-logo { display: block; width: 26px; height: 26px; border-radius: var(--r-2); }
 .title { font-family: var(--serif); font-size: var(--fs-2xl); }
 .meta { color: var(--text-soft); font-size: var(--fs-sm); }
 
