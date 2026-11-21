@@ -1,11 +1,12 @@
 import { panelCraftSection } from '../panelcraft';
 import { newId, type Beat, type Cut,type CutMode, type PageLayout, type Pt } from '../../doc/model';
 import { rhythmSection } from '../rhythm';
-import { K, canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, type Panel } from '../../geom/carve';
+import { canEvenOut, cornerOverrides, derivePanels, evenOut, gutterPaths, layoutOf, mapPanelPoint, nearestCut, newCutId, panelAt, panelStack, planKnifeCut, pointInPoly, type Panel } from '../../geom/carve';
 import { invert } from '../../engine/core/selxform';
 import { anchorFor } from '../../geom/groups';
 import { movePanelCuts, sameGutterTopology } from '../../geom/paneltransform';
 import { inGutter } from '../../geom/gutters';
+import { panelHandles } from '../../geom/gutterhandles';
 import { panelPath } from '../../render/page';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
 import { h, seg, slider, toast } from '../dom';
@@ -106,25 +107,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   function handles(): Handle[] {
     const selectedPanel = selected();
     if (!selectedPanel) return [];
-    const p = selectedPanel.source ?? selectedPanel;
-    const { x0, x1, y0, y1 } = p.bbox;
-    const mx = (x0 + x1) / 2;
-    const my = (y0 + y1) / 2;
-    const sides: { side: Side; at: Pt; axis: 'x' | 'y' }[] = [
-      { side: 'w', at: { x: x0, y: my }, axis: 'x' },
-      { side: 'e', at: { x: x1, y: my }, axis: 'x' },
-      { side: 'n', at: { x: mx, y: y0 }, axis: 'y' },
-      { side: 's', at: { x: mx, y: y1 }, axis: 'y' },
-    ];
-    const out: Handle[] = [];
-    const gutter = layoutOf(page).gutter;
-    for (const s of sides) {
-      const c = nearestCut(displayPage(), s.at);
-      if (!c) continue;
-      const aligned = s.axis === 'x' ? Math.abs(c.n.x) > 0.55 : Math.abs(c.n.y) > 0.55;
-      if (aligned && c.d <= gutter / 2 + 18 / K) out.push({ ...s, at: c.at, cut: c.cut });
-    }
-    return out;
+    // on the edges the panel really shares, so angled, curved and zig-zag panels get handles too
+    return panelHandles(displayPage(), selectedPanel.source ?? selectedPanel);
   }
 
   const handleAt = (p: Pt, r: number): Handle | null => {
