@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newPage } from '../doc/model';
 import { derivePanels, layoutOf, presetCuts } from './carve';
-import { describeTransform, formatLayoutCode, parseLayoutCode, transformMatrix } from './layoutcode';
+import { describeTransform, formatLayoutCode, isHandDrawn, parseLayoutCode, smoothDrawnCuts, transformMatrix } from './layoutcode';
 
 const page = () => newPage();
 
@@ -131,5 +131,71 @@ describe('page data for games', () => {
     expect(d.panels[0]!.lines).toEqual([{ speaker: 'MAYA', kind: 'whisper', text: 'Look.' }, { speaker: null, kind: 'box', text: 'Midnight.' }]);
     expect(d.panels[1]!.description).toBe('');
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
+  });
+
+  describe('a hand-drawn cut stays readable', () => {
+    /** A wobbly wave across the page, running on far past both edges the way a drawn cut is stored. */
+    const wavy = () => {
+      const p = page();
+      const pts = Array.from({ length: 60 }, (_, i) => ({ x: -1.3 + i * 0.12, y: 4.2 + Math.sin(i / 4) * 0.4 + ((i * 7) % 5 - 2) * 0.004 }));
+      pts.push({ x: 20.11, y: -6.05 });
+      p.cuts = [{ id: 'cwave', mode: 'across', pts, bounded: true }];
+      return p;
+    };
+
+    it('is shown with far fewer points, its ends pulled in near the page, and labelled', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p);
+      const line = code.split('\n').find((l) => l.startsWith('cut '))!;
+      const shown = line.split('#')[0]!.split('->');
+      expect(shown.length).toBeLessThan(20);
+      expect(line).toMatch(/# hand-drawn/);
+      const last = shown.at(-1)!.trim().split(',').map(Number);
+      expect(last[0]).toBeLessThanOrEqual(p.widthIn + 0.5 + 0.01); // shown to 0.01 in
+      expect(last[1]).toBeGreaterThanOrEqual(-0.5 - 0.01);
+    });
+
+    it('reads back as the very same cut when its line is untouched, even after another line changes', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p).replace(/^gutter .*$/m, 'gutter 0.3');
+      const back = parseLayoutCode(code, p);
+      expect(back.errors).toEqual([]);
+      expect(back.cuts[0]).toBe(p.cuts[0]); // same object: every drawn point kept
+      expect(back.layout.gutter).toBe(0.3);
+    });
+
+    it('still reads a line the student edits, and keeps that cut\'s id', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p).replace(/^cut .*$/m, 'cut 0,5 -> 6.6,5');
+      const back = parseLayoutCode(code, p);
+      expect(back.errors).toEqual([]);
+      expect(back.cuts[0]!.id).toBe('cwave');
+      expect(back.cuts[0]!.pts).toHaveLength(2);
+    });
+  });
+});
+
+describe('smooth cuts', () => {
+  const wobbly = () => {
+    const p = newPage();
+    const pts = Array.from({ length: 80 }, (_, i) => ({ x: -0.5 + i * 0.09, y: 5 + ((i * 13) % 7 - 3) * 0.012 })); // a nearly straight, shaky line
+    p.cuts = [{ id: 'cshaky', mode: 'across', pts, bounded: true }, { id: 'cstraight', mode: 'across', pts: [{ x: 2, y: -1 }, { x: 2, y: 11 }], bounded: true }];
+    return p;
+  };
+
+  it('straightens a shaky line, keeps its ends, and leaves straight cuts alone', () => {
+    const p = wobbly();
+    const next = smoothDrawnCuts(p, 100);
+    expect(next[0]!.pts.length).toBeLessThanOrEqual(3);
+    expect(next[0]!.pts[0]!.x).toBeCloseTo(p.cuts[0]!.pts[0]!.x, 0);
+    expect(Math.abs(next[0]!.pts.at(-1)!.y - 5)).toBeLessThan(0.1);
+    expect(next[1]).toBe(p.cuts[1]); // untouched
+    expect(next[0]!.id).toBe('cshaky');
+  });
+
+  it('recognises which cuts are hand-drawn', () => {
+    const p = wobbly();
+    expect(isHandDrawn(p.cuts[0]!, p)).toBe(true);
+    expect(isHandDrawn(p.cuts[1]!, p)).toBe(false);
   });
 });

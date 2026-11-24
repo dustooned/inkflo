@@ -465,9 +465,9 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Resize gutters previews shared gutter movement on the page. Drag a gutter directly or drag
   a panel body along an axis with two movable boundaries. Panel-only cuts stay attached where
   possible, and the preview holds at the last valid layout when a move would collapse a panel.
-- Select lines uses a rectangular or freehand selection on one vector layer. Drag to move, resize
-  or rotate the lines, or use the flip controls. Shift constrains the transform and Alt resizes
-  from the centre. Vector transforms retain pressure and brush colour.
+- Select lines uses a rectangular or freehand selection on one vector layer. It shares the
+  transform box below: each gesture is applied as it ends, and the box keeps its turn between
+  gestures. Vector transforms retain pressure and brush colour.
 - Ink and Vector pen accept a custom colour. The eyedropper can also set ink or fill colour from
   the visible art. Pencil still uses the blue sketch pass.
 - Caption has edge and corner handles, a centre or opposite-edge anchor, and on-canvas and
@@ -567,12 +567,59 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   page center. Hue, saturation, brightness and Gaussian blur apply to an unlocked paint layer
   with one undo step. Touch on the board pans, and adding a second finger there zooms around
   the gesture.
+- **Caption type frames** use the shared box geometry: a rotate knob, handles that work along the frame's own
+  edges, hit-testing on the turned frame, Shift to snap turns to 15° or keep proportions, Alt to scale from the
+  centre, a live angle or size readout, arrow nudges (0.01 in, Shift 0.1 in) and two-finger pinch, twist and drag.
+  The inspector now also has Left, Top, Width and Height fields beside Rotation.
+- **Caption balloons** keep their own box (rotate knob, edge handles, tails). They also take arrow-key nudges
+  (1 pt, Shift for 10) and two-finger pinch (size, to readable steps), twist and drag, each one undo step.
+- **Classroom mode** (Display settings, on desks): opens Simple layout and hides the code tools (Layout's Code
+  button and panel, Script's Code view). Student-facing options such as Script dialogue and Style sheet stay.
+  The choice is remembered (`Prefs.classroom`).
+- **Liquify** (Draw, U; Push, Twirl, Pinch, Bloat in its variants) pushes, turns, pinches or swells the paint
+  under the brush with a soft falloff (`src/draw/liquify.ts`). Like Smudge it is a saved pixel edit
+  (`LiquifyStroke`), replayed from its points, undoable per stroke, and exact between preview and replay.
+  Size and Strength sliders are shared with Smudge.
 - **Clone** samples an area of the same paint layer. Tap **Set source**, pick the source area,
   and brush the copy into place. The stroke can be undone and replayed.
 - **Transform**, **Select lines**, and **Screentone → Selection** share rectangle, ellipse,
   freehand, polygon and magnetic lassos. Tap polygon corners and close at the first point or
   press Enter. Magnetic follows nearby contrast and alpha edges while staying close to the swipe.
   Pixel transforms offer freeform and uniform scale and an option to keep the original pixels.
+- **Select** (Draw, Q) is the pointer: tap a vector line to select it, tap painted art to select that
+  layer's paint, or drag on empty space to box-select lines. Either way the transform box takes over
+  (drag to move, handles, knob, pinch). Select lines and Transform remain for lasso shapes.
+  Select also picks placed images and Artist marks (handing off to Position image / Artist mark), and
+  Shift-tap adds more lines to a line selection. In **Layout**, Select (Q) is the pointer: a box handle
+  turns or stretches the selected panel, a gutter or its handle resizes the cut, and a panel body selects
+  and moves it. Arrow keys nudge (Shift for ten times the step) in Draw and Layout.
+- **Selection recipes** (Transform, paint): the bar's **Selection** menu adds to or subtracts from the selection
+  (drag in Add or Subtract mode, even inside the box), inverts it, feathers its edge (0–60 px), or picks by
+  colour (tap; tolerance, and touching-only or whole layer). The selected area shows as a light blue tint.
+  A selection is a list of steps (`SelectionStep`: polygon or colour, replace / add / subtract, invert,
+  feather) replayed into a soft mask (`src/draw/selmask.ts`); the lift through it takes only what the mask
+  covers, so a feathered edge moves partly and leaves the rest. A plain one-area selection saves as before;
+  anything else saves its steps in `PixelTransform.selection` and replays the same way on load. Selections can be
+  **saved by name** on the page (`Page.savedSelections`, up to 32) and brought back from the Selection menu, on the layer
+  they were made on. Select lines has the same New / Add / Subtract and Invert, without feather or colour, and
+  without saving (lines are picked, not painted).
+- **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
+  lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
+  a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches
+  along its edges. State is one box (centre, size, turn, flips); the art's matrix is derived from the
+  box at selection and the box now, so drags never drift. Alt scales from the centre, Shift keeps
+  proportions (or snaps the turn to 15°), and Uniform / Freeform sets the default. Live readout of
+  angle and size. **Snapping** snaps turns to 15°, size back to 100%, and position to page edges and
+  centre with guide lines. **Pivot** shows a movable pivot the box turns about. Flip, Rotate 45°,
+  Fit to page and Reset. Two fingers pinch, twist and drag the box instead of the view while art is
+  selected (`DeskMode.pinchTransform`). Transform with *Draw on: Selected layer* takes the layer's
+  paint as soon as it is chosen, and **Whole layer** does so on demand. Paint transforms can use
+  **Crisp** (nearest-neighbour) resampling, saved as `crisp` on the edit. Transform panel (Layout, one panel) uses the same box,
+  turning with the placed panel, with pinch/twist and the bar controls; All panels keeps the older
+  axis-aligned resize.
+  **Distort** (four independent corners, with perspective) and **Warp** (a 4 × 4 grid of nodes with a smooth
+  surface) bend paint and lines through one mesh (`src/geom/meshwarp.ts`); a paint edit saves the mesh
+  (`PixelTransform.mesh`) and replays it. Panels are placed, not bent, so they only offer Freeform and Uniform.
 
 ## Touch workspace and book assets
 
@@ -1681,3 +1728,15 @@ pm run package:offline writes dist-offline/inkflo-offline.zip: the build plus a 
 
 - The Screentone tool no longer makes a layer per tap. New flat, selection and gradient tones go into the selected tone layer (if it is in that panel) or the panel's existing one; "New tone layer" starts a separate layer on purpose. Model: `Layer.screenTone` stays the first area and new `Layer.moreTones` holds the rest (`tonesOf` / `setTones` in `src/doc/model.ts`), so old files load unchanged; the schema keeps up to 64 areas per layer. Rendering, exports and layer thumbnails draw every area; an Area menu in the tool picks which to edit, re-aim or remove.
 - **Verified** in the dev app on a 3-panel strip: repeated taps in one panel gave one layer with two areas; New tone layer then made a second layer that took the following taps. **Not verified:** undo of an added area in the UI, PSD export of a multi-area layer, and the Paint tone brush (unchanged: it already reused one layer per panel).
+
+
+## Tests
+
+- `npm test` runs the unit tests (Vitest); `npm run typecheck` runs `tsc`.
+- `npm run e2e` drives the real app in Chromium (`e2e/*.e2e.mjs`, Node's test runner and Playwright; it starts
+  its own dev server). It covers the transform box, Distort and Warp (saved and reloaded), exact numbers and
+  arrow nudges, Select (tap, Shift-add, pinch and twist, Layout panel and gutter), selection recipes (Add and
+  Subtract saved and reloaded), Liquify, the zoom keys, and real multi-touch. Tests assert on the saved
+  document, not on screenshots. First run on a new machine: `npx playwright install chromium`.
+- `.github/workflows/ci.yml` runs typecheck, unit tests and `npm run e2e` on every pull request.
+- `docs/qa/TOUCH-CHECKLIST.md` lists what automation cannot judge and needs a real tablet and Pencil.

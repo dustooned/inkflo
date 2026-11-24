@@ -76,13 +76,15 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
     vignette.addEventListener('change', () => setPrefs({ vignette: vignette.checked }));
     const guide = h('select', { 'aria-label': 'Composition guides' }, GUIDES.map((g) => h('option', { value: g.id, selected: g.id === p.guide }, g.label)));
     guide.addEventListener('change', () => setPrefs({ guide: guide.value as Guide }));
+    const classroom = h('input', { type: 'checkbox', checked: p.classroom });
+    classroom.addEventListener('change', () => { setPrefs({ classroom: classroom.checked, ...(classroom.checked ? { layout: 'simple' as Layout } : {}) }); rebuild(); });
     const snap = h('input', { type: 'checkbox', checked: p.snapGuide });
     snap.addEventListener('change', () => setPrefs({ snapGuide: snap.checked }));
     return h('div', { class: 'w-240' },
       h('h4', {}, 'Theme'),
-      seg<Theme>([{ id: 'system', label: 'System' }, { id: 'light', label: 'Light' }, { id: 'dark', label: 'Dark' }], p.theme, (v) => { setPrefs({ theme: v }); rebuild(); }, 'Theme'),
+      seg<Theme>([{ id: 'system', label: 'System', icon: 'system' }, { id: 'light', label: 'Light', icon: 'sun' }, { id: 'dark', label: 'Dark', icon: 'moon' }], p.theme, (v) => { setPrefs({ theme: v }); rebuild(); }, 'Theme'),
       h('h4', {}, 'Canvas backdrop'),
-      seg<Backdrop>([{ id: 'grid', label: 'Grid' }, { id: 'dots', label: 'Dots' }, { id: 'plain', label: 'Plain' }], p.backdrop, (v) => { setPrefs({ backdrop: v }); rebuild(); }, 'Backdrop'),
+      seg<Backdrop>([{ id: 'grid', label: 'Grid', icon: 'gridLines' }, { id: 'dots', label: 'Dots', icon: 'screentone' }, { id: 'plain', label: 'Plain', icon: 'plain' }], p.backdrop, (v) => { setPrefs({ backdrop: v }); rebuild(); }, 'Backdrop'),
       h('div', { class: 'row' }, slider('Grid strength', 0, 100, 1, p.gridOpacity * 100, (v) => `${v}%`, (v) => setPrefs({ gridOpacity: v / 100 }))),
       h('div', { class: 'row' }, slider('Board brightness', -100, 100, 1, p.boardBrightness * 100, (v) => v ? `${v > 0 ? '+' : ''}${v}%` : 'Theme', (v) => setPrefs({ boardBrightness: v / 100 }))),
       h('div', { class: 'row' }, h('label', {}, vignette, 'Vignette')),
@@ -95,6 +97,7 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
         ? [h('div', { class: 'sep' }), h('h4', {}, 'Layout'),
           seg<Layout>([{ id: 'studio', label: 'Studio' }, { id: 'simple', label: 'Simple' }, { id: 'focus', label: 'Focus' }], p.layout, switchLayout, 'Layout'),
           h('div', { class: 'row' }, h('label', {}, finger, 'Draw with finger')),
+          h('div', { class: 'row' }, h('label', { title: 'For classes: opens Simple layout and hides code and developer tools' }, classroom, 'Classroom mode')),
           opts.shell ? h('div', { class: 'row' },
             h('label', {}, 'Brush sidebar', h('select', { 'aria-label': 'Handedness', onchange: (e) => {
               setPrefs({ handed: (e.target as HTMLSelectElement).value === 'left' ? 'left' : 'right' });

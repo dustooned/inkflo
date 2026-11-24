@@ -9,11 +9,13 @@ import { adjustPixels } from './adjustment';
 import { cloneSegment } from './clone';
 import { paintGradient } from './gradientfill';
 import { gutterMask } from '../geom/gutters';
+import { meshFromFlat } from '../geom/meshwarp';
 import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { fillRefLayers } from '../geom/groups';
-import { liftPixels, paintPixelTransform } from './pixeltransform';
+import { liftPixels, liftRecipe, paintPixelTransform } from './pixeltransform';
 import { smudgeSegment } from './smudge';
+import { liquifySegment } from './liquify';
 
 /**
  * Rebuild layer bitmaps from the page's data (strokes and fills).
@@ -218,11 +220,13 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
         const snapshot = ops.newCanvas(canvas.width, canvas.height).getContext('2d')!;
         snapshot.drawImage(canvas, 0, 0);
         for (let i = 1; i < edit.points.length; i++) cloneSegment(g, snapshot, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
+      } else if ('kind' in edit && edit.kind === 'liquify') {
+        for (let i = 1; i < edit.points.length; i++) liquifySegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else if ('kind' in edit) {
         for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else {
-        const lifted = liftPixels(canvas, edit.polygon, dpi);
-        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy);
+        const lifted = edit.selection ? liftRecipe(canvas, edit.selection, dpi) : liftPixels(canvas, edit.polygon, dpi);
+        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy, edit.crisp, edit.mesh ? meshFromFlat(edit.mesh) : null);
       }
     }
     replayTo(layer.strokes.length, layer.fills.length);

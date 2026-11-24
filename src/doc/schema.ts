@@ -4,8 +4,9 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
-import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
-import { INTENT_KEYS, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
+import { meshFromFlat } from '../geom/meshwarp';
+import type { LiquifyMode, SavedSelection, SelectionStep, DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
+import { INTENT_KEYS, LIQUIFY_MODES, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
@@ -275,6 +276,26 @@ function toneScreen(v: unknown, path: string): ToneScreen {
   return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, angle, color };
 }
 
+/** The steps of a selection recipe, checked. */
+function selectionSteps(value: unknown, path: string): SelectionStep[] {
+  const raw = arr(value, path);
+  if (raw.length < 1 || raw.length > 64) fail(path, 'needs 1 to 64 steps');
+  return raw.map((v, j): SelectionStep => {
+    const q = `${path}[${j}]`, s = obj(v, q);
+    if (s.op === 'invert') return { op: 'invert' };
+    if (s.op === 'feather') { const radius = num(s.radius, `${q}.radius`); if (radius < 0 || radius > 2) fail(`${q}.radius`, 'should be 0 to 2 inches'); return { op: 'feather', radius }; }
+    if (s.op !== 'replace' && s.op !== 'add' && s.op !== 'subtract') fail(`${q}.op`, 'is not a selection step');
+    const shape = obj(s.shape, `${q}.shape`);
+    if (shape.kind === 'polygon') {
+      const points = pts(shape.pts, `${q}.shape.pts`);
+      if (points.length < 3 || points.length > 8192) fail(`${q}.shape.pts`, 'needs 3 to 8192 points');
+      return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'polygon', pts: points } };
+    }
+    if (shape.kind !== 'colour') fail(`${q}.shape.kind`, 'is not a selection shape');
+    return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'colour', at: pt(shape.at, `${q}.shape.at`), tolerance: unit(shape.tolerance, `${q}.shape.tolerance`, 0.2), contiguous: shape.contiguous !== false } };
+  });
+}
+
 function layer(v: unknown, path: string): Layer {
   const o = obj(v, path);
   const type = oneOf(o.type, LAYER_TYPES, `${path}.type`);
@@ -317,7 +338,7 @@ function layer(v: unknown, path: string): Layer {
         if (Math.abs(hue) > 180 || Math.abs(sat) > 100 || Math.abs(bright) > 100 || blur < 0 || blur > 0.15) fail(p, 'has an adjustment out of range');
         return { kind: 'adjustment', hue, sat, bright, blur, strokes, fills };
       }
-      if (op.kind === 'smudge' || op.kind === 'clone') {
+      if (op.kind === 'smudge' || op.kind === 'clone' || op.kind === 'liquify') {
         const raw = arr(op.points, `${p}.points`);
         if (raw.length < 2 || raw.length > 8192) fail(`${p}.points`, 'needs 2 to 8192 points');
         const points = raw.map((v, j) => {
@@ -327,6 +348,10 @@ function layer(v: unknown, path: string): Layer {
         const size = pos(op.size, `${p}.size`);
         if (size > 1) fail(`${p}.size`, 'should be no more than one inch');
         const edit = { points, size, strength: unit(op.strength, `${p}.strength`, 0.5), strokes, fills };
+        if (op.kind === 'liquify') {
+          if (!(LIQUIFY_MODES as readonly unknown[]).includes(op.mode)) fail(`${p}.mode`, 'is not a Liquify mode');
+          return { kind: 'liquify', mode: op.mode as LiquifyMode, ...edit };
+        }
         return op.kind === 'clone' ? { kind: 'clone', ...edit, offset: pt(op.offset, `${p}.offset`) } : { kind: 'smudge', ...edit };
       }
       const polygon = pts(op.polygon, `${p}.polygon`);
@@ -335,7 +360,15 @@ function layer(v: unknown, path: string): Layer {
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}) };
+      const selection = op.selection !== undefined ? selectionSteps(op.selection, `${p}.selection`) : undefined;
+      let mesh: PixelTransform['mesh'];
+      if (op.mesh !== undefined) {
+        const m = obj(op.mesh, `${p}.mesh`);
+        const flat = { cols: num(m.cols, `${p}.mesh.cols`), rows: num(m.rows, `${p}.mesh.rows`), pts: arr(m.pts, `${p}.mesh.pts`).map((v, j) => num(v, `${p}.mesh.pts[${j}]`)) };
+        if (!meshFromFlat(flat)) fail(`${p}.mesh`, 'is not a valid mesh');
+        mesh = flat;
+      }
+      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}), ...(op.crisp === true ? { crisp: true } : {}), ...(mesh ? { mesh } : {}), ...(selection ? { selection } : {}) };
     });
   }
   return l;
@@ -699,6 +732,15 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   if (o.autoLetter === true) pg.autoLetter = true;
   if (o.texts !== undefined) pg.texts = arr(o.texts, `${path}.texts`).map((t, i) => textFrame(t, `${path}.texts[${i}]`));
   if (o.marks !== undefined) pg.marks = arr(o.marks, `${path}.marks`).map((m, i) => pageMark(m, `${path}.marks[${i}]`));
+  if (o.savedSelections !== undefined) {
+    const list = arr(o.savedSelections, `${path}.savedSelections`);
+    if (list.length > 32) fail(`${path}.savedSelections`, 'holds at most 32 selections');
+    pg.savedSelections = list.map((v, i): SavedSelection => {
+      const q = `${path}.savedSelections[${i}]`, s = obj(v, q);
+      return { id: str(s.id, `${q}.id`), name: str(s.name, `${q}.name`).trim().slice(0, 60) || 'Selection', layerId: str(s.layerId, `${q}.layerId`),
+        steps: selectionSteps(s.steps, `${q}.steps`), feather: unit(s.feather, `${q}.feather`, 0) };
+    });
+  }
   const earlier = new Set<string>();
   const grouped = pg.balloons.some((l) => l.continuation);
   for (const [i, l] of pg.balloons.entries()) {

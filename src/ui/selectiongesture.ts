@@ -1,6 +1,8 @@
 import type { Pt } from '../doc/model';
 import { IDENTITY, type XParams } from '../engine/core/selxform';
-import { boxHandles, resizeBox, type Bounds, type ResizeSide } from '../geom/resizebox';
+import { boxHandles as sideHandles, resizeBox, type Bounds, type ResizeSide } from '../geom/resizebox';
+import type { Mesh } from '../geom/meshwarp';
+import { boxCorners, boxFrame, boxHandles, boxPoint, rotateKnob, type OBox } from '../geom/xformbox';
 
 export type SelectionGrab = { kind: 'move' | 'rotate' } | { kind: 'resize'; side: ResizeSide };
 export const selectionCenter = (b: Bounds): Pt => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 });
@@ -12,7 +14,7 @@ export function selectionFrame(b: Bounds, scale: number): Bounds {
   return { x0: b.x0 - x, y0: b.y0 - y, x1: b.x1 + x, y1: b.y1 + y };
 }
 const rotationAt = (b: Bounds, scale: number) => ({ x: (b.x0 + b.x1) / 2, y: b.y0 - 23 / scale });
-const handles = (b: Bounds, scale: number) => boxHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
+const handles = (b: Bounds, scale: number) => sideHandles(b).filter((h) => h.x && h.y || ((b.x1 - b.x0) * scale > 34 && (b.y1 - b.y0) * scale > 34));
 
 export function grabSelection(b: Bounds, p: Pt, scale: number, touch: boolean, rotation = true, reachPx = touch ? 13 : 8): SelectionGrab | null {
   const reach = reachPx / scale;
@@ -65,4 +67,97 @@ export function drawSelectionFrame(g: CanvasRenderingContext2D, b: Bounds, scale
     g.beginPath(); g.arc(q.x * scale, q.y * scale, radius, 0, Math.PI * 2); g.fill(); g.stroke();
   }
   if (angle !== undefined) g.fillText(`${Math.round(angle)}°`, rotate.x * scale + 10, rotate.y * scale);
+}
+
+export interface TransformBoxStyle {
+  /** Pixels per document unit as drawn (the canvas scale). */
+  scale: number;
+  /** Extra zoom from a moved panel's placement: drawn sizes divide by it so handles keep their screen size. */
+  k?: number;
+  rotation?: boolean;
+  pivot?: Pt | null;
+  /** A short label that follows the gesture ("32°", "120%"), drawn at `at`. */
+  readout?: { text: string; at: Pt } | null;
+  /** Snap guides to draw, in document units. */
+  guides?: { x?: number; y?: number } | null;
+  extent?: { w: number; h: number };
+}
+
+const ACCENT = '#2F7FD8';
+
+/** The Procreate-style box: it turns with the art, with corner and side handles and a rotate knob on a stem. */
+export function drawTransformBox(g: CanvasRenderingContext2D, box: OBox, o: TransformBoxStyle): void {
+  const { scale } = o, k = o.k ?? 1;
+  const frame = boxFrame(box, scale * k);
+  const px = (n: number) => n / k;
+  const at = (p: Pt): [number, number] => [p.x * scale, p.y * scale];
+  g.save();
+  g.setLineDash([]);
+  g.strokeStyle = ACCENT;
+  if (o.guides && o.extent) {
+    g.save();
+    g.strokeStyle = '#E0457B'; g.lineWidth = px(1); g.setLineDash([px(4), px(3)]);
+    const big = 1e4;
+    if (o.guides.x !== undefined) { g.beginPath(); g.moveTo(o.guides.x * scale, -big); g.lineTo(o.guides.x * scale, big); g.stroke(); }
+    if (o.guides.y !== undefined) { g.beginPath(); g.moveTo(-big, o.guides.y * scale); g.lineTo(big, o.guides.y * scale); g.stroke(); }
+    g.restore();
+  }
+  // outline
+  g.lineWidth = px(1.5);
+  g.beginPath();
+  boxCorners(frame).forEach((p, i) => (i ? g.lineTo(...at(p)) : g.moveTo(...at(p))));
+  g.closePath();
+  g.stroke();
+  // knob on a stem from the top edge
+  const knob = rotateKnob(frame, scale * k);
+  if (o.rotation !== false) {
+    g.beginPath(); g.moveTo(...at(boxPoint(frame, 0, -frame.h / 2))); g.lineTo(...at(knob)); g.stroke();
+  }
+  g.fillStyle = '#FFFDF7';
+  const dot = (p: Pt, r: number) => { g.beginPath(); g.arc(...at(p), px(r), 0, Math.PI * 2); g.fill(); g.stroke(); };
+  for (const handle of boxHandles(frame, scale * k)) dot(handle.at, handle.sx && handle.sy ? 5.5 : 4);
+  if (o.rotation !== false) dot(knob, 5);
+  if (o.pivot) {
+    const [x, y] = at(o.pivot), r = px(7);
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(x - r * 1.5, y); g.lineTo(x + r * 1.5, y); g.moveTo(x, y - r * 1.5); g.lineTo(x, y + r * 1.5); g.stroke();
+  }
+  if (o.readout) {
+    const [x, y] = at(o.readout.at);
+    g.font = `600 ${px(12)}px system-ui, sans-serif`;
+    const w = g.measureText(o.readout.text).width + px(14), h = px(22);
+    g.fillStyle = 'rgba(27,31,38,.9)';
+    g.beginPath(); g.roundRect(x + px(12), y - px(30), w, h, px(11)); g.fill();
+    g.fillStyle = '#fff';
+    g.textBaseline = 'middle';
+    g.fillText(o.readout.text, x + px(19), y - px(30) + h / 2);
+  }
+  g.restore();
+}
+
+/** Distort and Warp: the mesh as a lattice, with a handle on each corner (Distort) or node (Warp). */
+export function drawMeshHandles(g: CanvasRenderingContext2D, mesh: Mesh, nodes: Pt[], scale: number, k = 1): void {
+  const px = (n: number) => n / k, w = mesh.cols + 1;
+  g.save();
+  g.setLineDash([]);
+  g.strokeStyle = ACCENT;
+  g.lineWidth = px(1.2);
+  const line = (at: (t: number) => Pt, steps: number) => {
+    g.beginPath();
+    for (let i = 0; i <= steps; i++) { const q = at(i / steps); if (i) g.lineTo(q.x * scale, q.y * scale); else g.moveTo(q.x * scale, q.y * scale); }
+    g.stroke();
+  };
+  for (let n = 0; n <= 3; n++) {
+    const edge = n === 0 || n === 3;
+    g.globalAlpha = edge ? 1 : 0.55;
+    g.lineWidth = px(edge ? 1.6 : 1);
+    const jr = Math.round((n / 3) * mesh.rows), ic = Math.round((n / 3) * mesh.cols);
+    line((t) => mesh.pts[jr * w + Math.round(t * mesh.cols)]!, mesh.cols);
+    line((t) => mesh.pts[Math.round(t * mesh.rows) * w + ic]!, mesh.rows);
+  }
+  g.globalAlpha = 1;
+  g.fillStyle = '#FFFDF7';
+  g.lineWidth = px(1.5);
+  for (const q of nodes) { g.beginPath(); g.arc(q.x * scale, q.y * scale, px(nodes.length === 4 ? 6 : 5), 0, Math.PI * 2); g.fill(); g.stroke(); }
+  g.restore();
 }

@@ -22,6 +22,8 @@ import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
 import { autoHideChrome, chromeActions } from './chromeview';
 import { messageBar, type HintOptions } from './messagebar';
+import type { PinchGesture } from './transformbox';
+import { isZoomKey } from './browserzoom';
 import { cssVar, onPrefs, prefs, setPrefs, setToolPrefs, toolPrefs } from './prefs';
 import { scriptDesk } from './desks/script';
 import { layoutDesk } from './desks/layout';
@@ -75,6 +77,9 @@ export interface DeskCtx {
 /** One row of the canvas right-click menu, or a separator. */
 export type MenuItem = { label: string; run: () => void; disabled?: boolean; checked?: boolean; key?: string } | 'sep';
 
+/** Selection-shape variants: the tool keeps its own icon (Select lines and Transform would otherwise look identical). */
+const LASSO_SHAPES = new Set(['Rectangle', 'Ellipse', 'Freehand', 'Polygon', 'Magnetic']);
+
 export interface DeskMode {
   id: Stage;
   tools: Tool[];
@@ -91,6 +96,10 @@ export interface DeskMode {
   move?(p: Pt, e: PointerEvent): void;
   up?(p: Pt, e: PointerEvent): void;
   modifierTouch?(active: boolean): void;
+  /** Two fingers on the canvas. Return true when the tool used the gesture (a transform box), so the view stays put; null ends it. */
+  pinchTransform?(g: PinchGesture | null): boolean;
+  /** The tool was just chosen (rail, key or menu). */
+  toolSelected?(id: string): void;
   hover?(p: Pt | null): void;
   overlay?(g: CanvasRenderingContext2D, s: number): void;
   live?(): Partial<Record<Pass, HTMLCanvasElement>>;
@@ -379,8 +388,8 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     const p = ctx.toPage(e);
     const offPage = p.x < 0 || p.y < 0 || p.x > page.widthIn || p.y > page.heightIn;
     // Lasso outlines and transform handles can extend outside the page. These tools edit existing art.
-    const selectingArt = stage === 'draw' && (mode.tool === 'selection' || mode.tool === 'pixels');
-    const offPageTool = stage === 'layout' && (mode.tool === 'knife' || mode.tool === 'place');
+    const selectingArt = stage === 'draw' && (mode.tool === 'selection' || mode.tool === 'pixels' || mode.tool === 'select');
+    const offPageTool = stage === 'layout' && (mode.tool === 'knife' || mode.tool === 'place' || mode.tool === 'select');
     if (e.pointerType === 'touch' && !selectingArt && ((stage === 'draw' && !prefs().fingerDrawing) || (offPage && !offPageTool))) {
       boardTouch = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
     } else if (e.pointerType === 'touch') finger = { first: e, last: e, started: false };
@@ -410,7 +419,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       if (pinch.moved) {
         const separation = Math.hypot(a.x - b.x, a.y - b.y);
         const turn = separation > 8 ? bearing(a, b) - pinch.bearing : view.angle - angle;
-        changeView(local(midpoint(a, b)), anchor, zoom * separation / distance, angle + turn);
+        const twist = separation > 8 ? normalizeAngle(turn) * Math.PI / 180 : 0; // the desk works in degrees, tools in radians
+        const used = mode.pinchTransform?.({ anchor, to: geom().toPage(local(midpoint(a, b))), scale: separation / distance, turn: twist });
+        if (!used) changeView(local(midpoint(a, b)), anchor, zoom * separation / distance, angle + turn);
       }
       return;
     }
@@ -469,6 +480,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const remaining = e.pointerId === primaryPointer ? pinch.b : pinch.a;
       if (e.pointerId === primaryPointer) primaryPointer = pinch.id;
       boardTouch = { x: remaining.x, y: remaining.y, px: view.panX, py: view.panY };
+      mode.pinchTransform?.(null);
       pinch = null;
       return;
     }
@@ -675,6 +687,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   function selectTool(id: string): void {
     mode.tool = id;
+    mode.toolSelected?.(id);
     chrome();
     ctx.request();
   }
@@ -744,7 +757,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const b = h('button', { class: 'tool', type: 'button', 'aria-pressed': String(t.id === mode.tool), 'aria-haspopup': t.variants ? 'menu' : null,
         title: `${label}${t.key ? ` (${t.key.toUpperCase()})` : ''}${t.variants ? ' · right-click for options' : ''}` },
         // the chosen variant's own icon when it has one (each eraser shows what it erases)
-        glyphEl(v && iconFor(v.label) ? v.label : t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
+        glyphEl(v && iconFor(v.label) && !LASSO_SHAPES.has(v.label) ? v.label : t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
       b.setAttribute('aria-label', label);
       b.addEventListener('click', () => {
         if (t.variants && mode.tool === t.id) flyout(t, b);
@@ -1040,6 +1053,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const idle = autoHideChrome(screen, [top, ctxBar, toolRail, insp, compactStatus, message.el, ...(mode.sidebar ? [mode.sidebar] : [])]);
 
   function applyLayout(): void {
+    screen.classList.toggle('classroom', prefs().classroom);
     screen.classList.toggle('focus', prefs().layout === 'focus');
     screen.classList.toggle('simple', prefs().layout === 'simple' && stage === 'draw');
     const compact = screen.matches('.focus, .simple');
@@ -1081,7 +1095,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   studio.afterUndo.add(onUndo);
   const offHistory = () => studio.afterUndo.delete(onUndo);
   const onKey = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
+    if ((e.defaultPrevented && !isZoomKey(e)) || document.querySelector('dialog[open]')) return;
     const t = e.target as HTMLElement | null;
     const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
     const redoKey = gesturePrefs.matches('key.redo', e) || gesturePrefs.matches('key.redo.alt', e);
@@ -1121,6 +1135,16 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     }
     if (gesturePrefs.matches('key.fit', e)) {
       resetView();
+      return;
+    }
+    // Ctrl/Cmd and + - 0 zoom the canvas (the browser's own page zoom is blocked app-wide)
+    if (isZoomKey(e) && !mode.pane) {
+      e.preventDefault();
+      if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') resetView();
+      else {
+        const at = local({ x: stageRect.left + stageRect.width / 2, y: stageRect.top + stageRect.height / 2 });
+        changeView(at, geom().toPage(at), view.zoom * (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === 'Subtract' ? 1 / 1.2 : 1.2), view.angle);
+      }
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;

@@ -33,11 +33,13 @@ export interface Prefs {
   autoHideDelay: number;
   guide: Guide;
   snapGuide: boolean;
+  /** For classes: opens Simple layout and hides code and developer tools. */
+  classroom: boolean;
   tools: Partial<Record<Stage, ToolPrefs>>;
 }
 
 const KEY = 'inkflo.prefs.v1';
-const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, boardBrightness: 0, fingerDrawing: true, vignette: true, layout: 'studio', handed: 'right', autoHide: false, autoHideDelay: 3500, guide: 'off', snapGuide: false, tools: {} };
+const DEFAULTS: Prefs = { theme: 'system', backdrop: 'grid', gridOpacity: 1, boardBrightness: 0, fingerDrawing: true, vignette: true, layout: 'studio', handed: 'right', autoHide: false, autoHideDelay: 3500, guide: 'off', snapGuide: false, classroom: false, tools: {} };
 
 function read(): Prefs {
   try {
@@ -57,6 +59,7 @@ function read(): Prefs {
       autoHideDelay: typeof v.autoHideDelay === 'number' && Number.isFinite(v.autoHideDelay) && v.autoHideDelay > 0 ? v.autoHideDelay : DEFAULTS.autoHideDelay,
       guide: GUIDES.find((g) => g.id === v.guide)?.id ?? 'off',
       snapGuide: v.snapGuide === true,
+      classroom: v.classroom === true,
       tools: v.tools && typeof v.tools === 'object' ? v.tools : {},
     };
   } catch {

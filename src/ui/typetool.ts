@@ -3,6 +3,8 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { DEFAULT_TYPE, layoutType, TYPE_FACES, TYPE_PRESETS, typeFont, type Measure } from '../render/typeset';
 import type { DeskCtx } from './desk';
 import { h, seg } from './dom';
+import { boxFrame, boxLocal, boxPoint, grabBox, moveBox, pinchBox, resizeOBox, rotateOBox, wrapDegrees, type BoxGrab, type OBox } from '../geom/xformbox';
+import { drawTransformBox } from './selectiongesture';
 
 /**
  * The Type tool (Caption desk): frames of set text for text-led pages. Drag on the page to make a
@@ -12,7 +14,9 @@ import { h, seg } from './dom';
 export function typeTool(ctx: DeskCtx) {
   const { page, studio } = ctx;
   let selectedId: string | null = null;
-  let drag: { kind: 'create' | 'move' | 'resize'; start: Pt; before: TextFrame[] | undefined; id: string | null } | null = null;
+  let drag: { kind: 'create' | 'box'; grab?: BoxGrab; start: Pt; box?: OBox; before: TextFrame[] | undefined; id: string | null; readout?: { text: string; at: Pt } } | null = null;
+  /** A two-finger transform in progress. */
+  let pinching: { id: string; box: OBox; before: TextFrame[] | undefined } | null = null;
   const measureCanvas = document.createElement('canvas').getContext('2d')!;
   const measure = (f: TextFrame): Measure => (text, size) => {
     measureCanvas.font = typeFont(f, size);
@@ -23,8 +27,15 @@ export function typeTool(ctx: DeskCtx) {
 
   const frames = () => page.texts ?? [];
   const selected = () => frames().find((f) => f.id === selectedId) ?? null;
-  const handleAt = (f: TextFrame, p: Pt) => Math.hypot(p.x - (f.x + f.w), p.y - (f.y + f.h)) < 12 / ctx.scale();
-  const inside = (f: TextFrame, p: Pt) => p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h;
+  /** A frame as an oriented box (inches), turned about its centre by its rotation. */
+  const boxOf = (f: TextFrame): OBox => ({ cx: f.x + f.w / 2, cy: f.y + f.h / 2, w: f.w, h: f.h, a: (f.rotation ?? 0) * Math.PI / 180, fx: 1, fy: 1 });
+  const writeBox = (f: TextFrame, b: OBox): void => {
+    f.w = b.w; f.h = b.h; f.x = b.cx - b.w / 2; f.y = b.cy - b.h / 2;
+    const degrees = Math.round(wrapDegrees(b.a * 180 / Math.PI) * 100) / 100;
+    if (degrees) f.rotation = degrees; else delete f.rotation;
+  };
+  /** Is `p` inside the frame as it is drawn (turned)? */
+  const inside = (f: TextFrame, p: Pt) => { const q = boxLocal(boxOf(f), p); return Math.abs(q.x) <= f.w / 2 && Math.abs(q.y) <= f.h / 2; };
 
   /** Record the change from `before` to the page as it is now, as one undo step. */
   function commit(label: string, before: TextFrame[] | undefined): void {
@@ -119,8 +130,8 @@ export function typeTool(ctx: DeskCtx) {
         seg<TextFrame['caps']>([{ id: 'none', label: 'Aa' }, { id: 'all', label: 'AA' }, { id: 'small', label: 'Small caps' }], f.caps, (v) => live({ caps: v }, true, 'Capitals'), 'Capitals')),
       h('div', { class: 'sec stack' },
         h('h4', {}, 'Paragraphs'),
-        seg<TextFrame['align']>([{ id: 'left', label: 'Left' }, { id: 'center', label: 'Centre' }, { id: 'right', label: 'Right' }, { id: 'justify', label: 'Justify' }], f.align, (v) => live({ align: v }, true, 'Alignment'), 'Alignment'),
-        seg<TextFrame['valign']>([{ id: 'top', label: 'Top' }, { id: 'middle', label: 'Middle' }, { id: 'bottom', label: 'Bottom' }], f.valign, (v) => live({ valign: v }, true, 'Vertical alignment'), 'Vertical alignment'),
+        seg<TextFrame['align']>([{ id: 'left', label: 'Left', icon: 'alignLeft' }, { id: 'center', label: 'Centre', icon: 'alignCenter' }, { id: 'right', label: 'Right', icon: 'alignRight' }, { id: 'justify', label: 'Justify', icon: 'alignJustify' }], f.align, (v) => live({ align: v }, true, 'Alignment'), 'Alignment'),
+        seg<TextFrame['valign']>([{ id: 'top', label: 'Top', icon: 'alignTop' }, { id: 'middle', label: 'Middle', icon: 'alignMiddle' }, { id: 'bottom', label: 'Bottom', icon: 'alignBottom' }], f.valign, (v) => live({ valign: v }, true, 'Vertical alignment'), 'Vertical alignment'),
         h('div', { class: 'type-grid' },
           field('First-line indent', f.indent, 0, 10, 0.25, 'indent', 'em'),
           field('Space between', f.paraSpace, 0, 5, 0.1, 'paraSpace', 'em')),
@@ -135,6 +146,8 @@ export function typeTool(ctx: DeskCtx) {
         h('div', { class: 'type-grid' },
           field('Column gap', f.gutter, 0, 2, 0.05, 'gutter', 'in'),
           field('Inset', f.padding, 0, 2, 0.05, 'padding', 'in'),
+          field('Left', f.x, -20, 60, 0.05, 'x', 'in'), field('Top', f.y, -20, 60, 0.05, 'y', 'in'),
+          field('Width', f.w, 0.4, 60, 0.05, 'w', 'in'), field('Height', f.h, 0.3, 60, 0.05, 'h', 'in'),
           field('Rotation', f.rotation ?? 0, -180, 180, 1, 'rotation', '°')),
         h('div', { class: 'type-toggles' },
           toggle('Background', !!f.background, (v) => ({ background: v ? (back.value || '#ffffff') : null })), f.background ? back : null),
@@ -147,13 +160,17 @@ export function typeTool(ctx: DeskCtx) {
     select(id: string | null) { selectedId = id; },
     inspector,
     remove,
-    down(p: Pt): void {
+    down(p: Pt, e: Pick<PointerEvent, 'pointerType'> = { pointerType: 'mouse' }): void {
       const sel = selected();
-      if (sel && handleAt(sel, p)) { drag = { kind: 'resize', start: p, before: structuredClone(page.texts), id: sel.id }; return; }
+      if (sel) {
+        const scale = ctx.scale();
+        const grab = grabBox(boxFrame(boxOf(sel), scale), p, scale, { touch: e.pointerType === 'touch' });
+        if (grab && grab.kind !== 'move') { drag = { kind: 'box', grab, start: p, box: boxOf(sel), before: structuredClone(page.texts), id: sel.id }; return; }
+      }
       const hit = [...frames()].reverse().find((f) => inside(f, p));
       if (hit) {
         selectedId = hit.id;
-        drag = { kind: 'move', start: p, before: structuredClone(page.texts), id: hit.id };
+        drag = { kind: 'box', grab: { kind: 'move' }, start: p, box: boxOf(hit), before: structuredClone(page.texts), id: hit.id };
         ctx.chrome();
         return;
       }
@@ -164,17 +181,53 @@ export function typeTool(ctx: DeskCtx) {
       selectedId = f.id;
       drag = { kind: 'create', start: p, before, id: f.id };
     },
-    move(p: Pt): void {
+    move(p: Pt, e: Pick<PointerEvent, 'shiftKey' | 'altKey'> = { shiftKey: false, altKey: false }): void {
       const f = drag && frames().find((x) => x.id === drag!.id);
       if (!drag || !f) return;
-      const b = drag.before?.find((x) => x.id === f.id);
-      if (drag.kind === 'move' && b) { f.x = b.x + p.x - drag.start.x; f.y = b.y + p.y - drag.start.y; }
-      else if (drag.kind === 'resize' && b) { f.w = Math.max(0.4, b.w + p.x - drag.start.x); f.h = Math.max(0.3, b.h + p.y - drag.start.y); }
-      else if (drag.kind === 'create') {
+      if (drag.kind === 'box' && drag.box && drag.grab) {
+        const { box, grab, start } = drag;
+        if (grab.kind === 'move') writeBox(f, moveBox(box, { x: p.x - start.x, y: p.y - start.y }, e.shiftKey));
+        else if (grab.kind === 'rotate') {
+          const r = rotateOBox(box, { x: box.cx, y: box.cy }, start, p, 0, e.shiftKey ? { step: 15, tol: 180 } : null);
+          writeBox(f, r.box);
+          drag.readout = { text: `${Math.round(r.degrees * 10) / 10}°`, at: p };
+        } else if (grab.kind === 'resize') {
+          const next = resizeOBox(box, grab.sx, grab.sy, start, p, { uniform: e.shiftKey, centre: e.altKey, min: 0.3 });
+          writeBox(f, { ...next, w: Math.max(0.4, next.w) });
+          drag.readout = { text: `${next.w.toFixed(2)} × ${next.h.toFixed(2)} in`, at: p };
+        }
+      } else if (drag.kind === 'create') {
         f.x = Math.min(drag.start.x, p.x); f.y = Math.min(drag.start.y, p.y);
         f.w = Math.abs(p.x - drag.start.x); f.h = Math.abs(p.y - drag.start.y);
       }
       ctx.request();
+    },
+    /** Two fingers on the selected frame: pinch resizes, twist turns, drift moves. Null ends it (one undo step). */
+    pinch(g: { anchor: Pt; to: Pt; scale: number; turn: number } | null): boolean {
+      if (!g) {
+        const done = pinching;
+        pinching = null;
+        if (done) { studio.drawing = false; commit('Transform type frame', done.before); }
+        return false;
+      }
+      const f = selected();
+      if (!f) return false;
+      pinching ??= { id: f.id, box: boxOf(f), before: structuredClone(page.texts) };
+      if (pinching.id !== f.id) return false;
+      studio.drawing = true;
+      const next = pinchBox(pinching.box, g.anchor, { x: g.to.x - g.anchor.x, y: g.to.y - g.anchor.y }, g.scale, g.turn);
+      if (next.w >= 0.4 && next.h >= 0.3) writeBox(f, next);
+      ctx.request();
+      return true;
+    },
+    /** Arrow keys: move the selected frame (inches), as one undo step. */
+    nudge(dx: number, dy: number): boolean {
+      const f = selected();
+      if (!f) return false;
+      const before = structuredClone(page.texts);
+      f.x += dx; f.y += dy;
+      commit('Nudge type frame', before);
+      return true;
     },
     up(cancel: boolean): void {
       const d = drag;
@@ -188,24 +241,28 @@ export function typeTool(ctx: DeskCtx) {
         f.x = Math.max(0.25, Math.min(page.widthIn - f.w - 0.25, d.start.x));
         f.y = Math.max(0.25, Math.min(page.heightIn - f.h - 0.25, d.start.y));
       }
-      commit(d.kind === 'create' ? 'Add type frame' : d.kind === 'move' ? 'Move type frame' : 'Resize type frame', d.before);
+      const label = d.kind === 'create' ? 'Add type frame' : d.grab?.kind === 'move' ? 'Move type frame' : d.grab?.kind === 'rotate' ? 'Rotate type frame' : 'Resize type frame';
+      commit(label, d.before);
     },
     overlay(g: CanvasRenderingContext2D, s: number): void {
       g.save();
       for (const f of frames()) {
         const on = f.id === selectedId;
-        g.setLineDash(on ? [] : [4, 4]);
-        g.lineWidth = on ? 1.5 : 1;
-        g.strokeStyle = on ? '#2f7fd8' : 'rgba(47,127,216,.55)';
-        g.strokeRect(f.x * s, f.y * s, f.w * s, f.h * s);
-        if (on) {
-          g.fillStyle = '#fff';
-          g.fillRect((f.x + f.w) * s - 5, (f.y + f.h) * s - 5, 10, 10);
-          g.strokeRect((f.x + f.w) * s - 5, (f.y + f.h) * s - 5, 10, 10);
+        const box = boxOf(f);
+        if (on) drawTransformBox(g, box, { scale: s, readout: drag?.id === f.id ? drag.readout : null });
+        else {
+          g.setLineDash([4, 4]);
+          g.lineWidth = 1;
+          g.strokeStyle = 'rgba(47,127,216,.55)';
+          g.beginPath();
+          ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).forEach(([sx, sy], i) => { const q = boxPoint(box, sx * f.w / 2, sy * f.h / 2); if (i) g.lineTo(q.x * s, q.y * s); else g.moveTo(q.x * s, q.y * s); });
+          g.closePath();
+          g.stroke();
         }
         // overset: a red plus at the corner, as in page-layout apps
         if (layoutType(f, 72, measure(f)).overset) {
-          const x = (f.x + f.w) * s - 18, y = (f.y + f.h) * s - 18;
+          const c = boxPoint(box, f.w / 2 - 18 / s, f.h / 2 - 18 / s);
+          const x = c.x * s, y = c.y * s;
           g.setLineDash([]);
           g.fillStyle = '#c0392b';
           g.fillRect(x - 6, y - 6, 12, 12);

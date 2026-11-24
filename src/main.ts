@@ -7,6 +7,7 @@ import { renderDesk } from './ui/desk';
 import { h, toast } from './ui/dom';
 import { renderHome } from './ui/home';
 import { applyTheme } from './ui/prefs';
+import { installBrowserZoomGuard } from './ui/browserzoom';
 import { installAffordances } from './ui/affordances';
 import { registerOffline } from './app/offline';
 
@@ -14,6 +15,7 @@ import { registerOffline } from './app/offline';
 async function boot(): Promise<void> {
   applyTheme();
   installAffordances();
+  installBrowserZoomGuard();
   registerOffline();
   const root = document.getElementById('app')!;
   root.replaceChildren(h('p', { class: 'boot-note' }, 'Opening your library…'));

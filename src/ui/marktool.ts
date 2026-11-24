@@ -134,6 +134,8 @@ export function markTool(ctx: DeskCtx) {
   return {
     inspector, place,
     hasMark: () => !!book.artistMark,
+    /** Is there a placed Artist mark under `p`? */
+    hits: (p: Pt): boolean => [...marks()].some((m) => { const b = box(m); return p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1; }),
     down(p: Pt): void {
       const sel = selected();
       if (sel) {

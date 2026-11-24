@@ -265,6 +265,12 @@ export function imagePlacement(ctx: DeskCtx, selected: () => string | null, sele
 
   return {
     open, options, clipboard, placeAsset,
+    /** Is there a visible placed image under `p`? */
+    hits(p: Pt): boolean {
+      const panels = ctx.panels();
+      return page.groups.filter((g) => g.visible && (!g.anchor || !g.mask || panelForGroup(panels, g) === panelAt(panels, p)))
+        .some((g) => g.layers.some((l) => l.visible && l.image && hitsImage(l.image, mapPanelPoint(p, inverseForGroup(g)))));
+    },
     start(p: Pt) {
       if (cutting) { cutPoint = p; marquee.down(p, 'freehand'); return; }
       let item = get();

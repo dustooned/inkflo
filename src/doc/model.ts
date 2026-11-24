@@ -249,10 +249,36 @@ export interface PlacedImage {
   edge?: { width: number; color: string };
 }
 
+/**
+ * How a paint selection was made, as steps replayed in order into a soft mask: draw an area (replace, add to
+ * or subtract from what is selected), pick a colour, invert, feather the edge. Positions are page inches
+ * in the layer's own space. Colour picks read the layer as it was when the step ran, so replay agrees.
+ */
+export type SelectionStep =
+  | { op: 'replace' | 'add' | 'subtract'; shape: { kind: 'polygon'; pts: Pt[] } | { kind: 'colour'; at: Pt; tolerance: number; contiguous: boolean } }
+  | { op: 'invert' }
+  | { op: 'feather'; radius: number };
+
+/** A paint selection kept by name: the layer it was made on and the steps that rebuild it. */
+export interface SavedSelection {
+  id: string;
+  name: string;
+  layerId: string;
+  steps: SelectionStep[];
+  /** Feather radius in inches. */
+  feather: number;
+}
+
 export interface PixelTransform {
   polygon: Pt[];
   /** Keep the original pixels when the lifted selection is placed. */
   copy?: boolean;
+  /** Nearest-neighbour resampling: hard pixel edges instead of blended ones. */
+  crisp?: boolean;
+  /** A selection made with more than one polygon (add, subtract, colour, invert, feather); `polygon` is then just its bounds. */
+  selection?: SelectionStep[];
+  /** Distort or Warp: where each grid vertex of the lifted rectangle lands (page inches, x then y). Replaces `matrix`. */
+  mesh?: { cols: number; rows: number; pts: number[] };
   /** Canvas affine matrix in page inches. */
   matrix: [number, number, number, number, number, number];
   /** Replay this move after these many strokes and fills on the layer. */
@@ -267,6 +293,15 @@ export interface SmudgeStroke {
   strength: number;
   strokes: number;
   fills: number;
+}
+
+export const LIQUIFY_MODES = ['push', 'twirl', 'pinch', 'bloat'] as const;
+export type LiquifyMode = typeof LIQUIFY_MODES[number];
+
+/** Liquify: dabs along a stroke that push, turn, pinch or bloat the paint under the brush. */
+export interface LiquifyStroke extends Omit<SmudgeStroke, 'kind'> {
+  kind: 'liquify';
+  mode: LiquifyMode;
 }
 
 export interface CloneStroke extends Omit<SmudgeStroke, 'kind'> {
@@ -285,7 +320,7 @@ export interface PixelAdjustment {
   fills: number;
 }
 
-export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | PixelAdjustment;
+export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | LiquifyStroke | PixelAdjustment;
 
 export const TONE_SHAPES = ['dot', 'square', 'diamond', 'line', 'cross'] as const;
 /** A tone that changes across the area: a stack of stops from `from` to `to` (page inches). */
@@ -462,6 +497,8 @@ export interface Page {
   texts?: TextFrame[];
   /** Placements of the artist mark (a signature or symbol), by asset key. */
   marks?: PageMark[];
+  /** Paint selections kept by name, to bring back later. */
+  savedSelections?: SavedSelection[];
   state: Record<Stage, StageState>;
   updatedAt: number;
 }
