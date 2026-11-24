@@ -115,6 +115,8 @@ export function createTransformBox(o: TransformBoxOptions) {
     reset(): void { if (orig) { box = orig; nodes = null; meshMoved = false; pivot = { x: 0, y: 0 }; o.changed(); o.chrome(); } },
     active: () => !!box,
     dragging: () => !!drag || !!nodeDrag,
+    /** A gesture is in progress (a drag or two fingers): previews may be coarse. */
+    busy: () => !!drag || !!nodeDrag || !!pinchBase || !!nodeBase,
     /** What the current drag took hold of. */
     grab: (): BoxGrab | null => drag?.grab ?? (nodeDrag ? { kind: 'resize', sx: 1, sy: 1 } : null),
     box: () => box,

@@ -1,5 +1,5 @@
 import { findLayer, type Layer, type PixelTransform, type Pt } from '../doc/model';
-import { IDENTITY_MATRIX, liftPixels, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
+import { downscaleCanvas, downscaleLifted, IDENTITY_MATRIX, liftPixels, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
 import { touchLayer } from '../draw/residency';
 import { applyPoint, unionRect, type Mat, type Rect } from '../engine/core/selxform';
 import { meshToFlat } from '../geom/meshwarp';
@@ -57,6 +57,10 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   /** Nearest-neighbour resampling: hard pixel edges, for pixel art and screentone. */
   let crisp = false;
   let dirty: Rect | null = null;
+  /** A reduced-resolution stand-in for big art while a gesture is in progress; the full preview returns on release. */
+  let low: { k: number; source: HTMLCanvasElement; lifted: LiftedPixels; preview: CanvasRenderingContext2D; rendered: object | null; copy: boolean; crisp: boolean; dirty: Rect | null } | null = null;
+  const LOW_ABOVE = 1800;
+  const LOW_SIZE = 1600;
 
   function current(): Selection | null {
     if (!selected) return null;
@@ -83,6 +87,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     preview = null;
     rendered = null;
     dirty = null;
+    low = null;
   }
 
   function apply(): void {
@@ -227,6 +232,30 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       const mesh = xf.mesh();
       if (!s || !xf.moved()) return {};
       const key = mesh ?? matrix;
+      if (xf.busy() && Math.max(s.source.width, s.source.height) > LOW_ABOVE) {
+        // big art: drag a smaller copy, then settle at full size when the gesture ends
+        if (!low) {
+          const k = LOW_SIZE / Math.max(s.source.width, s.source.height);
+          const source = downscaleCanvas(s.source, k);
+          const canvas = document.createElement('canvas');
+          canvas.width = source.width;
+          canvas.height = source.height;
+          const preview = canvas.getContext('2d')!;
+          preview.drawImage(source, 0, 0);
+          low = { k, source, lifted: downscaleLifted(s.lifted, k), preview, rendered: null, copy, crisp, dirty: null };
+        }
+        const L = low;
+        if (L.rendered !== key || L.copy !== copy || L.crisp !== crisp) {
+          if (L.dirty) {
+            const { x, y, w, h } = L.dirty;
+            L.preview.clearRect(x, y, w, h);
+            L.preview.drawImage(L.source, x, y, w, h, x, y, w, h);
+          }
+          L.dirty = paintPixelTransform(L.preview, L.lifted, matrix, dpi * L.k, copy, crisp, mesh);
+          L.rendered = key; L.copy = copy; L.crisp = crisp;
+        }
+        return { [s.id]: L.preview.canvas };
+      }
       if (!preview) {
         const canvas = document.createElement('canvas');
         canvas.width = s.source.width;

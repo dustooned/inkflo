@@ -33,7 +33,10 @@ export function liftPixels(source: HTMLCanvasElement, polygon: Pt[], dpi: number
   const rect = clipRect(Math.floor(Math.min(...xs)), Math.floor(Math.min(...ys)), Math.ceil(Math.max(...xs)), Math.ceil(Math.max(...ys)), source.width, source.height);
   if (!rect) return null;
   const { x, y, w, h } = rect;
-  const area = polygonMask(xs.map((px, i) => [px - x, ys[i]! - y]), w, h);
+  // a rectangle that covers the whole region (Whole layer, a box round everything) needs no rasterising
+  const covers = polygon.length === 4 && Math.min(...xs) <= x && Math.max(...xs) >= x + w && Math.min(...ys) <= y && Math.max(...ys) >= y + h &&
+    polygon.every((p, i) => p.x === polygon[(i + 1) % 4]!.x || p.y === polygon[(i + 1) % 4]!.y);
+  const area = covers ? { mask: new Uint8Array(w * h).fill(1), x0: 0, y0: 0, x1: w - 1, y1: h - 1 } : polygonMask(xs.map((px, i) => [px - x, ys[i]! - y]), w, h);
   if (!area) return null;
   const sourcePixels = source.getContext('2d')!.getImageData(x, y, w, h);
   let left = w, top = h, right = -1, bottom = -1;
@@ -63,6 +66,29 @@ export function liftPixels(source: HTMLCanvasElement, polygon: Pt[], dpi: number
   lifted.putImageData(pixels, 0, 0);
   erase.putImageData(mask, 0, 0);
   return { rect: { x: x + left, y: y + top, w: width, h: height }, pixels: lifted.canvas, mask: erase.canvas };
+}
+
+/**
+ * A smaller copy of the lifted art, for a live preview while it is being dragged: every pixel
+ * measure is multiplied by `k` (paint it with `dpi * k`). Nothing saved ever comes from this.
+ */
+export function downscaleLifted(lifted: LiftedPixels, k: number): LiftedPixels {
+  const { x, y, w, h } = lifted.rect;
+  const lw = Math.max(1, Math.round(w * k)), lh = Math.max(1, Math.round(h * k));
+  const shrink = (src: HTMLCanvasElement) => {
+    const g = canvasContext(lw, lh);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 0, 0, lw, lh);
+    return g.canvas;
+  };
+  return { rect: { x: x * k, y: y * k, w: lw, h: lh }, pixels: shrink(lifted.pixels), mask: shrink(lifted.mask) };
+}
+
+export function downscaleCanvas(source: HTMLCanvasElement, k: number): HTMLCanvasElement {
+  const g = canvasContext(Math.max(1, Math.round(source.width * k)), Math.max(1, Math.round(source.height * k)));
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(source, 0, 0, g.canvas.width, g.canvas.height);
+  return g.canvas;
 }
 
 function pixelMatrix(m: Mat, dpi: number): Mat {
