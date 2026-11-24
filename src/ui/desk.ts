@@ -76,6 +76,9 @@ export interface DeskCtx {
 /** One row of the canvas right-click menu, or a separator. */
 export type MenuItem = { label: string; run: () => void; disabled?: boolean; checked?: boolean; key?: string } | 'sep';
 
+/** Selection-shape variants: the tool keeps its own icon (Select lines and Transform would otherwise look identical). */
+const LASSO_SHAPES = new Set(['Rectangle', 'Ellipse', 'Freehand', 'Polygon', 'Magnetic']);
+
 export interface DeskMode {
   id: Stage;
   tools: Tool[];
@@ -753,7 +756,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const b = h('button', { class: 'tool', type: 'button', 'aria-pressed': String(t.id === mode.tool), 'aria-haspopup': t.variants ? 'menu' : null,
         title: `${label}${t.key ? ` (${t.key.toUpperCase()})` : ''}${t.variants ? ' · right-click for options' : ''}` },
         // the chosen variant's own icon when it has one (each eraser shows what it erases)
-        glyphEl(v && iconFor(v.label) ? v.label : t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
+        glyphEl(v && iconFor(v.label) && !LASSO_SHAPES.has(v.label) ? v.label : t.label, v?.glyph ?? t.glyph, 20), h('em', {}, t.label), t.variants ? h('i', { class: 'more', 'aria-hidden': 'true' }) : null);
       b.setAttribute('aria-label', label);
       b.addEventListener('click', () => {
         if (t.variants && mode.tool === t.id) flyout(t, b);
