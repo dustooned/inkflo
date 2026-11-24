@@ -30,9 +30,9 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   let lastArea: Pt[] | null = null;
   const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome() });
   const marquee = createMarquee(ctx, (polygon, from) => pick(polygon, from));
-  function pick(polygon: Pt[], from: Pt): void {
+  function pick(polygon: Pt[], from: Pt, only?: Layer): void {
     lastArea = polygon.map((p) => ({ ...p }));
-    for (const layer of layersIn(polygon, from)) {
+    for (const layer of only ? [only] : layersIn(polygon, from)) {
       const source = art.planes[layer.id];
       if (!source) continue;
       const place = placement(layer.id);
@@ -179,6 +179,21 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       ctx.request();
     },
     hasSelection: () => !!current(),
+    /** Unapplied changes are waiting (a new selection must not silently drop them). */
+    pending: () => !!current() && xf.moved(),
+    /** Pointer-style pick: everything painted on this layer. */
+    pickLayer(layer: Layer): boolean {
+      clear();
+      pick(selectionCorners({ x: 0, y: 0 }, { x: page.widthIn, y: page.heightIn }), { x: page.widthIn / 2, y: page.heightIn / 2 }, layer);
+      return !!selected;
+    },
+    /** Take hold of the box under `p` without starting a new selection. */
+    tryGrab(p: Pt, e: PointerEvent): boolean {
+      const s = current();
+      if (!s || !xf.down(toSource(s.place, p), e, view(s))) return false;
+      studio.drawing = true;
+      return true;
+    },
     /** The selected pixels as a clipboard piece: size in inches, centre on the page. */
     clipboard(): { name: string; canvas: HTMLCanvasElement; widthIn: number; heightIn: number; centre: Pt } | null {
       const sel = current();

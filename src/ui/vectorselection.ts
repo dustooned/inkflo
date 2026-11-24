@@ -30,7 +30,8 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
   const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome() });
-  const marquee = createMarquee(ctx, (poly, from) => {
+  const marquee = createMarquee(ctx, (poly, from) => pick(poly, from, false));
+  function pick(poly: Pt[], from: Pt, quiet: boolean): void {
     for (const l of layersIn(poly, from)) {
       // strokes on a moved panel are stored where the panel was carved
       const place = placement(l.id);
@@ -42,8 +43,8 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       xf.start(boxFromBounds(boundsOf(l.strokes, indices)));
       break;
     }
-    if (!selected) toast(emptyHint());
-  });
+    if (!selected && !quiet) toast(emptyHint());
+  }
   /** The strokes as the box would leave them, while a drag is in progress. */
   let liveStrokes: Stroke[] | null = null;
   let preview: HTMLCanvasElement | null = null;
@@ -158,6 +159,22 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       const xs = strokes.flatMap((st) => st.pts.map((q) => q.x)), ys = strokes.flatMap((st) => st.pts.map((q) => q.y));
       return { type: layer.type, strokes, centre: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 } };
     },
+    /** Pointer-style pick: select the line(s) touching a small area around `p`. True when something was selected. */
+    pickAt(p: Pt, reach: number): boolean {
+      selected = null;
+      xf.clear();
+      pick([{ x: p.x - reach, y: p.y - reach }, { x: p.x + reach, y: p.y - reach }, { x: p.x + reach, y: p.y + reach }, { x: p.x - reach, y: p.y + reach }], p, true);
+      return !!selected;
+    },
+    /** Take hold of the box under `p` without starting a new selection. */
+    tryGrab(p: Pt, e: PointerEvent): boolean {
+      const s = current();
+      if (!s || !xf.down(toSource(s.place, p), e, view(s))) return false;
+      studio.drawing = true;
+      return true;
+    },
+    hasSelection: () => !!current(),
+    pending: () => false,
     hover: marquee.hover,
     closePolygon: marquee.closePolygon,
     resetMarquee: marquee.clear,

@@ -573,6 +573,9 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   freehand, polygon and magnetic lassos. Tap polygon corners and close at the first point or
   press Enter. Magnetic follows nearby contrast and alpha edges while staying close to the swipe.
   Pixel transforms offer freeform and uniform scale and an option to keep the original pixels.
+- **Select** (Draw, Q) is the pointer: tap a vector line to select it, tap painted art to select that
+  layer's paint, or drag on empty space to box-select lines. Either way the transform box takes over
+  (drag to move, handles, knob, pinch). Select lines and Transform remain for lasso shapes.
 - **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
   lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
   a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches
