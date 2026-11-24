@@ -512,7 +512,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       return items;
     },
     down(p, e) {
-      if (mode.tool === 'type') { type.down(p); return; }
+      if (mode.tool === 'type') { type.down(p, e); return; }
       if (mode.tool === 'draw-balloon') {
         loop = [p];
         lastTap = null;
@@ -587,7 +587,7 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       downAt = p;
     },
     move(p, e) {
-      if (mode.tool === 'type') { type.move(p); return; }
+      if (mode.tool === 'type') { type.move(p, e); return; }
       if (loop) {
         const last = loop[loop.length - 1]!;
         if (Math.hypot(p.x - last.x, p.y - last.y) * ctx.scale() > 2) {
@@ -814,13 +814,15 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     /** Two fingers on a selected balloon: pinch resizes (to readable steps), twist turns, drift moves. */
     pinchTransform(g) {
       if (!g) {
+        type.pinch(null);
         const done = pinchEdit;
         pinchEdit = null;
         if (done) { studio.drawing = false; commit('Transform balloon', done.before, done.beforeBeats); ctx.chrome(); }
         return false;
       }
+      if (mode.tool === 'type') return type.pinch(g && { anchor: g.anchor, to: g.to, scale: g.scale, turn: g.turn });
       const l = sel();
-      if (!l || mode.tool === 'type') return false;
+      if (!l) return false;
       pinchEdit ??= { id: l.id, orig: structuredClone(l.cap), rotation: l.rotation, before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats) };
       if (pinchEdit.id !== l.id) return false;
       studio.drawing = true;
@@ -839,6 +841,10 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
     key(e) {
       const l = sel();
       const arrow = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number] | undefined>)[e.key];
+      if (arrow && mode.tool === 'type' && type.selected() && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
+        const step = e.shiftKey ? 0.1 : 0.01;
+        if (type.nudge(arrow[0] * step, arrow[1] * step)) return true;
+      }
       if (l && arrow && mode.tool !== 'type' && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
         // one point a press (ten with Shift); the tails stay on their speakers
         const step = e.shiftKey ? 10 : 1;

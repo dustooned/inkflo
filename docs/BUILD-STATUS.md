@@ -567,6 +567,10 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   page center. Hue, saturation, brightness and Gaussian blur apply to an unlocked paint layer
   with one undo step. Touch on the board pans, and adding a second finger there zooms around
   the gesture.
+- **Caption type frames** use the shared box geometry: a rotate knob, handles that work along the frame's own
+  edges, hit-testing on the turned frame, Shift to snap turns to 15° or keep proportions, Alt to scale from the
+  centre, a live angle or size readout, arrow nudges (0.01 in, Shift 0.1 in) and two-finger pinch, twist and drag.
+  The inspector now also has Left, Top, Width and Height fields beside Rotation.
 - **Caption balloons** keep their own box (rotate knob, edge handles, tails). They also take arrow-key nudges
   (1 pt, Shift for 10) and two-finger pinch (size, to readable steps), twist and drag, each one undo step.
 - **Classroom mode** (Display settings, on desks): opens Simple layout and hides the code tools (Layout's Code

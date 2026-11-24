@@ -32,7 +32,8 @@ export async function openDesk(browser, base, stage, { width = 1400, touch = fal
   await page.goto(`${base}#/desk/${ids[0]}/${ids[1]}/${stage}`);
   await page.waitForSelector('canvas');
   await page.waitForTimeout(1000);
-  const OX = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return Math.round(r.x + r.width / 2 - 586); });
+  // the page canvas is the widest one (a desk can hold smaller canvases, such as previews)
+  const OX = await page.evaluate(() => { const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0]; const r = c.getBoundingClientRect(); return Math.round(r.x + r.width / 2 - 586); });
   const mv = (x, y, o) => page.mouse.move(x + OX, y, o);
   const drag = async (pts, steps = 8) => {
     await mv(pts[0][0], pts[0][1]); await page.mouse.down();
