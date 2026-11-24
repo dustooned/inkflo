@@ -97,6 +97,11 @@ export const ICONS = {
   merge: P('M6 4c0 6 6 5 6 10v6M18 4c0 6-6 5-6 10') + P('M9.5 17L12 20l2.5-3'),
   backup: P('M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5 4 4 0 0 1 17.5 18z') + P('M12 17v-5M9.8 14l2.2-2.2 2.2 2.2'),
   actualSize: R(3.5, 6, 17, 12, 1.5) + P('M8.5 10v4M7.5 11l1-1M15.5 10v4M14.5 11l1-1') + DOT(12, 11.2, 0.8) + DOT(12, 13.2, 0.8),
+  liquify: P('M12 3.5c3.5 4.2 6 7 6 10a6 6 0 0 1-12 0c0-3 2.5-5.8 6-10z') + P('M9.5 14a2.5 2.5 0 0 0 2.5 2.5'),
+  liquifyPush: P('M3.5 12h9M9.5 8l4 4-4 4') + C(18, 12, 2.6),
+  liquifyTwirl: P('M19 12a7 7 0 0 0-7-7M5 12a7 7 0 0 0 7 7') + P('M12 2.5l2.5 2.5-2.5 2.5M12 21.5L9.5 19l2.5-2.5'),
+  liquifyPinch: P('M3.5 12h5M20.5 12h-5M12 3.5v5M12 20.5v-5') + P('M6.500 9.500L8.500 12l-2 2.500M17.500 9.500L15.500 12l2 2.500'),
+  liquifyBloat: C(12, 12, 3) + P('M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3') + P('M9.5 5.500L12 3.500l2.500 2M9.500 18.500l2.500 2 2.500-2'),
   // draw tools
   brush: P('M20.5 3.5l-8 8') + P('M11 9.5l3.5 3.5') + P('M11 9.5c-3 .5-5.5 2.5-6.5 6l-1 4.5 4.5-1c3.5-1 5.5-3.5 6-6.5'),
   smudge: P('M4 15c2.5-3 4.5-3 6.5 0s4 3 6.5 0') + P('M7 9c2.5-3 4.5-3 6.5 0s4 3 6.5 0'),
@@ -199,6 +204,7 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   // desks
   Script: 'script', Layout: 'layout', Draw: 'draw', Caption: 'caption', Print: 'print',
   // draw tools and variants
+  Liquify: 'liquify', Push: 'liquifyPush', Twirl: 'liquifyTwirl', Pinch: 'liquifyPinch', Bloat: 'liquifyBloat',
   Brush: 'brush', Smudge: 'smudge', Eraser: 'eraser', 'Erase ink': 'eraseInk', 'Erase pencil': 'erasePencil',
   'Erase vector lines': 'eraseVector', 'Erase painted tone': 'eraseTone', 'Paint tone': 'paintTone', Gradient: 'gradient', Pencil: 'pencil', Clone: 'clone', 'Vector pen': 'vpen', 'Edit lines': 'vedit',
   'Pull and select': 'vedit', 'Edit points': 'nodes', 'Move line': 'moveLine', Thicken: 'thicken', Thin: 'thin',

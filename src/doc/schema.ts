@@ -5,8 +5,8 @@ import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
 import { meshFromFlat } from '../geom/meshwarp';
-import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
-import { INTENT_KEYS, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
+import type { LiquifyMode, DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
+import { INTENT_KEYS, LIQUIFY_MODES, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
 
@@ -318,7 +318,7 @@ function layer(v: unknown, path: string): Layer {
         if (Math.abs(hue) > 180 || Math.abs(sat) > 100 || Math.abs(bright) > 100 || blur < 0 || blur > 0.15) fail(p, 'has an adjustment out of range');
         return { kind: 'adjustment', hue, sat, bright, blur, strokes, fills };
       }
-      if (op.kind === 'smudge' || op.kind === 'clone') {
+      if (op.kind === 'smudge' || op.kind === 'clone' || op.kind === 'liquify') {
         const raw = arr(op.points, `${p}.points`);
         if (raw.length < 2 || raw.length > 8192) fail(`${p}.points`, 'needs 2 to 8192 points');
         const points = raw.map((v, j) => {
@@ -328,6 +328,10 @@ function layer(v: unknown, path: string): Layer {
         const size = pos(op.size, `${p}.size`);
         if (size > 1) fail(`${p}.size`, 'should be no more than one inch');
         const edit = { points, size, strength: unit(op.strength, `${p}.strength`, 0.5), strokes, fills };
+        if (op.kind === 'liquify') {
+          if (!(LIQUIFY_MODES as readonly unknown[]).includes(op.mode)) fail(`${p}.mode`, 'is not a Liquify mode');
+          return { kind: 'liquify', mode: op.mode as LiquifyMode, ...edit };
+        }
         return op.kind === 'clone' ? { kind: 'clone', ...edit, offset: pt(op.offset, `${p}.offset`) } : { kind: 'smudge', ...edit };
       }
       const polygon = pts(op.polygon, `${p}.polygon`);

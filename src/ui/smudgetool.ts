@@ -1,4 +1,5 @@
-import { findLayer, type CloneStroke, type Layer, type Pt, type SmudgeStroke } from '../doc/model';
+import { findLayer, type CloneStroke, type Layer, type LiquifyMode, type LiquifyStroke, type Pt, type SmudgeStroke } from '../doc/model';
+import { liquifySegment } from '../draw/liquify';
 import { cloneSegment } from '../draw/clone';
 import { smudgeSegment } from '../draw/smudge';
 import { touchLayer } from '../draw/residency';
@@ -11,7 +12,7 @@ type Sample = SmudgeStroke['points'][number];
 
 export function smudgeTool(ctx: DeskCtx, layersAt: (p: Sample) => Layer[], keepResident: () => void, placement: (id: string) => Placement | null = () => null) {
   const { studio, page, art, book: { dpi } } = ctx;
-  let draft: { id: string; place: Placement | null; source: HTMLCanvasElement; revision: number; preview: CanvasRenderingContext2D; edit: SmudgeStroke | CloneStroke; dirty: Rect | null } | null = null;
+  let draft: { id: string; place: Placement | null; source: HTMLCanvasElement; revision: number; preview: CanvasRenderingContext2D; edit: SmudgeStroke | CloneStroke | LiquifyStroke; dirty: Rect | null } | null = null;
 
   function clear(): void {
     if (draft) studio.drawing = false;
@@ -28,12 +29,13 @@ export function smudgeTool(ctx: DeskCtx, layersAt: (p: Sample) => Layer[], keepR
     const last = edit.points.at(-1)!;
     if (edit.points.length >= 8192 || Math.hypot(last.x - p.x, last.y - p.y) * dpi < 1.5) return;
     edit.points.push(p);
-    draft.dirty = unionRect(draft.dirty, edit.kind === 'clone' ? cloneSegment(preview, draft.source.getContext('2d')!, last, p, edit, dpi) : smudgeSegment(preview, last, p, edit, dpi));
+    draft.dirty = unionRect(draft.dirty, edit.kind === 'clone' ? cloneSegment(preview, draft.source.getContext('2d')!, last, p, edit, dpi)
+      : edit.kind === 'liquify' ? liquifySegment(preview, last, p, edit, dpi) : smudgeSegment(preview, last, p, edit, dpi));
   }
 
   return {
     clear,
-    down(p: Sample, size: number, strength: number, cloneFrom?: Pt) {
+    down(p: Sample, size: number, strength: number, cloneFrom?: Pt, liquify?: LiquifyMode) {
       const pageAt = cloneFrom ?? p;
       const layers = layersAt({ ...p, ...pageAt });
       const drawable = layers.filter((l) => art.planes[l.id]);
@@ -43,7 +45,7 @@ export function smudgeTool(ctx: DeskCtx, layersAt: (p: Sample) => Layer[], keepR
       };
       const layer = drawable.find(painted) ?? drawable[0];
       const source = layer && art.planes[layer.id];
-      if (!layer || !source) { toast(cloneFrom ? 'Set the source on a painted layer.' : 'Choose a painted layer to smudge.'); return; }
+      if (!layer || !source) { toast(cloneFrom ? 'Set the source on a painted layer.' : liquify ? 'Choose a painted layer to liquify.' : 'Choose a painted layer to smudge.'); return; }
       const place = placement(layer.id);
       p = local(place, p);
       if (cloneFrom) cloneFrom = toSource(place, cloneFrom);
@@ -55,7 +57,7 @@ export function smudgeTool(ctx: DeskCtx, layersAt: (p: Sample) => Layer[], keepR
       preview.drawImage(source, 0, 0);
       const edit = { points: [p], size, strength, strokes: layer.strokes.length, fills: layer.fills.length };
       draft = { id: layer.id, place, source, revision: art.revs[layer.id] ?? 0, preview, dirty: null,
-        edit: cloneFrom ? { kind: 'clone', ...edit, offset: { x: cloneFrom.x - p.x, y: cloneFrom.y - p.y } } : { kind: 'smudge', ...edit } };
+        edit: cloneFrom ? { kind: 'clone', ...edit, offset: { x: cloneFrom.x - p.x, y: cloneFrom.y - p.y } } : liquify ? { kind: 'liquify', mode: liquify, ...edit } : { kind: 'smudge', ...edit } };
       if (cloneFrom) {
         draft.edit.points.push(p);
         draft.dirty = cloneSegment(preview, source.getContext('2d')!, p, p, draft.edit as CloneStroke, dpi);
@@ -86,7 +88,7 @@ export function smudgeTool(ctx: DeskCtx, layersAt: (p: Sample) => Layer[], keepR
         touchLayer(art, id);
       };
       keepResident();
-      studio.run({ label: edit.kind === 'clone' ? 'Clone' : 'Smudge', do: () => write(after, next), undo: () => write(before, old) });
+      studio.run({ label: edit.kind === 'clone' ? 'Clone' : edit.kind === 'liquify' ? 'Liquify' : 'Smudge', do: () => write(after, next), undo: () => write(before, old) });
       studio.markStage(page, 'draw', 1);
     },
     live(): Record<string, HTMLCanvasElement> {

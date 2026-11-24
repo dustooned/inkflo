@@ -15,6 +15,7 @@ import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { fillRefLayers } from '../geom/groups';
 import { liftPixels, paintPixelTransform } from './pixeltransform';
 import { smudgeSegment } from './smudge';
+import { liquifySegment } from './liquify';
 
 /**
  * Rebuild layer bitmaps from the page's data (strokes and fills).
@@ -219,6 +220,8 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
         const snapshot = ops.newCanvas(canvas.width, canvas.height).getContext('2d')!;
         snapshot.drawImage(canvas, 0, 0);
         for (let i = 1; i < edit.points.length; i++) cloneSegment(g, snapshot, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
+      } else if ('kind' in edit && edit.kind === 'liquify') {
+        for (let i = 1; i < edit.points.length; i++) liquifySegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else if ('kind' in edit) {
         for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else {

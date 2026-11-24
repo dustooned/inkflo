@@ -1,4 +1,4 @@
-import { findLayer, newLayer, PT, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
+import { findLayer, LIQUIFY_MODES, newLayer, PT, type LiquifyMode, type Fill, type Layer, type LayerGroup, type LayerType, type Pass, type Pt, type Stroke } from '../../doc/model';
 import { DEFAULT_TONE_SCREEN, openLayerTone } from '../layertone';
 import { gesturePrefs } from '../../app/gestureprefs';
 import { DEFAULT_BRUSH, entry, PASS_STYLE, withGPenPressure, type BrushEntry, type GPenPressure } from '../../draw/brushes';
@@ -1572,7 +1572,8 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   let smudgeStrength = 0.55;
   let cloneFrom: Pt | undefined;
   let pickingClone = false;
-  const pixelBrush = () => mode.tool === 'smudge' || mode.tool === 'clone';
+  const pixelBrush = () => mode.tool === 'smudge' || mode.tool === 'clone' || mode.tool === 'liquify';
+  const liquifyMode = (): LiquifyMode => LIQUIFY_MODES.find((m) => m === variantOf(mode, 'liquify')) ?? 'push';
   const smudgePoint = (p: Pt, e: PointerEvent) => ({ ...p, pressure: e.pointerType === 'pen' ? e.pressure : 1 });
 
   function hitVector(p: Pt): { layer: Layer; index: number; at: number } | null {
@@ -1882,6 +1883,10 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     tools: [
       { id: 'ink', label: 'Brush', glyph: '✒', key: 'i', group: 'paint' },
       { id: 'smudge', label: 'Smudge', glyph: '≈', key: 's', group: 'paint' },
+      { id: 'liquify', label: 'Liquify', glyph: '☄', key: 'u', group: 'paint', variants: [
+        { id: 'push', label: 'Push', glyph: '→' }, { id: 'twirl', label: 'Twirl', glyph: '↻' },
+        { id: 'pinch', label: 'Pinch', glyph: '⇥' }, { id: 'bloat', label: 'Bloat', glyph: '◎' },
+      ] },
       { id: 'eraser', label: 'Eraser', glyph: '⌫', key: 'e', group: 'paint', variants: [
         { id: 'ink', label: 'Erase ink', glyph: '⌫' },
         { id: 'pencil', label: 'Erase pencil', glyph: '⌦' },
@@ -2214,6 +2219,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       }
       if (mode.tool === 'tone') { tone.down(p); return; }
       if (mode.tool === 'smudge') { smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength); return; }
+      if (mode.tool === 'liquify') { smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength, undefined, liquifyMode()); return; }
       if (mode.tool === 'clone') {
         if (!cloneFrom || pickingClone || e.altKey) { cloneFrom = p; pickingClone = false; ctx.chrome(); ctx.request(); }
         else smudge.down(smudgePoint(p, e), smudgeSize / PT, smudgeStrength, cloneFrom);

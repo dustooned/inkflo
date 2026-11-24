@@ -273,6 +273,15 @@ export interface SmudgeStroke {
   fills: number;
 }
 
+export const LIQUIFY_MODES = ['push', 'twirl', 'pinch', 'bloat'] as const;
+export type LiquifyMode = typeof LIQUIFY_MODES[number];
+
+/** Liquify: dabs along a stroke that push, turn, pinch or bloat the paint under the brush. */
+export interface LiquifyStroke extends Omit<SmudgeStroke, 'kind'> {
+  kind: 'liquify';
+  mode: LiquifyMode;
+}
+
 export interface CloneStroke extends Omit<SmudgeStroke, 'kind'> {
   kind: 'clone';
   offset: Pt;
@@ -289,7 +298,7 @@ export interface PixelAdjustment {
   fills: number;
 }
 
-export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | PixelAdjustment;
+export type PixelEdit = PixelTransform | SmudgeStroke | CloneStroke | LiquifyStroke | PixelAdjustment;
 
 export const TONE_SHAPES = ['dot', 'square', 'diamond', 'line', 'cross'] as const;
 /** A tone that changes across the area: a stack of stops from `from` to `to` (page inches). */

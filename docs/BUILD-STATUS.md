@@ -567,6 +567,10 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   page center. Hue, saturation, brightness and Gaussian blur apply to an unlocked paint layer
   with one undo step. Touch on the board pans, and adding a second finger there zooms around
   the gesture.
+- **Liquify** (Draw, U; Push, Twirl, Pinch, Bloat in its variants) pushes, turns, pinches or swells the paint
+  under the brush with a soft falloff (`src/draw/liquify.ts`). Like Smudge it is a saved pixel edit
+  (`LiquifyStroke`), replayed from its points, undoable per stroke, and exact between preview and replay.
+  Size and Strength sliders are shared with Smudge.
 - **Clone** samples an area of the same paint layer. Tap **Set source**, pick the source area,
   and brush the copy into place. The stroke can be undone and replayed.
 - **Transform**, **Select lines**, and **Screentone → Selection** share rectangle, ellipse,
