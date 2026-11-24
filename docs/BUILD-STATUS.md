@@ -586,6 +586,14 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   Shift-tap adds more lines to a line selection. In **Layout**, Select (Q) is the pointer: a box handle
   turns or stretches the selected panel, a gutter or its handle resizes the cut, and a panel body selects
   and moves it. Arrow keys nudge (Shift for ten times the step) in Draw and Layout.
+- **Selection recipes** (Transform, paint): the bar's **Selection** menu adds to or subtracts from the selection
+  (drag in Add or Subtract mode, even inside the box), inverts it, feathers its edge (0–60 px), or picks by
+  colour (tap; tolerance, and touching-only or whole layer). The selected area shows as a light blue tint.
+  A selection is a list of steps (`SelectionStep`: polygon or colour, replace / add / subtract, invert,
+  feather) replayed into a soft mask (`src/draw/selmask.ts`); the lift through it takes only what the mask
+  covers, so a feathered edge moves partly and leaves the rest. A plain one-area selection saves as before;
+  anything else saves its steps in `PixelTransform.selection` and replays the same way on load. Not yet:
+  named, saved selections, and these steps for Select lines (vector).
 - **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
   lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
   a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches

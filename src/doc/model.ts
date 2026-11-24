@@ -249,12 +249,24 @@ export interface PlacedImage {
   edge?: { width: number; color: string };
 }
 
+/**
+ * How a paint selection was made, as steps replayed in order into a soft mask: draw an area (replace, add to
+ * or subtract from what is selected), pick a colour, invert, feather the edge. Positions are page inches
+ * in the layer's own space. Colour picks read the layer as it was when the step ran, so replay agrees.
+ */
+export type SelectionStep =
+  | { op: 'replace' | 'add' | 'subtract'; shape: { kind: 'polygon'; pts: Pt[] } | { kind: 'colour'; at: Pt; tolerance: number; contiguous: boolean } }
+  | { op: 'invert' }
+  | { op: 'feather'; radius: number };
+
 export interface PixelTransform {
   polygon: Pt[];
   /** Keep the original pixels when the lifted selection is placed. */
   copy?: boolean;
   /** Nearest-neighbour resampling: hard pixel edges instead of blended ones. */
   crisp?: boolean;
+  /** A selection made with more than one polygon (add, subtract, colour, invert, feather); `polygon` is then just its bounds. */
+  selection?: SelectionStep[];
   /** Distort or Warp: where each grid vertex of the lifted rectangle lands (page inches, x then y). Replaces `matrix`. */
   mesh?: { cols: number; rows: number; pts: number[] };
   /** Canvas affine matrix in page inches. */

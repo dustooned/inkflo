@@ -1,7 +1,8 @@
-import type { PixelTransform, Pt } from '../doc/model';
+import type { PixelTransform, Pt, SelectionStep } from '../doc/model';
 import { clipRect, transformedRect, unionRect, type Mat, type Rect } from '../engine/core/selxform';
 import { polygonMask } from '../engine/fill/fill';
 import { meshBounds, type Mesh } from '../geom/meshwarp';
+import { buildMask, maskBounds, type Mask } from './selmask';
 
 export const IDENTITY_MATRIX: Mat = [1, 0, 0, 1, 0, 0];
 
@@ -72,6 +73,52 @@ export function liftPixels(source: HTMLCanvasElement, polygon: Pt[], dpi: number
  * A smaller copy of the lifted art, for a live preview while it is being dragged: every pixel
  * measure is multiplied by `k` (paint it with `dpi * k`). Nothing saved ever comes from this.
  */
+/**
+ * Lift through a soft selection mask: each pixel comes out as much of itself as the mask covers, and the same
+ * amount is taken from where it was, so nothing is created or lost by feathering.
+ */
+export function liftMask(source: HTMLCanvasElement, mask: Mask): LiftedPixels | null {
+  const b = maskBounds(mask);
+  if (!b) return null;
+  const rect = clipRect(b.x0, b.y0, b.x1 + 1, b.y1 + 1, source.width, source.height);
+  if (!rect) return null;
+  const { x, y, w, h } = rect;
+  const src = source.getContext('2d')!.getImageData(x, y, w, h).data;
+  let left = w, top = h, right = -1, bottom = -1;
+  for (let row = 0; row < h; row++) {
+    for (let col = 0; col < w; col++) {
+      if (!mask.data[(row + y) * mask.w + col + x] || !src[(row * w + col) * 4 + 3]) continue;
+      left = Math.min(left, col); right = Math.max(right, col);
+      top = Math.min(top, row); bottom = row;
+    }
+  }
+  if (right < 0) return null;
+  const width = right - left + 1, height = bottom - top + 1;
+  const lifted = canvasContext(width, height), erase = canvasContext(width, height);
+  const pixels = lifted.createImageData(width, height), cover = erase.createImageData(width, height);
+  for (let row = 0; row < height; row++) {
+    for (let col = 0; col < width; col++) {
+      const m = mask.data[(row + top + y) * mask.w + col + left + x]!;
+      const from = ((row + top) * w + col + left) * 4, to = (row * width + col) * 4;
+      if (!m || !src[from + 3]) continue;
+      pixels.data[to] = src[from]!; pixels.data[to + 1] = src[from + 1]!; pixels.data[to + 2] = src[from + 2]!;
+      pixels.data[to + 3] = Math.round(src[from + 3]! * m / 255);
+      cover.data[to + 3] = m;
+    }
+  }
+  lifted.putImageData(pixels, 0, 0);
+  erase.putImageData(cover, 0, 0);
+  return { rect: { x: x + left, y: y + top, w: width, h: height }, pixels: lifted.canvas, mask: erase.canvas };
+}
+
+/** Lift whatever a selection recipe selects. One polygon is the plain hard-edged lift; anything more goes through a mask. */
+export function liftRecipe(source: HTMLCanvasElement, steps: readonly SelectionStep[], dpi: number): LiftedPixels | null {
+  const only = steps.length === 1 ? steps[0]! : null;
+  if (only && only.op === 'replace' && only.shape.kind === 'polygon') return liftPixels(source, only.shape.pts, dpi);
+  const mask = buildMask(steps, source.width, source.height, dpi, () => source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data);
+  return mask ? liftMask(source, mask) : null;
+}
+
 export function downscaleLifted(lifted: LiftedPixels, k: number): LiftedPixels {
   const { x, y, w, h } = lifted.rect;
   const lw = Math.max(1, Math.round(w * k)), lh = Math.max(1, Math.round(h * k));

@@ -102,6 +102,9 @@ export const ICONS = {
   liquifyTwirl: P('M19 12a7 7 0 0 0-7-7M5 12a7 7 0 0 0 7 7') + P('M12 2.5l2.5 2.5-2.5 2.5M12 21.5L9.5 19l2.5-2.5'),
   liquifyPinch: P('M3.5 12h5M20.5 12h-5M12 3.5v5M12 20.5v-5') + P('M6.500 9.500L8.500 12l-2 2.500M17.500 9.500L15.500 12l2 2.500'),
   liquifyBloat: C(12, 12, 3) + P('M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3') + P('M9.5 5.500L12 3.500l2.500 2M9.500 18.500l2.500 2 2.500-2'),
+  selAdd: R(3.5, 6, 12, 12, 1).replace('<rect', '<rect stroke-dasharray="3 2.5"') + P('M18 4v7M14.5 7.5h7'),
+  selSubtract: R(3.5, 6, 12, 12, 1).replace('<rect', '<rect stroke-dasharray="3 2.5"') + P('M14.5 7.5h7'),
+  selInvert: R(4, 4, 16, 16, 1.5) + P('M12 4h6.5A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5H12z').replace('<path', '<path fill="currentColor"'),
   // draw tools
   brush: P('M20.5 3.5l-8 8') + P('M11 9.5l3.5 3.5') + P('M11 9.5c-3 .5-5.5 2.5-6.5 6l-1 4.5 4.5-1c3.5-1 5.5-3.5 6-6.5'),
   smudge: P('M4 15c2.5-3 4.5-3 6.5 0s4 3 6.5 0') + P('M7 9c2.5-3 4.5-3 6.5 0s4 3 6.5 0'),
@@ -213,7 +216,7 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   'Auto flats': 'flats', Screentone: 'screentone', 'Select lines': 'select', Transform: 'transform',
   'Position image': 'image', Rectangle: 'rectangle', Ellipse: 'ellipse', Freehand: 'freehand', Polygon: 'polygon',
   Magnetic: 'magnetic', 'Touched part': 'eraseTouched', 'To crossings': 'eraseCrossings', 'Whole line': 'eraseWhole',
-  'Whole layer': 'layers', Snapping: 'snap', Pivot: 'pivot', 'Flip horizontal': 'flip', 'Flip vertical': 'flipV', 'Rotate 45°': 'rotate',
+  'Whole layer': 'layers', Invert: 'selInvert', 'Colour select': 'eyedropper', 'Selection ▾': 'select', Snapping: 'snap', Pivot: 'pivot', 'Flip horizontal': 'flip', 'Flip vertical': 'flipV', 'Rotate 45°': 'rotate',
   'Fit to page': 'fit', Arrange: 'moveLine', 'Keep original': 'copy', Duplicate: 'copy',
   // layout
   'Smooth cuts': 'cutSmooth', Knife: 'knife', 'Across page': 'cutAcross', 'One panel': 'cutPanel', 'All panels': 'templates', 'Reading order': 'readingOrder', Uncut: 'uncut', 'Resize gutters': 'resizeGutters',

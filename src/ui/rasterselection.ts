@@ -1,11 +1,13 @@
-import { findLayer, type Layer, type PixelTransform, type Pt } from '../doc/model';
-import { downscaleCanvas, downscaleLifted, IDENTITY_MATRIX, liftPixels, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
+import { findLayer, type Layer, type PixelTransform, type Pt, type SelectionStep } from '../doc/model';
+import { downscaleCanvas, downscaleLifted, IDENTITY_MATRIX, liftRecipe, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
 import { touchLayer } from '../draw/residency';
 import { applyPoint, unionRect, type Mat, type Rect } from '../engine/core/selxform';
 import { meshToFlat } from '../geom/meshwarp';
 import { boxFromBounds } from '../geom/xformbox';
 import type { DeskCtx } from './desk';
-import { h, seg, toast } from './dom';
+import { h, seg, slider, toast } from './dom';
+import { icon } from './icons';
+import { popover } from './popover';
 import { createMarquee, type MarqueeShape } from './marquee';
 import { selectionCorners } from './selectiongesture';
 import { toSource, withPlacement, type Placement } from './placement';
@@ -16,7 +18,10 @@ interface Selection {
   name: string;
   source: HTMLCanvasElement;
   revision: number;
+  /** The first area drawn (source space, inches). */
   polygon: Pt[];
+  /** How it was made, without the feather (which is a separate setting). */
+  recipe: SelectionStep[];
   lifted: LiftedPixels;
   /** The panel placement the layer is shown through; the selection works in its source space. */
   place: Placement | null;
@@ -31,22 +36,103 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   let lastArea: Pt[] | null = null;
   const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true, unit: { label: 'px', scale: dpi } });
   const marquee = createMarquee(ctx, (polygon, from) => pick(polygon, from));
+  const tints = new WeakMap<LiftedPixels, HTMLCanvasElement>();
+  /** The selected area as a flat blue wash, cached per selection. */
+  function tintOf(lifted: LiftedPixels): HTMLCanvasElement {
+    let t = tints.get(lifted);
+    if (!t) {
+      t = document.createElement('canvas');
+      t.width = lifted.mask.width; t.height = lifted.mask.height;
+      const g = t.getContext('2d')!;
+      g.drawImage(lifted.mask, 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = '#2F7FD8';
+      g.fillRect(0, 0, t.width, t.height);
+      tints.set(lifted, t);
+    }
+    return t;
+  }
+
+  /** New or add to / subtract from what is already selected. */
+  let selMode: 'replace' | 'add' | 'subtract' = 'replace';
+  /** Feather radius in inches (0 = hard edge). */
+  let feather = 0;
+  /** Colour select: the next tap picks pixels like the one under it. */
+  let picking = false;
+  let tolerance = 0.2;
+  let contiguous = true;
+  const withFeather = (steps: SelectionStep[]): SelectionStep[] => (feather > 0 ? [...steps, { op: 'feather', radius: feather }] : steps);
+  const lift = (source: HTMLCanvasElement, steps: SelectionStep[]) => liftRecipe(source, withFeather(steps), dpi);
+  const boxOf = (lifted: LiftedPixels) => {
+    const { x, y, w, h } = lifted.rect;
+    return boxFromBounds({ x0: x / dpi, y0: y / dpi, x1: (x + w) / dpi, y1: (y + h) / dpi });
+  };
+  const rectPolygon = (lifted: LiftedPixels): Pt[] => {
+    const { x, y, w, h } = lifted.rect;
+    return selectionCorners({ x: x / dpi, y: y / dpi }, { x: (x + w) / dpi, y: (y + h) / dpi });
+  };
+  const isSimple = (steps: SelectionStep[]) => feather === 0 && steps.length === 1 && steps[0]!.op === 'replace' && steps[0]!.shape.kind === 'polygon';
+
+  /** Put a new recipe's result in place of the current selection (same layer), and restart the box around it. */
+  function revise(s: Selection, steps: SelectionStep[], empty: string): boolean {
+    const lifted = lift(s.source, steps);
+    if (!lifted) { toast(empty); return false; }
+    selected = { ...s, recipe: steps, lifted };
+    xf.start(boxOf(lifted));
+    preview = null; rendered = null; dirty = null; low = null;
+    return true;
+  }
+  function pending(): boolean {
+    if (current() && xf.moved()) { toast('Apply or cancel the transform before changing the selection.'); return true; }
+    return false;
+  }
+
   function pick(polygon: Pt[], from: Pt, only?: Layer): void {
     lastArea = polygon.map((p) => ({ ...p }));
+    const base = selMode !== 'replace' ? current() : null;
+    if (base) {
+      if (pending()) return;
+      const step: SelectionStep = { op: selMode, shape: { kind: 'polygon', pts: polygon.map((p) => toSource(base.place, p)) } };
+      if (revise(base, [...base.recipe, step], 'That leaves nothing selected.')) ctx.request();
+      return;
+    }
     for (const layer of only ? [only] : layersIn(polygon, from)) {
       const source = art.planes[layer.id];
       if (!source) continue;
       const place = placement(layer.id);
       const local = polygon.map((p) => toSource(place, p));
-      const lifted = liftPixels(source, local, dpi);
+      const recipe: SelectionStep[] = [{ op: 'replace', shape: { kind: 'polygon', pts: local } }];
+      const lifted = lift(source, recipe);
       if (!lifted) continue;
-      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, lifted, place };
-      const { x, y, w, h } = lifted.rect;
-      xf.start(boxFromBounds({ x0: x / dpi, y0: y / dpi, x1: (x + w) / dpi, y1: (y + h) / dpi }));
+      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, recipe, lifted, place };
+      xf.start(boxOf(lifted));
       break;
     }
     if (!selected) toast(emptyHint());
   }
+
+  /** Colour select: pixels like the one under `p`, on the selected layer (or the first layer that has paint there). */
+  function pickColour(p: Pt): void {
+    const base = current();
+    if (base && pending()) return;
+    const around = [{ x: p.x - 0.01, y: p.y - 0.01 }, { x: p.x + 0.01, y: p.y - 0.01 }, { x: p.x + 0.01, y: p.y + 0.01 }, { x: p.x - 0.01, y: p.y + 0.01 }];
+    const layer = base ? findLayer(page, base.id)?.layer : layersIn(around, p)[0];
+    const source = layer && art.planes[layer.id];
+    if (!layer || !source) { toast(emptyHint()); return; }
+    const place = base?.place ?? placement(layer.id);
+    const shape = { kind: 'colour' as const, at: toSource(place, p), tolerance, contiguous };
+    if (base) {
+      if (revise(base, [...base.recipe, { op: selMode === 'replace' ? 'replace' : selMode, shape }], 'Nothing like that colour here.')) ctx.request();
+      return;
+    }
+    const recipe: SelectionStep[] = [{ op: 'replace', shape }];
+    const lifted = lift(source, recipe);
+    if (!lifted) { toast('Nothing like that colour here.'); return; }
+    selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: rectPolygon(lifted), recipe, lifted, place };
+    xf.start(boxOf(lifted));
+    ctx.request();
+  }
+
   /** The matrix the art is currently carried by; identity while the box is untouched. */
   const cur = (): Mat => xf.matrix() ?? IDENTITY_MATRIX;
   let preview: CanvasRenderingContext2D | null = null;
@@ -84,6 +170,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     selected = null;
     xf.clear();
     copy = false;
+    picking = false;
     preview = null;
     rendered = null;
     dirty = null;
@@ -104,7 +191,8 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     const before = g.getImageData(x, y, w, h);
     const layer = findLayer(page, id)!.layer;
     const previous = layer.pixelTransforms;
-    const edit: PixelTransform = { polygon: s.polygon, matrix: [...matrix], ...(mesh ? { mesh: meshToFlat(mesh) } : {}), strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
+    const simple = isSimple(s.recipe);
+    const edit: PixelTransform = { polygon: simple ? s.polygon : rectPolygon(lifted), ...(simple ? {} : { selection: withFeather(s.recipe) }), matrix: [...matrix], ...(mesh ? { mesh: meshToFlat(mesh) } : {}), strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
     const next = [...previous ?? [], edit];
     let after: ImageData;
     try {
@@ -133,12 +221,55 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     ctx.request();
   }
 
+  /** The bar's Selection menu: add and subtract, invert, feather and colour select. */
+  function selectionMenu(invert: () => void): HTMLElement {
+    const anchor = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-pressed': String(picking), title: 'Add to or subtract from the selection, invert it, feather its edge, or pick by colour' }, 'Selection ▾');
+    anchor.addEventListener('click', () => {
+      const holder = h('div', { class: 'arrange' });
+      const again = () => holder.replaceChildren(...build());
+      const build = (): HTMLElement[] => {
+        const s = current();
+        return [
+          h('div', { class: 'arrange-row' }, seg<'replace' | 'add' | 'subtract'>([
+            { id: 'replace', label: 'New', icon: 'select', hint: 'A new selection replaces the old one' },
+            { id: 'add', label: 'Add', icon: 'selAdd', hint: 'Draw an area to add to the selection' },
+            { id: 'subtract', label: 'Subtract', icon: 'selSubtract', hint: 'Draw an area to take out of the selection' },
+          ], selMode, (v) => { selMode = v; again(); }, 'Selection mode')),
+          h('div', { class: 'arrange-row' },
+            h('button', { class: 'btn', type: 'button', disabled: !s, title: 'Select everything that is not selected', onclick: () => { invert(); again(); } }, icon('selInvert', 16), 'Invert')),
+          slider('Feather', 0, 60, 1, Math.round(feather * dpi), (v) => `${v} px`, () => {}, (v) => {
+            feather = v / dpi;
+            const now = current();
+            if (now && !pending()) { revise(now, now.recipe, 'That leaves nothing selected.'); ctx.request(); }
+            ctx.chrome();
+            again();
+          }),
+          h('div', { class: 'arrange-row' },
+            h('button', { class: 'btn', type: 'button', 'aria-pressed': String(picking), title: 'Tap the art: everything like that colour is selected', onclick: () => { picking = !picking; marquee.clear(); ctx.chrome(); again(); } }, icon('eyedropper', 16), 'Colour select'),
+            h('button', { class: 'btn', type: 'button', 'aria-pressed': String(contiguous), title: 'Only pixels touching the one you tap', onclick: () => { contiguous = !contiguous; again(); } }, 'Touching only')),
+          slider('Tolerance', 0, 100, 1, Math.round(tolerance * 100), (v) => `${v}%`, (v) => { tolerance = v / 100; }),
+        ];
+      };
+      holder.replaceChildren(...build());
+      popover(anchor, holder, 'below', 'Selection');
+    });
+    return anchor;
+  }
+
   return {
     /** The outline of the last selection made with this tool (page inches), or null. */
     lastArea: () => lastArea,
     down(p: Pt, e: PointerEvent, shape: MarqueeShape) {
       if (marquee.active()) { marquee.down(p, shape); return; }
+      if (picking) { pickColour(p); ctx.chrome(); return; }
       const s = current();
+      // Add and Subtract draw on the selection, wherever the press lands; New (the default) grabs the box
+      if (s && selMode !== 'replace') {
+        if (xf.moved()) { toast('Apply or cancel the transform before changing the selection.'); return; }
+        marquee.down(p, shape);
+        ctx.chrome();
+        return;
+      }
       if (s) {
         if (xf.down(toSource(s.place, p), e, view(s))) { studio.drawing = true; return; }
         if (xf.moved()) { toast('Apply or cancel the transform before making a new selection.'); return; }
@@ -186,6 +317,12 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       ctx.request();
     },
     hasSelection: () => !!current(),
+    /** Select everything that is not selected. */
+    invert(): void {
+      const s = current();
+      if (!s || pending()) return;
+      if (revise(s, [...s.recipe, { op: 'invert' }], 'That leaves nothing selected.')) { ctx.chrome(); ctx.request(); }
+    },
     /** Arrow-key step, in page inches. */
     nudge(dx: number, dy: number): boolean {
       if (!current() || xf.dragging()) return false;
@@ -283,6 +420,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
         h('button', { class: 'btn primary', type: 'button', disabled: !s || !xf.moved(), onclick: apply }, 'Apply'),
         h('button', { class: 'btn', type: 'button', disabled: !s && !marquee.active(), onclick: () => { clear(); ctx.chrome(); ctx.request(); } }, 'Cancel'),
         h('button', { class: 'btn', type: 'button', title: 'Select everything painted on this layer', onclick: () => this.selectLayer() }, 'Whole layer'),
+        selectionMenu(() => this.invert()),
         ...xf.controls({
           extent: () => (s && !s.place ? { w: page.widthIn, h: page.heightIn } : null),
           extras: (refresh) => [
@@ -300,7 +438,19 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       g.setLineDash([5, 4]);
       marquee.overlay(g, scale);
       const s = current();
-      if (s) withPlacement(g, s.place, scale, (sc, k) => xf.overlay(g, sc, view(s)));
+      if (s) {
+        withPlacement(g, s.place, scale, (sc) => {
+          // the selected area, lightly tinted, so add / subtract / feather / colour picks can be seen
+          const m = cur(), r = s.lifted.rect;
+          g.save();
+          g.scale(sc, sc);
+          g.transform(...m);
+          g.globalAlpha = 0.28;
+          g.drawImage(tintOf(s.lifted), r.x / dpi, r.y / dpi, r.w / dpi, r.h / dpi);
+          g.restore();
+        });
+        withPlacement(g, s.place, scale, (sc) => xf.overlay(g, sc, view(s)));
+      }
       g.restore();
     },
   };

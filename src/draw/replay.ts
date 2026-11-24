@@ -13,7 +13,7 @@ import { meshFromFlat } from '../geom/meshwarp';
 import { FillKit, FILL_THRESHOLD, hexRgb, type Refer } from './fillkit';
 import { derivePanels, panelAt, type Panel } from '../geom/carve';
 import { fillRefLayers } from '../geom/groups';
-import { liftPixels, paintPixelTransform } from './pixeltransform';
+import { liftPixels, liftRecipe, paintPixelTransform } from './pixeltransform';
 import { smudgeSegment } from './smudge';
 import { liquifySegment } from './liquify';
 
@@ -225,7 +225,7 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
       } else if ('kind' in edit) {
         for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else {
-        const lifted = liftPixels(canvas, edit.polygon, dpi);
+        const lifted = edit.selection ? liftRecipe(canvas, edit.selection, dpi) : liftPixels(canvas, edit.polygon, dpi);
         if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy, edit.crisp, edit.mesh ? meshFromFlat(edit.mesh) : null);
       }
     }
