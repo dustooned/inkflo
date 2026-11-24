@@ -465,9 +465,9 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - Resize gutters previews shared gutter movement on the page. Drag a gutter directly or drag
   a panel body along an axis with two movable boundaries. Panel-only cuts stay attached where
   possible, and the preview holds at the last valid layout when a move would collapse a panel.
-- Select lines uses a rectangular or freehand selection on one vector layer. Drag to move, resize
-  or rotate the lines, or use the flip controls. Shift constrains the transform and Alt resizes
-  from the centre. Vector transforms retain pressure and brush colour.
+- Select lines uses a rectangular or freehand selection on one vector layer. It shares the
+  transform box below: each gesture is applied as it ends, and the box keeps its turn between
+  gestures. Vector transforms retain pressure and brush colour.
 - Ink and Vector pen accept a custom colour. The eyedropper can also set ink or fill colour from
   the visible art. Pencil still uses the blue sketch pass.
 - Caption has edge and corner handles, a centre or opposite-edge anchor, and on-canvas and
@@ -573,6 +573,19 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   freehand, polygon and magnetic lassos. Tap polygon corners and close at the first point or
   press Enter. Magnetic follows nearby contrast and alpha edges while staying close to the swipe.
   Pixel transforms offer freeform and uniform scale and an option to keep the original pixels.
+- **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
+  lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
+  a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches
+  along its edges. State is one box (centre, size, turn, flips); the art's matrix is derived from the
+  box at selection and the box now, so drags never drift. Alt scales from the centre, Shift keeps
+  proportions (or snaps the turn to 15°), and Uniform / Freeform sets the default. Live readout of
+  angle and size. **Snapping** snaps turns to 15°, size back to 100%, and position to page edges and
+  centre with guide lines. **Pivot** shows a movable pivot the box turns about. Flip, Rotate 45°,
+  Fit to page and Reset. Two fingers pinch, twist and drag the box instead of the view while art is
+  selected (`DeskMode.pinchTransform`). Transform with *Draw on: Selected layer* takes the layer's
+  paint as soon as it is chosen, and **Whole layer** does so on demand. Paint transforms can use
+  **Crisp** (nearest-neighbour) resampling, saved as `crisp` on the edit. Not yet: Distort and Warp,
+  and the same box for Transform panel (Layout), which still uses the older axis-aligned frame.
 
 ## Touch workspace and book assets
 

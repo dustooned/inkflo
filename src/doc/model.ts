@@ -253,6 +253,8 @@ export interface PixelTransform {
   polygon: Pt[];
   /** Keep the original pixels when the lifted selection is placed. */
   copy?: boolean;
+  /** Nearest-neighbour resampling: hard pixel edges instead of blended ones. */
+  crisp?: boolean;
   /** Canvas affine matrix in page inches. */
   matrix: [number, number, number, number, number, number];
   /** Replay this move after these many strokes and fills on the layer. */

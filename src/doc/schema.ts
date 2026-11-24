@@ -335,7 +335,7 @@ function layer(v: unknown, path: string): Layer {
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}) };
+      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}), ...(op.crisp === true ? { crisp: true } : {}) };
     });
   }
   return l;

@@ -222,7 +222,7 @@ export function replayLayer(page: Page, art: PageArt, layer: Layer, dpi: number,
         for (let i = 1; i < edit.points.length; i++) smudgeSegment(g, edit.points[i - 1]!, edit.points[i]!, edit, dpi);
       } else {
         const lifted = liftPixels(canvas, edit.polygon, dpi);
-        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy);
+        if (lifted) paintPixelTransform(g, lifted, edit.matrix, dpi, edit.copy, edit.crisp);
       }
     }
     replayTo(layer.strokes.length, layer.fills.length);

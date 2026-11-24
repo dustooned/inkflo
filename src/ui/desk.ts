@@ -22,6 +22,7 @@ import { closePopover, displayButton, displayMenu, popover } from './popover';
 import { clustersFor, type ChromeAction } from './chrome';
 import { autoHideChrome, chromeActions } from './chromeview';
 import { messageBar, type HintOptions } from './messagebar';
+import type { PinchGesture } from './transformbox';
 import { cssVar, onPrefs, prefs, setPrefs, setToolPrefs, toolPrefs } from './prefs';
 import { scriptDesk } from './desks/script';
 import { layoutDesk } from './desks/layout';
@@ -91,6 +92,10 @@ export interface DeskMode {
   move?(p: Pt, e: PointerEvent): void;
   up?(p: Pt, e: PointerEvent): void;
   modifierTouch?(active: boolean): void;
+  /** Two fingers on the canvas. Return true when the tool used the gesture (a transform box), so the view stays put; null ends it. */
+  pinchTransform?(g: PinchGesture | null): boolean;
+  /** The tool was just chosen (rail, key or menu). */
+  toolSelected?(id: string): void;
   hover?(p: Pt | null): void;
   overlay?(g: CanvasRenderingContext2D, s: number): void;
   live?(): Partial<Record<Pass, HTMLCanvasElement>>;
@@ -410,7 +415,9 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       if (pinch.moved) {
         const separation = Math.hypot(a.x - b.x, a.y - b.y);
         const turn = separation > 8 ? bearing(a, b) - pinch.bearing : view.angle - angle;
-        changeView(local(midpoint(a, b)), anchor, zoom * separation / distance, angle + turn);
+        const twist = separation > 8 ? Math.atan2(Math.sin(turn), Math.cos(turn)) : 0;
+        const used = mode.pinchTransform?.({ anchor, to: geom().toPage(local(midpoint(a, b))), scale: separation / distance, turn: twist });
+        if (!used) changeView(local(midpoint(a, b)), anchor, zoom * separation / distance, angle + turn);
       }
       return;
     }
@@ -469,6 +476,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       const remaining = e.pointerId === primaryPointer ? pinch.b : pinch.a;
       if (e.pointerId === primaryPointer) primaryPointer = pinch.id;
       boardTouch = { x: remaining.x, y: remaining.y, px: view.panX, py: view.panY };
+      mode.pinchTransform?.(null);
       pinch = null;
       return;
     }
@@ -675,6 +683,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
 
   function selectTool(id: string): void {
     mode.tool = id;
+    mode.toolSelected?.(id);
     chrome();
     ctx.request();
   }

@@ -2269,6 +2269,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
     live: () => shapeEditor.active() ? shapeEditor.live() : pixelBrush() ? smudge.live() : mode.tool === 'pixels' ? pixels.live() : mode.tool === 'selection' ? selection.live() : live && !live.vector ? { [live.layerId]: engine.displaySource() } : {},
     placement: () => mode.tool === 'image' ? images.preview() : undefined,
     types: () => ({ pencil: state.showPencil }),
+    pinchTransform: (g) => mode.tool === 'pixels' ? pixels.pinch(g) : mode.tool === 'selection' ? selection.pinch(g) : false,
+    toolSelected(id) {
+      // Transform takes the active layer's paint straight away, so the box is there to grab
+      if (id === 'pixels' && target === 'layer' && !pixels.hasSelection()) pixels.selectLayer();
+    },
     overlay(g, s) {
       if (shapeEditor.active()) { shapeEditor.overlay(g, s); return; }
       if (mode.tool === 'image') { images.overlay(g, s); return; }

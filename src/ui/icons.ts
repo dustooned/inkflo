@@ -50,6 +50,26 @@ export const ICONS = {
   draw: P('M4 20l1-4L15.5 5.5a2 2 0 0 1 3 3L8 19z') + P('M13.5 7.5l3 3'),
   caption: P('M12 4.5c4.7 0 8.5 2.9 8.5 6.5s-3.8 6.5-8.5 6.5c-.9 0-1.8-.1-2.6-.3L5 19.5l1.4-3.6C4.6 14.6 3.5 12.9 3.5 11c0-3.6 3.8-6.5 8.5-6.5z'),
   print: P('M7 9V3.5h10V9') + R(3.5, 9, 17, 8, 2) + P('M7 14h10v6.5H7z'),
+  // cutting: what the knife does, and the shape the cut settles into
+  cutAcross: R(3.5, 4, 17, 16, 1) + P('M12 3.5v17').replace('<path', '<path stroke-dasharray="3 2.5"') + P('M2 16.5l20-7'),
+  cutPanel: R(3.5, 4, 17, 16, 1) + P('M12 3.5v17').replace('<path', '<path stroke-dasharray="3 2.5"') + P('M3.5 15l8.5-3') + DOT(12, 12, 1.3),
+  cutStraight: P('M4.5 19L19.5 5') + DOT(4.5, 19, 1.6) + DOT(19.5, 5, 1.6),
+  cutArc: P('M4.5 18A12 12 0 0 1 19.5 7') + DOT(4.5, 18, 1.6) + DOT(19.5, 7, 1.6),
+  cutZigzag: P('M4 18l4.5-9 4 7 4-10 3.5 6') + DOT(4, 18, 1.3) + DOT(20, 12, 1.3),
+  cutSmooth: P('M4 17C8 4 13 20 20 7') + DOT(4, 17, 1.3) + DOT(20, 7, 1.3),
+  readingOrder: R(3.5, 3.5, 7, 7, 1) + R(13.5, 3.5, 7, 7, 1) + R(3.5, 13.5, 17, 7, 1) + P('M10.5 7h3') + P('M17 10.5v3'),
+  layoutCode: P('M8.5 8L4.5 12l4 4M15.5 8l4 4-4 4M13.3 6.5L10.7 17.5'),
+  // erasing vector lines: what part of the line goes
+  eraseTouched: P('M3 12h5.5M15.5 12h5.5') + C(12, 12, 2.4),
+  eraseCrossings: P('M8 5v14M16 5v14M3 12h5M16 12h5') + P('M10.5 12h3').replace('<path', '<path stroke-dasharray="1.5 2"'),
+  eraseWhole: P('M3.5 15C8 5 14 17 20.5 7').replace('<path', '<path stroke-dasharray="2 2.6"') + P('M15.5 15.5l4.5 4.5M20 15.5L15.5 20'),
+  // transform box
+  scaleFreeform: R(8, 8, 8, 8, 0.5) + P('M3.5 12H7M20.5 12H17M12 3.5V7M12 20.5V17M5.3 10.3L3.5 12l1.8 1.7M18.7 10.3l1.8 1.7-1.8 1.7M10.3 5.3L12 3.5l1.7 1.8M10.3 18.7l1.7 1.8 1.7-1.8'),
+  scaleUniform: R(8.5, 8.5, 7, 7, 0.5) + P('M4 4l3.5 3.5M20 20l-3.5-3.5M20 4l-3.5 3.5M4 20l3.5-3.5M4 7.5V4h3.5M20 16.5V20h-3.5M16.5 4H20v3.5M7.5 20H4v-3.5'),
+  snap: P('M3.5 7.5h17').replace('<path', '<path stroke-dasharray="3 2.5"') + P('M7.5 3.5v17').replace('<path', '<path stroke-dasharray="3 2.5"') + R(10.5, 10.5, 6, 6, 0.5),
+  pivot: DOT(12, 12, 2) + P('M19 12a7 7 0 1 1-2.05-4.95') + P('M19 4v4h-4'),
+  flipV: P('M3 12h18') + P('M7 9L17 4v5zM7 15l10 5v-5z'),
+  resetBox: P('M5 12a7 7 0 1 0 2.05-4.95') + P('M5 4v4h4'),
   // draw tools
   brush: P('M20.5 3.5l-8 8') + P('M11 9.5l3.5 3.5') + P('M11 9.5c-3 .5-5.5 2.5-6.5 6l-1 4.5 4.5-1c3.5-1 5.5-3.5 6-6.5'),
   smudge: P('M4 15c2.5-3 4.5-3 6.5 0s4 3 6.5 0') + P('M7 9c2.5-3 4.5-3 6.5 0s4 3 6.5 0'),
@@ -99,7 +119,6 @@ export const ICONS = {
   magnetic: P('M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4z') + P('M6 8h4M14 8h4'),
   // layout
   knife: P('M4 20L17 7l3 3L7 20z') + P('M17 7l2.5-3.5L22 6l-2 4'),
-  onePanel: R(3.5, 4, 17, 16, 1) + P('M12 4v16').replace('<path', '<path stroke-dasharray="2.5 2"'),
   uncut: R(3.5, 4, 17, 16, 1) + P('M9 9l6 6M15 9l-6 6'),
   resizeGutters: P('M12 4v16M8 9l-3 3 3 3M16 9l3 3-3 3M5 12h4M15 12h4'),
   panelTransform: R(7, 7, 10, 10, 1).replace('<rect', '<rect transform="rotate(12 12 12)"') + P('M4 8a9 9 0 0 1 5-4M20 16a9 9 0 0 1-5 4'),
@@ -160,9 +179,13 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   Bucket: 'fill', 'Drag fill': 'dragFill', 'Enclose and fill': 'enclose', 'Fill leftovers': 'leftovers',
   'Auto flats': 'flats', Screentone: 'screentone', 'Select lines': 'select', Transform: 'transform',
   'Position image': 'image', Rectangle: 'rectangle', Ellipse: 'ellipse', Freehand: 'freehand', Polygon: 'polygon',
-  Magnetic: 'magnetic',
+  Magnetic: 'magnetic', 'Touched part': 'eraseTouched', 'To crossings': 'eraseCrossings', 'Whole line': 'eraseWhole',
+  'Whole layer': 'layers', Snapping: 'snap', Pivot: 'pivot', 'Flip horizontal': 'flip', 'Flip vertical': 'flipV', 'Rotate 45°': 'rotate',
+  'Fit to page': 'fit', 'Keep original': 'copy', Duplicate: 'copy',
   // layout
-  Knife: 'knife', 'Across page': 'knife', 'One panel': 'onePanel', Uncut: 'uncut', 'Resize gutters': 'resizeGutters',
+  Knife: 'knife', 'Across page': 'cutAcross', 'One panel': 'cutPanel', 'All panels': 'templates', 'Reading order': 'readingOrder', Uncut: 'uncut', 'Resize gutters': 'resizeGutters',
+  'Straight line': 'cutStraight', Arc: 'cutArc', 'Zig-zag': 'cutZigzag', 'Smooth curve': 'cutSmooth',
+  'Layout as code': 'layoutCode', 'Edit layout code': 'layoutCode',
   'Transform panel': 'panelTransform', 'Curve edges': 'curve', 'Page templates': 'templates', 'Even out': 'evenOut',
   // caption
   Select: 'pointer', Letter: 'speech', 'Speech balloon': 'speech', Thought: 'thought', Shout: 'shout',

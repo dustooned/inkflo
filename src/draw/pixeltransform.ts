@@ -73,7 +73,7 @@ export function transformDestination(lifted: LiftedPixels, m: Mat, dpi: number, 
   return transformedRect(pixelMatrix(m, dpi), { x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1 }, w, h);
 }
 
-export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number, copy = false): Rect | null {
+export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number, copy = false, crisp = false): Rect | null {
   if (isUnmoved(m)) return null;
   const { x, y } = lifted.rect;
   g.save();
@@ -82,8 +82,8 @@ export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedP
     g.drawImage(lifted.mask, x, y);
   }
   g.globalCompositeOperation = 'source-over';
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = 'low';
+  g.imageSmoothingEnabled = !crisp;
+  g.imageSmoothingQuality = 'high';
   g.transform(...pixelMatrix(m, dpi));
   g.drawImage(lifted.pixels, x, y);
   g.restore();

@@ -20,6 +20,7 @@ import { beatsFollowing, layoutWithOrder, orderPoints } from '../../geom/reading
 import { sideChoice } from '../binpanel';
 import { resample, pathLength } from '../../engine/core/quickshape';
 import { adjustCut, CUT_SHAPE_LABEL, recognizeCut, type CutShape } from '../../geom/cutshape';
+import { icon, ICON_BY_LABEL } from '../icons';
 import { snapCutEnd } from '../../geom/cutangle';
 import { drawCutAngle } from '../cutangleoverlay';
 import { panelPlacement } from '../panelplacement';
@@ -62,6 +63,9 @@ function panelNumberAt(panel: Panel, page: DeskCtx['page'], scale: number): Pt |
 /** Layout: carve panels with a knife; drag a panel's edge to move the cut under it. */
 /** Smoothing as the slider shows it: the page's own, or the closest match to the older passes. */
 const smoothOf = (L: { curve: number; smooth?: number }) => L.smooth ?? (L.curve <= 0 ? 0 : L.curve === 1 ? 0.5 : 1);
+
+/** The icon for each shape a held cut can settle into. */
+const CUT_SHAPE_ICON = { line: ICON_BY_LABEL['Straight line']!, arc: ICON_BY_LABEL.Arc!, polyline: ICON_BY_LABEL['Zig-zag']!, smooth: ICON_BY_LABEL['Smooth curve']! } as const;
 
 export function layoutDesk(ctx: DeskCtx): DeskMode {
   const { studio, book, page } = ctx;
@@ -137,7 +141,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       held = { cut, grab: trail.at(-1)! };
       heldStraight = cut.kind === 'line';
       trail = cut.pts.map((q) => ({ ...q }));
-      ctx.hint(CUT_SHAPE_LABEL[cut.kind] + ' · keep holding and drag to adjust');
+      ctx.hint(CUT_SHAPE_LABEL[cut.kind] + ' · keep holding and drag to adjust', { control: h('span', { class: 'hint-icon' }, icon(CUT_SHAPE_ICON[cut.kind], 18)) });
       ctx.request();
     }, 550);
   }
