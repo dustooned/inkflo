@@ -23,6 +23,7 @@ import { clustersFor, type ChromeAction } from './chrome';
 import { autoHideChrome, chromeActions } from './chromeview';
 import { messageBar, type HintOptions } from './messagebar';
 import type { PinchGesture } from './transformbox';
+import { isZoomKey } from './browserzoom';
 import { cssVar, onPrefs, prefs, setPrefs, setToolPrefs, toolPrefs } from './prefs';
 import { scriptDesk } from './desks/script';
 import { layoutDesk } from './desks/layout';
@@ -1093,7 +1094,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   studio.afterUndo.add(onUndo);
   const offHistory = () => studio.afterUndo.delete(onUndo);
   const onKey = (e: KeyboardEvent) => {
-    if (e.defaultPrevented || document.querySelector('dialog[open]')) return;
+    if ((e.defaultPrevented && !isZoomKey(e)) || document.querySelector('dialog[open]')) return;
     const t = e.target as HTMLElement | null;
     const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
     const redoKey = gesturePrefs.matches('key.redo', e) || gesturePrefs.matches('key.redo.alt', e);
@@ -1133,6 +1134,16 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
     }
     if (gesturePrefs.matches('key.fit', e)) {
       resetView();
+      return;
+    }
+    // Ctrl/Cmd and + - 0 zoom the canvas (the browser's own page zoom is blocked app-wide)
+    if (isZoomKey(e) && !mode.pane) {
+      e.preventDefault();
+      if (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0') resetView();
+      else {
+        const at = local({ x: stageRect.left + stageRect.width / 2, y: stageRect.top + stageRect.height / 2 });
+        changeView(at, geom().toPage(at), view.zoom * (e.key === '-' || e.key === '_' || e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === 'Subtract' ? 1 / 1.2 : 1.2), view.angle);
+      }
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
