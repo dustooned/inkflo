@@ -1,7 +1,8 @@
 import { findLayer, type Layer, type PixelTransform, type Pt } from '../doc/model';
-import { IDENTITY_MATRIX, isUnmoved, liftPixels, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
+import { IDENTITY_MATRIX, liftPixels, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
 import { touchLayer } from '../draw/residency';
 import { applyPoint, unionRect, type Mat, type Rect } from '../engine/core/selxform';
+import { meshToFlat } from '../geom/meshwarp';
 import { boxFromBounds } from '../geom/xformbox';
 import type { DeskCtx } from './desk';
 import { h, seg, toast } from './dom';
@@ -28,7 +29,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   let selected: Selection | null = null;
   /** The last area selected (page inches), kept after the tool changes: a gradient can use it. */
   let lastArea: Pt[] | null = null;
-  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome() });
+  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true });
   const marquee = createMarquee(ctx, (polygon, from) => pick(polygon, from));
   function pick(polygon: Pt[], from: Pt, only?: Layer): void {
     lastArea = polygon.map((p) => ({ ...p }));
@@ -49,7 +50,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   /** The matrix the art is currently carried by; identity while the box is untouched. */
   const cur = (): Mat => xf.matrix() ?? IDENTITY_MATRIX;
   let preview: CanvasRenderingContext2D | null = null;
-  let rendered: Mat | null = null;
+  let rendered: object | null = null;
   let renderedCopy = false;
   let renderedCrisp = false;
   let copy = false;
@@ -87,9 +88,10 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   function apply(): void {
     const s = current();
     const matrix = cur();
-    if (!s || isUnmoved(matrix) || xf.dragging()) return;
+    const mesh = xf.mesh();
+    if (!s || !xf.moved() || xf.dragging()) return;
     const { source, lifted, id } = s;
-    const destination = transformDestination(lifted, matrix, dpi, source.width, source.height);
+    const destination = transformDestination(lifted, matrix, dpi, source.width, source.height, mesh);
     if (!destination) { toast('Move the selection back onto the page before applying.'); return; }
     const region = unionRect(lifted.rect, destination)!;
     const g = source.getContext('2d')!;
@@ -97,11 +99,11 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     const before = g.getImageData(x, y, w, h);
     const layer = findLayer(page, id)!.layer;
     const previous = layer.pixelTransforms;
-    const edit: PixelTransform = { polygon: s.polygon, matrix: [...matrix], strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
+    const edit: PixelTransform = { polygon: s.polygon, matrix: [...matrix], ...(mesh ? { mesh: meshToFlat(mesh) } : {}), strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
     const next = [...previous ?? [], edit];
     let after: ImageData;
     try {
-      paintPixelTransform(g, lifted, matrix, dpi, copy, crisp);
+      paintPixelTransform(g, lifted, matrix, dpi, copy, crisp, mesh);
       after = g.getImageData(x, y, w, h);
     } catch (error) {
       g.putImageData(before, x, y);
@@ -217,7 +219,9 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     live(): Record<string, HTMLCanvasElement> {
       const s = current();
       const matrix = cur();
-      if (!s || isUnmoved(matrix)) return {};
+      const mesh = xf.mesh();
+      if (!s || !xf.moved()) return {};
+      const key = mesh ?? matrix;
       if (!preview) {
         const canvas = document.createElement('canvas');
         canvas.width = s.source.width;
@@ -225,14 +229,14 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
         preview = canvas.getContext('2d')!;
         preview.drawImage(s.source, 0, 0);
       }
-      if (rendered !== matrix || renderedCopy !== copy || renderedCrisp !== crisp) {
+      if (rendered !== key || renderedCopy !== copy || renderedCrisp !== crisp) {
         if (dirty) {
           const { x, y, w, h } = dirty;
           preview.clearRect(x, y, w, h);
           preview.drawImage(s.source, x, y, w, h, x, y, w, h);
         }
-        dirty = paintPixelTransform(preview, s.lifted, matrix, dpi, copy, crisp);
-        rendered = matrix;
+        dirty = paintPixelTransform(preview, s.lifted, matrix, dpi, copy, crisp, mesh);
+        rendered = key;
         renderedCopy = copy;
         renderedCrisp = crisp;
       }

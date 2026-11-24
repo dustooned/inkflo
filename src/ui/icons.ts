@@ -66,6 +66,8 @@ export const ICONS = {
   // transform box
   scaleFreeform: R(8, 8, 8, 8, 0.5) + P('M3.5 12H7M20.5 12H17M12 3.5V7M12 20.5V17M5.3 10.3L3.5 12l1.8 1.7M18.7 10.3l1.8 1.7-1.8 1.7M10.3 5.3L12 3.5l1.7 1.8M10.3 18.7l1.7 1.8 1.7-1.8'),
   scaleUniform: R(8.5, 8.5, 7, 7, 0.5) + P('M4 4l3.5 3.5M20 20l-3.5-3.5M20 4l-3.5 3.5M4 20l3.5-3.5M4 7.5V4h3.5M20 16.5V20h-3.5M16.5 4H20v3.5M7.5 20H4v-3.5'),
+  scaleDistort: P('M5 6.5L19 4v16L5 17.5z') + DOT(5, 6.5, 1.6) + DOT(19, 4, 1.6) + DOT(19, 20, 1.6) + DOT(5, 17.5, 1.6),
+  scaleWarp: P('M3.5 8c3-3 5 3 8.5 0s5.500-3 8.500 0M3.500 12c3-3 5 3 8.500 0s5.500-3 8.500 0M3.500 16c3-3 5 3 8.500 0s5.500-3 8.500 0'),
   snap: P('M3.5 7.5h17').replace('<path', '<path stroke-dasharray="3 2.5"') + P('M7.5 3.5v17').replace('<path', '<path stroke-dasharray="3 2.5"') + R(10.5, 10.5, 6, 6, 0.5),
   pivot: DOT(12, 12, 2) + P('M19 12a7 7 0 1 1-2.05-4.95') + P('M19 4v4h-4'),
   flipV: P('M3 12h18') + P('M7 9L17 4v5zM7 15l10 5v-5z'),

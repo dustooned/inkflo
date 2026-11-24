@@ -255,6 +255,8 @@ export interface PixelTransform {
   copy?: boolean;
   /** Nearest-neighbour resampling: hard pixel edges instead of blended ones. */
   crisp?: boolean;
+  /** Distort or Warp: where each grid vertex of the lifted rectangle lands (page inches, x then y). Replaces `matrix`. */
+  mesh?: { cols: number; rows: number; pts: number[] };
   /** Canvas affine matrix in page inches. */
   matrix: [number, number, number, number, number, number];
   /** Replay this move after these many strokes and fills on the layer. */

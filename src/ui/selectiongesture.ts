@@ -1,6 +1,7 @@
 import type { Pt } from '../doc/model';
 import { IDENTITY, type XParams } from '../engine/core/selxform';
 import { boxHandles as sideHandles, resizeBox, type Bounds, type ResizeSide } from '../geom/resizebox';
+import type { Mesh } from '../geom/meshwarp';
 import { boxCorners, boxFrame, boxHandles, boxPoint, rotateKnob, type OBox } from '../geom/xformbox';
 
 export type SelectionGrab = { kind: 'move' | 'rotate' } | { kind: 'resize'; side: ResizeSide };
@@ -131,5 +132,32 @@ export function drawTransformBox(g: CanvasRenderingContext2D, box: OBox, o: Tran
     g.textBaseline = 'middle';
     g.fillText(o.readout.text, x + px(19), y - px(30) + h / 2);
   }
+  g.restore();
+}
+
+/** Distort and Warp: the mesh as a lattice, with a handle on each corner (Distort) or node (Warp). */
+export function drawMeshHandles(g: CanvasRenderingContext2D, mesh: Mesh, nodes: Pt[], scale: number, k = 1): void {
+  const px = (n: number) => n / k, w = mesh.cols + 1;
+  g.save();
+  g.setLineDash([]);
+  g.strokeStyle = ACCENT;
+  g.lineWidth = px(1.2);
+  const line = (at: (t: number) => Pt, steps: number) => {
+    g.beginPath();
+    for (let i = 0; i <= steps; i++) { const q = at(i / steps); if (i) g.lineTo(q.x * scale, q.y * scale); else g.moveTo(q.x * scale, q.y * scale); }
+    g.stroke();
+  };
+  for (let n = 0; n <= 3; n++) {
+    const edge = n === 0 || n === 3;
+    g.globalAlpha = edge ? 1 : 0.55;
+    g.lineWidth = px(edge ? 1.6 : 1);
+    const jr = Math.round((n / 3) * mesh.rows), ic = Math.round((n / 3) * mesh.cols);
+    line((t) => mesh.pts[jr * w + Math.round(t * mesh.cols)]!, mesh.cols);
+    line((t) => mesh.pts[Math.round(t * mesh.rows) * w + ic]!, mesh.rows);
+  }
+  g.globalAlpha = 1;
+  g.fillStyle = '#FFFDF7';
+  g.lineWidth = px(1.5);
+  for (const q of nodes) { g.beginPath(); g.arc(q.x * scale, q.y * scale, px(nodes.length === 4 ? 6 : 5), 0, Math.PI * 2); g.fill(); g.stroke(); }
   g.restore();
 }

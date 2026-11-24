@@ -1,6 +1,7 @@
 import type { PixelTransform, Pt } from '../doc/model';
 import { clipRect, transformedRect, unionRect, type Mat, type Rect } from '../engine/core/selxform';
 import { polygonMask } from '../engine/fill/fill';
+import { meshBounds, type Mesh } from '../geom/meshwarp';
 
 export const IDENTITY_MATRIX: Mat = [1, 0, 0, 1, 0, 0];
 
@@ -68,13 +69,57 @@ function pixelMatrix(m: Mat, dpi: number): Mat {
   return [m[0], m[1], m[2], m[3], m[4] * dpi, m[5] * dpi];
 }
 
-export function transformDestination(lifted: LiftedPixels, m: Mat, dpi: number, w: number, h: number): Rect | null {
+export function transformDestination(lifted: LiftedPixels, m: Mat, dpi: number, w: number, h: number, mesh?: Mesh | null): Rect | null {
   const r = lifted.rect;
+  if (mesh) {
+    const b = meshBounds(mesh);
+    return clipRect(Math.floor(b.x0 * dpi) - 2, Math.floor(b.y0 * dpi) - 2, Math.ceil(b.x1 * dpi) + 2, Math.ceil(b.y1 * dpi) + 2, w, h);
+  }
   return transformedRect(pixelMatrix(m, dpi), { x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1 }, w, h);
 }
 
-export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number, copy = false, crisp = false): Rect | null {
-  if (isUnmoved(m)) return null;
+/**
+ * Draw `image` through a mesh: each cell of the source becomes two triangles, each carried by its own
+ * affine map. `mesh.pts` are destination pixels; the source is the whole image, cut into cols × rows cells.
+ */
+export function drawMesh(g: CanvasRenderingContext2D, image: CanvasImageSource & { width: number; height: number }, mesh: Mesh): void {
+  const { cols, rows, pts } = mesh, w = cols + 1;
+  const sw = image.width / cols, sh = image.height / rows;
+  const tri = (s: [number, number][], d: { x: number; y: number }[]) => {
+    const [s0, s1, s2] = s as [[number, number], [number, number], [number, number]];
+    const sx1 = s1[0] - s0[0], sy1 = s1[1] - s0[1], sx2 = s2[0] - s0[0], sy2 = s2[1] - s0[1];
+    const det = sx1 * sy2 - sx2 * sy1;
+    if (!det) return;
+    const dx1 = d[1]!.x - d[0]!.x, dy1 = d[1]!.y - d[0]!.y, dx2 = d[2]!.x - d[0]!.x, dy2 = d[2]!.y - d[0]!.y;
+    const a = (dx1 * sy2 - dx2 * sy1) / det, c = (dx2 * sx1 - dx1 * sx2) / det;
+    const b = (dy1 * sy2 - dy2 * sy1) / det, e = (dy2 * sx1 - dy1 * sx2) / det;
+    // grow the clip a little so neighbouring cells overlap and no seam shows
+    const cx = (d[0]!.x + d[1]!.x + d[2]!.x) / 3, cy = (d[0]!.y + d[1]!.y + d[2]!.y) / 3;
+    g.save();
+    g.beginPath();
+    d.forEach((q, i) => {
+      const len = Math.hypot(q.x - cx, q.y - cy) || 1, k = 0.7 / len;
+      const x = q.x + (q.x - cx) * k, y = q.y + (q.y - cy) * k;
+      if (i) g.lineTo(x, y); else g.moveTo(x, y);
+    });
+    g.closePath();
+    g.clip();
+    g.transform(a, b, c, e, d[0]!.x - a * s0[0] - c * s0[1], d[0]!.y - b * s0[0] - e * s0[1]);
+    g.drawImage(image, 0, 0);
+    g.restore();
+  };
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const p00 = pts[j * w + i]!, p10 = pts[j * w + i + 1]!, p01 = pts[(j + 1) * w + i]!, p11 = pts[(j + 1) * w + i + 1]!;
+      const x0 = i * sw, x1 = (i + 1) * sw, y0 = j * sh, y1 = (j + 1) * sh;
+      tri([[x0, y0], [x1, y0], [x0, y1]], [p00, p10, p01]);
+      tri([[x1, y1], [x0, y1], [x1, y0]], [p11, p01, p10]);
+    }
+  }
+}
+
+export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedPixels, m: Mat, dpi: number, copy = false, crisp = false, mesh: Mesh | null = null): Rect | null {
+  if (!mesh && isUnmoved(m)) return null;
   const { x, y } = lifted.rect;
   g.save();
   if (!copy) {
@@ -84,8 +129,11 @@ export function paintPixelTransform(g: CanvasRenderingContext2D, lifted: LiftedP
   g.globalCompositeOperation = 'source-over';
   g.imageSmoothingEnabled = !crisp;
   g.imageSmoothingQuality = 'high';
-  g.transform(...pixelMatrix(m, dpi));
-  g.drawImage(lifted.pixels, x, y);
+  if (mesh) drawMesh(g, lifted.pixels, { ...mesh, pts: mesh.pts.map((q) => ({ x: q.x * dpi, y: q.y * dpi })) });
+  else {
+    g.transform(...pixelMatrix(m, dpi));
+    g.drawImage(lifted.pixels, x, y);
+  }
   g.restore();
-  return unionRect(lifted.rect, transformDestination(lifted, m, dpi, g.canvas.width, g.canvas.height));
+  return unionRect(lifted.rect, transformDestination(lifted, m, dpi, g.canvas.width, g.canvas.height, mesh));
 }

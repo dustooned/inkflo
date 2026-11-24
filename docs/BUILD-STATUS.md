@@ -589,7 +589,10 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   paint as soon as it is chosen, and **Whole layer** does so on demand. Paint transforms can use
   **Crisp** (nearest-neighbour) resampling, saved as `crisp` on the edit. Transform panel (Layout, one panel) uses the same box,
   turning with the placed panel, with pinch/twist and the bar controls; All panels keeps the older
-  axis-aligned resize. Not yet: Distort and Warp.
+  axis-aligned resize.
+  **Distort** (four independent corners, with perspective) and **Warp** (a 4 × 4 grid of nodes with a smooth
+  surface) bend paint and lines through one mesh (`src/geom/meshwarp.ts`); a paint edit saves the mesh
+  (`PixelTransform.mesh`) and replays it. Panels are placed, not bent, so they only offer Freeform and Uniform.
 
 ## Touch workspace and book assets
 

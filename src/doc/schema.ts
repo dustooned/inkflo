@@ -4,6 +4,7 @@ import { BUNDLED_FONTS } from '../engine/lettering/fonts';
 import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
+import { meshFromFlat } from '../geom/meshwarp';
 import type { DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
 import { INTENT_KEYS, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
 import type { BookAsset } from './model';
@@ -335,7 +336,14 @@ function layer(v: unknown, path: string): Layer {
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}), ...(op.crisp === true ? { crisp: true } : {}) };
+      let mesh: PixelTransform['mesh'];
+      if (op.mesh !== undefined) {
+        const m = obj(op.mesh, `${p}.mesh`);
+        const flat = { cols: num(m.cols, `${p}.mesh.cols`), rows: num(m.rows, `${p}.mesh.rows`), pts: arr(m.pts, `${p}.mesh.pts`).map((v, j) => num(v, `${p}.mesh.pts[${j}]`)) };
+        if (!meshFromFlat(flat)) fail(`${p}.mesh`, 'is not a valid mesh');
+        mesh = flat;
+      }
+      return { polygon, matrix, strokes, fills, ...(op.copy === true ? { copy: true } : {}), ...(op.crisp === true ? { crisp: true } : {}), ...(mesh ? { mesh } : {}) };
     });
   }
   return l;

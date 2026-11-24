@@ -1,6 +1,7 @@
 import { findLayer, type Layer, type Pt, type Stroke } from '../doc/model';
 import { applyPoint, type Mat } from '../engine/core/selxform';
-import { boxFromBounds } from '../geom/xformbox';
+import { boxFromBounds, boxLocal } from '../geom/xformbox';
+import { sampleMesh, type Mesh } from '../geom/meshwarp';
 import { strokeTouchesOutline } from '../geom/selection';
 import type { Bounds } from '../geom/resizebox';
 import { renderVectorLayer } from '../render/vector';
@@ -29,7 +30,7 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   placement: (id: string) => Placement | null, emptyHint: () => string) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
-  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome() });
+  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true });
   const marquee = createMarquee(ctx, (poly, from) => pick(poly, from, false));
   function pick(poly: Pt[], from: Pt, quiet: boolean): void {
     for (const l of layersIn(poly, from)) {
@@ -79,9 +80,28 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     if (!s) return;
     commit(s.id, label, strokes);
     const next = findLayer(page, s.id)?.layer.strokes;
+    const bent = !!xf.mesh() && xf.moved();
     selected = next ? { ...s, source: next } : null;
-    xf.rebase();
+    if (bent && selected) xf.start(boxFromBounds(boundsOf(selected.source, selected.indices)));
+    else xf.rebase();
     ctx.chrome();
+  }
+
+  /** The selected lines pushed through a Distort or Warp mesh. */
+  function bend(s: Selection, mesh: Mesh, orig: { cx: number; cy: number; w: number; h: number; a: number; fx: 1 | -1; fy: 1 | -1 }): Stroke[] {
+    const map = (q: Pt): Pt => { const l = boxLocal(orig, q); return sampleMesh(mesh, l.x / orig.w + 0.5, l.y / orig.h + 0.5); };
+    const c = [mesh.pts[0]!, mesh.pts[mesh.cols]!, mesh.pts.at(-1)!, mesh.pts[mesh.pts.length - 1 - mesh.cols]!];
+    const area = Math.abs(c.reduce((sum, p, i) => sum + p.x * c[(i + 1) % 4]!.y - c[(i + 1) % 4]!.x * p.y, 0)) / 2;
+    const k = Math.sqrt(area / (orig.w * orig.h)) || 1;
+    return s.source.map((st, i) => !s.indices.has(i) ? st : { ...st, w: st.w * k, pts: st.pts.map((q) => ({ ...q, ...map(q) })) });
+  }
+  /** The selection as the box would leave it, or null while nothing has moved. */
+  function shaped(s: Selection): Stroke[] | null {
+    if (!xf.moved()) return null;
+    const mesh = xf.mesh(), orig = xf.orig();
+    if (mesh && orig) return bend(s, mesh, orig);
+    const m = xf.matrix();
+    return m ? transform(s, m) : null;
   }
 
   function transform(s: Selection, m: Mat): Stroke[] {
@@ -107,8 +127,7 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       const s = current();
       if (!s || !xf.dragging()) return;
       xf.move(toSource(s.place, p), e);
-      const m = xf.matrix();
-      liveStrokes = xf.moved() && m ? transform(s, m) : null;
+      liveStrokes = shaped(s);
     },
     up(p: Pt, e: PointerEvent) {
       if (e.type === 'pointercancel') { stop(); ctx.chrome(); ctx.request(); return; }
@@ -135,13 +154,12 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       if (!g) {
         const ended = xf.moved() && s;
         xf.pinch(null);
-        if (ended) { const m = xf.matrix(); if (m) apply('Transform selected lines', transform(s, m)); }
+        if (ended) { const next = shaped(s); if (next) apply('Transform selected lines', next); }
         return false;
       }
       if (!s) return false;
       if (!xf.pinch({ ...g, anchor: toSource(s.place, g.anchor), to: toSource(s.place, g.to) })) return false;
-      const m = xf.matrix();
-      liveStrokes = xf.moved() && m ? transform(s, m) : null;
+      liveStrokes = shaped(s);
       return true;
     },
     /** The selected lines on the page (a moved panel's placement applied), for the clipboard. */
@@ -206,8 +224,8 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     controls() {
       const s = current();
       const change = (label: string) => {
-        const m = xf.matrix();
-        if (s && current() === s && m && xf.moved()) apply(label, transform(s, m));
+        const next = s && current() === s ? shaped(s) : null;
+        if (s && next) apply(label, next);
       };
       return [...marquee.controls(),
         ...xf.controls({ commit: change, reset: false, extent: () => (s && !s.place ? { w: page.widthIn, h: page.heightIn } : null) }),
