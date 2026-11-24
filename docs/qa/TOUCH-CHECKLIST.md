@@ -1,6 +1,6 @@
 # Touch and Pencil checklist (real tablet)
 
-`docs/qa/touch-check.cjs` injects genuine multi-touch into Chromium and checks the results (tap-to-pick,
+`e2e/touch.e2e.mjs` (`npm run e2e`) injects genuine multi-touch into Chromium and checks the results (tap-to-pick,
 finger drag, pinch and twist, one-undo). It cannot judge feel, size or the Apple Pencil, so run this list on a
 real iPad or Android tablet before a release. Tick each on **Draw**, **Layout** and **Caption** where it applies.
 

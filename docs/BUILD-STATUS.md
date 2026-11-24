@@ -1719,3 +1719,15 @@ pm run package:offline writes dist-offline/inkflo-offline.zip: the build plus a 
 
 - The Screentone tool no longer makes a layer per tap. New flat, selection and gradient tones go into the selected tone layer (if it is in that panel) or the panel's existing one; "New tone layer" starts a separate layer on purpose. Model: `Layer.screenTone` stays the first area and new `Layer.moreTones` holds the rest (`tonesOf` / `setTones` in `src/doc/model.ts`), so old files load unchanged; the schema keeps up to 64 areas per layer. Rendering, exports and layer thumbnails draw every area; an Area menu in the tool picks which to edit, re-aim or remove.
 - **Verified** in the dev app on a 3-panel strip: repeated taps in one panel gave one layer with two areas; New tone layer then made a second layer that took the following taps. **Not verified:** undo of an added area in the UI, PSD export of a multi-area layer, and the Paint tone brush (unchanged: it already reused one layer per panel).
+
+
+## Tests
+
+- `npm test` runs the unit tests (Vitest); `npm run typecheck` runs `tsc`.
+- `npm run e2e` drives the real app in Chromium (`e2e/*.e2e.mjs`, Node's test runner and Playwright; it starts
+  its own dev server). It covers the transform box, Distort and Warp (saved and reloaded), exact numbers and
+  arrow nudges, Select (tap, Shift-add, pinch and twist, Layout panel and gutter), selection recipes (Add and
+  Subtract saved and reloaded), Liquify, the zoom keys, and real multi-touch. Tests assert on the saved
+  document, not on screenshots. First run on a new machine: `npx playwright install chromium`.
+- `.github/workflows/ci.yml` runs typecheck, unit tests and `npm run e2e` on every pull request.
+- `docs/qa/TOUCH-CHECKLIST.md` lists what automation cannot judge and needs a real tablet and Pencil.
