@@ -102,4 +102,41 @@ describe('Select and selection recipes', () => {
     assert.deepEqual(d.errors, []);
     await d.context.close();
   });
+
+  it('lines: Add and Subtract change which lines are selected, and Invert takes the rest', async () => {
+    const d = await openDesk(browser, server.url, 'draw', { width: 2000 });
+    await d.page.keyboard.press('v');
+    await d.drag([[450, 300], [520, 340], [600, 300]]);
+    await d.drag([[450, 480], [520, 520], [600, 480]]);
+    await d.drag([[450, 650], [520, 690], [600, 650]]);
+    await d.page.keyboard.press('m'); // Select lines
+    await d.page.waitForTimeout(250);
+    const lines = async () => (await d.pageData()).groups.flatMap((g) => g.layers).filter((l) => l.vector).flatMap((l) => l.strokes).map((s) => s.pts[0].y);
+    const lasso = async (y0, y1) => { await d.mv(385, y0); await d.page.mouse.down(); await d.mv(640, y1, { steps: 10 }); await d.page.mouse.up(); await d.page.waitForTimeout(300); };
+    const mode = (name) => d.page.evaluate((n) => document.querySelector(`.seg button[aria-label="${n}"]`).click(), name);
+    const start = await lines();
+    await lasso(280, 360);                  // line 1
+    await mode('Add');
+    await lasso(460, 540);                  // add line 2
+    await mode('Subtract');
+    await lasso(280, 360);                  // take line 1 out again
+    await mode('New');
+    await d.drag([[525, 500], [525, 540]], 8); // moves only line 2
+    const moved = await lines();
+    assert.equal(moved[0], start[0], 'line 1 was subtracted, so it stayed');
+    assert.notEqual(moved[1], start[1], 'line 2 was added, so it moved');
+    assert.equal(moved[2], start[2]);
+    // Invert: select line 3 and 1 by selecting line 2 and inverting
+    await d.page.mouse.click(d.OX + 1900, 780);
+    await lasso(500, 600);                  // line 2 (now moved down)
+    assert.ok(await d.press('Invert'));
+    await d.page.waitForTimeout(200);
+    await d.drag([[525, 330], [525, 290]], 8);
+    const after = await lines();
+    assert.notEqual(after[0], moved[0], 'line 1 moved: it is part of the inverse');
+    assert.equal(after[1], moved[1], 'line 2 stayed');
+    assert.notEqual(after[2], moved[2], 'line 3 moved: it is part of the inverse');
+    assert.deepEqual(d.errors, []);
+    await d.context.close();
+  });
 });

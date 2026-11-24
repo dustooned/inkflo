@@ -1538,6 +1538,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   function selectDown(p: Pt, e: PointerEvent): void {
     const held = heldBy();
     if (picked === 'pixels' && pixels.wantsPress()) { pixels.down(p, e, 'rectangle'); return; }
+    if (picked === 'selection' && selection.wantsPress()) { selection.down(p, e, 'rectangle'); return; }
     if (e.shiftKey && picked === 'selection' && selection.hasSelection() && hitVector(p) && selection.addAt(p, 8 / ctx.scale())) return;
     if (held?.tryGrab(p, e)) return;
     if (held?.pending()) { toast('Apply or cancel the transform before selecting something else.'); return; }

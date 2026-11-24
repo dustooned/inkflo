@@ -6,7 +6,7 @@ import { strokeTouchesOutline } from '../geom/selection';
 import type { Bounds } from '../geom/resizebox';
 import { renderVectorLayer } from '../render/vector';
 import type { DeskCtx } from './desk';
-import { h, toast } from './dom';
+import { compactSeg, h, seg, toast } from './dom';
 import { createMarquee, type MarqueeShape } from './marquee';
 import { toSource, withPlacement, type Placement } from './placement';
 import { createTransformBox, type PinchGesture } from './transformbox';
@@ -32,7 +32,24 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   let selected: Selection | null = null;
   const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true, unit: { label: 'px', scale: book.dpi } });
   const marquee = createMarquee(ctx, (poly, from) => pick(poly, from, false));
+  /** New, or add to / subtract from the lines already selected (same layer). */
+  let selMode: 'replace' | 'add' | 'subtract' = 'replace';
   function pick(poly: Pt[], from: Pt, quiet: boolean): void {
+    const base = selMode !== 'replace' ? current() : null;
+    if (base) {
+      const layer = findLayer(page, base.id)?.layer;
+      if (!layer) return;
+      const local = poly.map((p) => toSource(base.place, p));
+      const indices = new Set(base.indices);
+      layer.strokes.forEach((stroke, i) => {
+        if (!strokeTouchesOutline(stroke, local)) return;
+        if (selMode === 'add') indices.add(i); else indices.delete(i);
+      });
+      if (!indices.size) { selected = null; xf.clear(); if (!quiet) toast('That leaves nothing selected.'); return; }
+      selected = { ...base, indices };
+      xf.start(boxFromBounds(boundsOf(base.source, indices)));
+      return;
+    }
     for (const l of layersIn(poly, from)) {
       // strokes on a moved panel are stored where the panel was carved
       const place = placement(l.id);
@@ -71,6 +88,7 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     stop();
     selected = null;
     xf.clear();
+    selMode = 'replace';
   }
 
   const view = (s: Selection) => ({ k: s.place?.k ?? 1, extent: s.place ? null : { w: page.widthIn, h: page.heightIn } });
@@ -116,6 +134,8 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     down(p: Pt, e: PointerEvent, shape: MarqueeShape) {
       if (marquee.active()) { marquee.down(p, shape); return; }
       const s = current();
+      // Add and Subtract draw on the selection wherever the press lands; New grabs the box
+      if (s && selMode !== 'replace') { marquee.down(p, shape); ctx.chrome(); return; }
       if (s && xf.down(toSource(s.place, p), e, view(s))) { studio.drawing = true; return; }
       selected = null;
       xf.clear();
@@ -196,6 +216,20 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       return true;
     },
     hasSelection: () => !!current(),
+    /** Add or Subtract is on, so a press draws on the selection instead of grabbing the box. */
+    wantsPress: () => selMode !== 'replace' && !!current(),
+    /** Select the other lines on the layer. */
+    invert(): void {
+      const s = current();
+      if (!s) return;
+      const rest = new Set<number>();
+      s.source.forEach((_, i) => { if (!s.indices.has(i)) rest.add(i); });
+      if (!rest.size) { toast('That leaves nothing selected.'); return; }
+      selected = { ...s, indices: rest };
+      xf.start(boxFromBounds(boundsOf(s.source, rest)));
+      ctx.chrome();
+      ctx.request();
+    },
     /** Shift-tap: add the line(s) under `p` to the selection (same layer). True when something was added. */
     addAt(p: Pt, reach: number): boolean {
       const s = current();
@@ -257,6 +291,12 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
         if (s && next) apply(label, next);
       };
       return [...marquee.controls(),
+        compactSeg(seg<'replace' | 'add' | 'subtract'>([
+          { id: 'replace', label: 'New', icon: 'select', hint: 'A new selection replaces the old one' },
+          { id: 'add', label: 'Add', icon: 'selAdd', hint: 'Draw round more lines to add them' },
+          { id: 'subtract', label: 'Subtract', icon: 'selSubtract', hint: 'Draw round lines to take them out' },
+        ], selMode, (v) => { selMode = v; ctx.chrome(); }, 'Selection mode')),
+        h('button', { class: 'btn', type: 'button', disabled: !s, title: 'Select the other lines on this layer', onclick: () => this.invert() }, 'Invert'),
         ...xf.controls({ commit: change, reset: false, extent: () => (s && !s.place ? { w: page.widthIn, h: page.heightIn } : null) }),
         h('button', { class: 'btn', type: 'button', disabled: !s, onclick: () => {
           if (!s || current() !== s) return;
