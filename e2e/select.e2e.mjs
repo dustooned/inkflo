@@ -139,4 +139,40 @@ describe('Select and selection recipes', () => {
     assert.deepEqual(d.errors, []);
     await d.context.close();
   });
+
+  it('paint: a selection can be saved by name, brought back after clearing and after a reload, and deleted', async () => {
+    const d = await openDesk(browser, server.url, 'draw', { width: 2000 });
+    for (let i = 0; i < 3; i++) await d.drag([[450, 300 + i * 60], [600, 300 + i * 60]]);
+    await d.page.keyboard.press('r');
+    await d.page.waitForTimeout(250);
+    await d.mv(430, 285); await d.page.mouse.down(); await d.mv(620, 315, { steps: 10 }); await d.page.mouse.up(); await d.page.waitForTimeout(350);
+    const menu = async (fn) => { await d.press('Selection ▾'); await d.page.waitForTimeout(200); const r = await fn(); await d.page.mouse.click(1900, 780); await d.page.waitForTimeout(150); return r; };
+    await menu(async () => { await d.page.getByLabel('Selection name').fill('Line one'); await d.press('Save', '.pop button'); await d.page.waitForTimeout(200); });
+    let saved = (await d.pageData()).savedSelections;
+    assert.equal(saved?.length, 1);
+    assert.equal(saved[0].name, 'Line one');
+    assert.equal(saved[0].steps[0].op, 'replace');
+    // clear the selection, then bring it back: its box returns
+    await d.page.keyboard.press('Escape');
+    await d.page.waitForTimeout(200);
+    const handles = () => d.page.evaluate(() => 1);
+    await menu(async () => { assert.ok(await d.press('Line one', '.pop button')); });
+    await d.page.waitForTimeout(300);
+    await d.drag([[525, 301], [525, 361]], 8);                       // drag the restored selection
+    assert.ok(await d.press('Apply'));
+    await d.page.waitForTimeout(600);
+    const [edit] = await d.edits();
+    assert.ok(edit && Math.abs(edit.matrix[5]) > 0.3, 'the restored selection moved line one');
+    await settle(d.page);
+    await d.page.reload();
+    await d.page.waitForTimeout(1500);
+    saved = (await d.pageData()).savedSelections;
+    assert.equal(saved?.[0]?.name, 'Line one', 'the saved selection survives a reload');
+    await d.page.keyboard.press('r');
+    await d.page.waitForTimeout(250);
+    await menu(async () => { await d.page.evaluate(() => document.querySelector('.pop [aria-label="Delete Line one"]').click()); await d.page.waitForTimeout(200); });
+    assert.equal((await d.pageData()).savedSelections, undefined, 'and it can be deleted');
+    assert.deepEqual(d.errors, []);
+    await d.context.close();
+  });
 });

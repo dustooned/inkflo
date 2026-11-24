@@ -5,7 +5,7 @@ import { readBrush } from '../engine/core/brushlib';
 import type { BrushSettings } from '../engine/core/brush';
 import { invert } from '../engine/core/selxform';
 import { meshFromFlat } from '../geom/meshwarp';
-import type { LiquifyMode, SelectionStep, DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
+import type { LiquifyMode, SavedSelection, SelectionStep, DialogueLine, ModularGrid, PageMark, PixelEdit, PixelTransform, PlacedImage, SavedBalloon, ScreenTone, TextFrame, ToneGradient, ToneScreen, FillGradient } from './model';
 import { INTENT_KEYS, LIQUIFY_MODES, isTransition, MAX_INTENT_CHARS, MAX_TONES_PER_LAYER, TONE_SHAPES, type PanelIntent } from './model';
 import type { BookAsset } from './model';
 import { baseGroups, DEFAULT_SHEET, groupOf, LAYER_TYPES, newLayer, PT, STAGES, type Letter, type LetterSheet, type Beat, type Book, type Cut, type Fill, type GroupKind, type Layer, type LayerGroup, type Page, type PageLayout, type Pt, type Stage, type StageState, type Stroke } from './model';
@@ -276,6 +276,26 @@ function toneScreen(v: unknown, path: string): ToneScreen {
   return { shape: oneOf(o.shape, TONE_SHAPES, `${path}.shape`), frequency, angle, color };
 }
 
+/** The steps of a selection recipe, checked. */
+function selectionSteps(value: unknown, path: string): SelectionStep[] {
+  const raw = arr(value, path);
+  if (raw.length < 1 || raw.length > 64) fail(path, 'needs 1 to 64 steps');
+  return raw.map((v, j): SelectionStep => {
+    const q = `${path}[${j}]`, s = obj(v, q);
+    if (s.op === 'invert') return { op: 'invert' };
+    if (s.op === 'feather') { const radius = num(s.radius, `${q}.radius`); if (radius < 0 || radius > 2) fail(`${q}.radius`, 'should be 0 to 2 inches'); return { op: 'feather', radius }; }
+    if (s.op !== 'replace' && s.op !== 'add' && s.op !== 'subtract') fail(`${q}.op`, 'is not a selection step');
+    const shape = obj(s.shape, `${q}.shape`);
+    if (shape.kind === 'polygon') {
+      const points = pts(shape.pts, `${q}.shape.pts`);
+      if (points.length < 3 || points.length > 8192) fail(`${q}.shape.pts`, 'needs 3 to 8192 points');
+      return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'polygon', pts: points } };
+    }
+    if (shape.kind !== 'colour') fail(`${q}.shape.kind`, 'is not a selection shape');
+    return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'colour', at: pt(shape.at, `${q}.shape.at`), tolerance: unit(shape.tolerance, `${q}.shape.tolerance`, 0.2), contiguous: shape.contiguous !== false } };
+  });
+}
+
 function layer(v: unknown, path: string): Layer {
   const o = obj(v, path);
   const type = oneOf(o.type, LAYER_TYPES, `${path}.type`);
@@ -340,25 +360,7 @@ function layer(v: unknown, path: string): Layer {
       if (raw.length !== 6) fail(`${p}.matrix`, 'needs six values');
       const matrix = raw.map((v, j) => num(v, `${p}.matrix[${j}]`)) as PixelTransform['matrix'];
       if (!invert(matrix)) fail(`${p}.matrix`, 'should be invertible');
-      let selection: PixelTransform['selection'];
-      if (op.selection !== undefined) {
-        const raw = arr(op.selection, `${p}.selection`);
-        if (raw.length < 1 || raw.length > 64) fail(`${p}.selection`, 'needs 1 to 64 steps');
-        selection = raw.map((v, j): SelectionStep => {
-          const q = `${p}.selection[${j}]`, s = obj(v, q);
-          if (s.op === 'invert') return { op: 'invert' };
-          if (s.op === 'feather') { const radius = num(s.radius, `${q}.radius`); if (radius < 0 || radius > 2) fail(`${q}.radius`, 'should be 0 to 2 inches'); return { op: 'feather', radius }; }
-          if (s.op !== 'replace' && s.op !== 'add' && s.op !== 'subtract') fail(`${q}.op`, 'is not a selection step');
-          const shape = obj(s.shape, `${q}.shape`);
-          if (shape.kind === 'polygon') {
-            const points = pts(shape.pts, `${q}.shape.pts`);
-            if (points.length < 3 || points.length > 8192) fail(`${q}.shape.pts`, 'needs 3 to 8192 points');
-            return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'polygon', pts: points } };
-          }
-          if (shape.kind !== 'colour') fail(`${q}.shape.kind`, 'is not a selection shape');
-          return { op: s.op as 'replace' | 'add' | 'subtract', shape: { kind: 'colour', at: pt(shape.at, `${q}.shape.at`), tolerance: unit(shape.tolerance, `${q}.shape.tolerance`, 0.2), contiguous: shape.contiguous !== false } };
-        });
-      }
+      const selection = op.selection !== undefined ? selectionSteps(op.selection, `${p}.selection`) : undefined;
       let mesh: PixelTransform['mesh'];
       if (op.mesh !== undefined) {
         const m = obj(op.mesh, `${p}.mesh`);
@@ -730,6 +732,15 @@ function page(v: unknown, path: string, v1Keys?: Obj): Page {
   if (o.autoLetter === true) pg.autoLetter = true;
   if (o.texts !== undefined) pg.texts = arr(o.texts, `${path}.texts`).map((t, i) => textFrame(t, `${path}.texts[${i}]`));
   if (o.marks !== undefined) pg.marks = arr(o.marks, `${path}.marks`).map((m, i) => pageMark(m, `${path}.marks[${i}]`));
+  if (o.savedSelections !== undefined) {
+    const list = arr(o.savedSelections, `${path}.savedSelections`);
+    if (list.length > 32) fail(`${path}.savedSelections`, 'holds at most 32 selections');
+    pg.savedSelections = list.map((v, i): SavedSelection => {
+      const q = `${path}.savedSelections[${i}]`, s = obj(v, q);
+      return { id: str(s.id, `${q}.id`), name: str(s.name, `${q}.name`).trim().slice(0, 60) || 'Selection', layerId: str(s.layerId, `${q}.layerId`),
+        steps: selectionSteps(s.steps, `${q}.steps`), feather: unit(s.feather, `${q}.feather`, 0) };
+    });
+  }
   const earlier = new Set<string>();
   const grouped = pg.balloons.some((l) => l.continuation);
   for (const [i, l] of pg.balloons.entries()) {

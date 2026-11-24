@@ -595,8 +595,10 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   A selection is a list of steps (`SelectionStep`: polygon or colour, replace / add / subtract, invert,
   feather) replayed into a soft mask (`src/draw/selmask.ts`); the lift through it takes only what the mask
   covers, so a feathered edge moves partly and leaves the rest. A plain one-area selection saves as before;
-  anything else saves its steps in `PixelTransform.selection` and replays the same way on load. Not yet:
-  named, saved selections, and these steps for Select lines (vector).
+  anything else saves its steps in `PixelTransform.selection` and replays the same way on load. Selections can be
+  **saved by name** on the page (`Page.savedSelections`, up to 32) and brought back from the Selection menu, on the layer
+  they were made on. Select lines has the same New / Add / Subtract and Invert, without feather or colour, and
+  without saving (lines are picked, not painted).
 - **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
   lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
   a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches

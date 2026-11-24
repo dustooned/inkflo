@@ -259,6 +259,16 @@ export type SelectionStep =
   | { op: 'invert' }
   | { op: 'feather'; radius: number };
 
+/** A paint selection kept by name: the layer it was made on and the steps that rebuild it. */
+export interface SavedSelection {
+  id: string;
+  name: string;
+  layerId: string;
+  steps: SelectionStep[];
+  /** Feather radius in inches. */
+  feather: number;
+}
+
 export interface PixelTransform {
   polygon: Pt[];
   /** Keep the original pixels when the lifted selection is placed. */
@@ -487,6 +497,8 @@ export interface Page {
   texts?: TextFrame[];
   /** Placements of the artist mark (a signature or symbol), by asset key. */
   marks?: PageMark[];
+  /** Paint selections kept by name, to bring back later. */
+  savedSelections?: SavedSelection[];
   state: Record<Stage, StageState>;
   updatedAt: number;
 }

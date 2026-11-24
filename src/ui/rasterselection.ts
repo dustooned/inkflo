@@ -1,4 +1,4 @@
-import { findLayer, type Layer, type PixelTransform, type Pt, type SelectionStep } from '../doc/model';
+import { findLayer, newId, type Layer, type PixelTransform, type Pt, type SavedSelection, type SelectionStep } from '../doc/model';
 import { downscaleCanvas, downscaleLifted, IDENTITY_MATRIX, liftRecipe, paintPixelTransform, transformDestination, type LiftedPixels } from '../draw/pixeltransform';
 import { touchLayer } from '../draw/residency';
 import { applyPoint, unionRect, type Mat, type Rect } from '../engine/core/selxform';
@@ -225,12 +225,48 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     ctx.request();
   }
 
+  /** Keep the current selection under a name, on this page. */
+  function saveSelection(name: string): boolean {
+    const s = current();
+    if (!s) return false;
+    const entry: SavedSelection = { id: newId('sel'), name: name.trim().slice(0, 60) || `Selection ${(page.savedSelections?.length ?? 0) + 1}`, layerId: s.id, steps: structuredClone(s.recipe), feather: s.feather };
+    studio.editPage(page, 'Save selection', ['savedSelections'], (p) => { p.savedSelections = [...(p.savedSelections ?? []), entry]; });
+    return true;
+  }
+  function deleteSelection(id: string): void {
+    studio.editPage(page, 'Delete saved selection', ['savedSelections'], (p) => {
+      p.savedSelections = (p.savedSelections ?? []).filter((x) => x.id !== id);
+      if (!p.savedSelections.length) delete p.savedSelections;
+    });
+  }
+  /** Bring a saved selection back, on the layer it was made on. */
+  function loadSelection(id: string): boolean {
+    const saved = page.savedSelections?.find((x) => x.id === id);
+    if (!saved) return false;
+    if (pending()) return false;
+    const match = findLayer(page, saved.layerId);
+    const source = match && art.planes[saved.layerId];
+    if (!match || !source || match.layer.vector || match.layer.image || match.layer.locked) { toast('The layer this selection was made on is no longer there, or is locked.'); return false; }
+    clear();
+    feather = saved.feather;
+    const recipe = structuredClone(saved.steps);
+    const lifted = lift(source, recipe);
+    if (!lifted) { toast('There is nothing under this selection any more.'); return false; }
+    const place = placement(saved.layerId);
+    selected = { id: saved.layerId, name: match.layer.name, source, revision: art.revs[saved.layerId] ?? 0, polygon: rectPolygon(lifted), recipe, feather, lifted, place };
+    xf.start(boxOf(lifted));
+    ctx.chrome();
+    ctx.request();
+    return true;
+  }
+
   /** The bar's Selection menu: add and subtract, invert, feather and colour select. */
   function selectionMenu(invert: () => void): HTMLElement {
     const anchor = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-pressed': String(picking || selMode !== 'replace'), title: 'Add to or subtract from the selection, invert it, feather its edge, or pick by colour' }, 'Selection ▾');
     anchor.addEventListener('click', () => {
       const holder = h('div', { class: 'arrange' });
       const again = () => holder.replaceChildren(...build());
+      const nameInput = h('input', { type: 'text', placeholder: 'Name', 'aria-label': 'Selection name', maxlength: 60 }) as HTMLInputElement;
       const build = (): HTMLElement[] => {
         const s = current();
         return [
@@ -253,6 +289,15 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
             h('button', { class: 'btn', type: 'button', 'aria-pressed': String(picking), title: 'Tap the art: everything like that colour is selected', onclick: () => { picking = !picking; marquee.clear(); ctx.chrome(); again(); } }, icon('eyedropper', 16), 'Colour select'),
             h('button', { class: 'btn', type: 'button', 'aria-pressed': String(contiguous), title: 'Only pixels touching the one you tap', onclick: () => { contiguous = !contiguous; again(); } }, 'Touching only')),
           slider('Tolerance', 0, 100, 1, Math.round(tolerance * 100), (v) => `${v}%`, (v) => { tolerance = v / 100; }),
+          h('h4', {}, 'Saved selections'),
+          h('div', { class: 'arrange-row' },
+            nameInput,
+            h('button', { class: 'btn', type: 'button', disabled: !s, title: 'Keep this selection to bring back later', onclick: () => { if (saveSelection(nameInput.value)) { nameInput.value = ''; again(); } } }, 'Save')),
+          ...((page.savedSelections ?? []).length
+            ? (page.savedSelections ?? []).map((x) => h('div', { class: 'arrange-row saved-selection' },
+              h('button', { class: 'btn', type: 'button', title: `Bring back “${x.name}”`, onclick: () => { if (loadSelection(x.id)) again(); } }, x.name),
+              h('button', { class: 'btn', type: 'button', 'aria-label': `Delete ${x.name}`, title: `Delete “${x.name}”`, onclick: () => { deleteSelection(x.id); again(); } }, '✕')))
+            : [h('p', { class: 'note flush' }, 'None yet. Select something, name it and press Save.')]),
         ];
       };
       holder.replaceChildren(...build());
