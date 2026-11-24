@@ -22,6 +22,8 @@ interface Selection {
   polygon: Pt[];
   /** How it was made, without the feather (which is a separate setting). */
   recipe: SelectionStep[];
+  /** The feather it was lifted with: what is saved must match what was lifted, whatever the slider says now. */
+  feather: number;
   lifted: LiftedPixels;
   /** The panel placement the layer is shown through; the selection works in its source space. */
   place: Placement | null;
@@ -71,13 +73,13 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     const { x, y, w, h } = lifted.rect;
     return selectionCorners({ x: x / dpi, y: y / dpi }, { x: (x + w) / dpi, y: (y + h) / dpi });
   };
-  const isSimple = (steps: SelectionStep[]) => feather === 0 && steps.length === 1 && steps[0]!.op === 'replace' && steps[0]!.shape.kind === 'polygon';
+  const isSimple = (steps: SelectionStep[], f: number) => f === 0 && steps.length === 1 && steps[0]!.op === 'replace' && steps[0]!.shape.kind === 'polygon';
 
   /** Put a new recipe's result in place of the current selection (same layer), and restart the box around it. */
   function revise(s: Selection, steps: SelectionStep[], empty: string): boolean {
     const lifted = lift(s.source, steps);
     if (!lifted) { toast(empty); return false; }
-    selected = { ...s, recipe: steps, lifted };
+    selected = { ...s, recipe: steps, lifted, feather };
     xf.start(boxOf(lifted));
     preview = null; rendered = null; dirty = null; low = null;
     return true;
@@ -87,8 +89,9 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     return false;
   }
 
-  function pick(polygon: Pt[], from: Pt, only?: Layer): void {
-    lastArea = polygon.map((p) => ({ ...p }));
+  function pick(polygon: Pt[], from: Pt, only?: Layer, implicit = false): void {
+    // a whole-layer grab is not an area the artist drew, so it must not become the remembered area
+    if (!implicit) lastArea = polygon.map((p) => ({ ...p }));
     const base = selMode !== 'replace' ? current() : null;
     if (base) {
       if (pending()) return;
@@ -104,7 +107,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       const recipe: SelectionStep[] = [{ op: 'replace', shape: { kind: 'polygon', pts: local } }];
       const lifted = lift(source, recipe);
       if (!lifted) continue;
-      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, recipe, lifted, place };
+      selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: local, recipe, feather, lifted, place };
       xf.start(boxOf(lifted));
       break;
     }
@@ -128,7 +131,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     const recipe: SelectionStep[] = [{ op: 'replace', shape }];
     const lifted = lift(source, recipe);
     if (!lifted) { toast('Nothing like that colour here.'); return; }
-    selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: rectPolygon(lifted), recipe, lifted, place };
+    selected = { id: layer.id, name: layer.name, source, revision: art.revs[layer.id] ?? 0, polygon: rectPolygon(lifted), recipe, feather, lifted, place };
     xf.start(boxOf(lifted));
     ctx.request();
   }
@@ -171,6 +174,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     xf.clear();
     copy = false;
     picking = false;
+    selMode = 'replace';
     preview = null;
     rendered = null;
     dirty = null;
@@ -191,8 +195,8 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     const before = g.getImageData(x, y, w, h);
     const layer = findLayer(page, id)!.layer;
     const previous = layer.pixelTransforms;
-    const simple = isSimple(s.recipe);
-    const edit: PixelTransform = { polygon: simple ? s.polygon : rectPolygon(lifted), ...(simple ? {} : { selection: withFeather(s.recipe) }), matrix: [...matrix], ...(mesh ? { mesh: meshToFlat(mesh) } : {}), strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
+    const simple = isSimple(s.recipe, s.feather);
+    const edit: PixelTransform = { polygon: simple ? s.polygon : rectPolygon(lifted), ...(simple ? {} : { selection: s.feather > 0 ? [...s.recipe, { op: 'feather' as const, radius: s.feather }] : s.recipe }), matrix: [...matrix], ...(mesh ? { mesh: meshToFlat(mesh) } : {}), strokes: layer.strokes.length, fills: layer.fills.length, ...(copy ? { copy: true } : {}), ...(crisp ? { crisp: true } : {}) };
     const next = [...previous ?? [], edit];
     let after: ImageData;
     try {
@@ -223,7 +227,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
 
   /** The bar's Selection menu: add and subtract, invert, feather and colour select. */
   function selectionMenu(invert: () => void): HTMLElement {
-    const anchor = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-pressed': String(picking), title: 'Add to or subtract from the selection, invert it, feather its edge, or pick by colour' }, 'Selection ▾');
+    const anchor = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', 'aria-pressed': String(picking || selMode !== 'replace'), title: 'Add to or subtract from the selection, invert it, feather its edge, or pick by colour' }, 'Selection ▾');
     anchor.addEventListener('click', () => {
       const holder = h('div', { class: 'arrange' });
       const again = () => holder.replaceChildren(...build());
@@ -238,9 +242,10 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
           h('div', { class: 'arrange-row' },
             h('button', { class: 'btn', type: 'button', disabled: !s, title: 'Select everything that is not selected', onclick: () => { invert(); again(); } }, icon('selInvert', 16), 'Invert')),
           slider('Feather', 0, 60, 1, Math.round(feather * dpi), (v) => `${v} px`, () => {}, (v) => {
-            feather = v / dpi;
             const now = current();
-            if (now && !pending()) { revise(now, now.recipe, 'That leaves nothing selected.'); ctx.request(); }
+            if (now && pending()) { ctx.chrome(); again(); return; } // the lift under a pending move must not change
+            feather = v / dpi;
+            if (now) { revise(now, now.recipe, 'That leaves nothing selected.'); ctx.request(); }
             ctx.chrome();
             again();
           }),
@@ -312,11 +317,13 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     selectLayer() {
       if (current() && xf.moved()) return;
       clear();
-      pick(selectionCorners({ x: 0, y: 0 }, { x: page.widthIn, y: page.heightIn }), { x: page.widthIn / 2, y: page.heightIn / 2 });
+      pick(selectionCorners({ x: 0, y: 0 }, { x: page.widthIn, y: page.heightIn }), { x: page.widthIn / 2, y: page.heightIn / 2 }, undefined, true);
       ctx.chrome();
       ctx.request();
     },
     hasSelection: () => !!current(),
+    /** Add, Subtract or Colour select is on, so a press draws on the selection instead of grabbing the box. */
+    wantsPress: () => picking || (selMode !== 'replace' && !!current()),
     /** Select everything that is not selected. */
     invert(): void {
       const s = current();
@@ -333,7 +340,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
     /** Pointer-style pick: everything painted on this layer. */
     pickLayer(layer: Layer): boolean {
       clear();
-      pick(selectionCorners({ x: 0, y: 0 }, { x: page.widthIn, y: page.heightIn }), { x: page.widthIn / 2, y: page.heightIn / 2 }, layer);
+      pick(selectionCorners({ x: 0, y: 0 }, { x: page.widthIn, y: page.heightIn }), { x: page.widthIn / 2, y: page.heightIn / 2 }, layer, true);
       return !!selected;
     },
     /** Take hold of the box under `p` without starting a new selection. */

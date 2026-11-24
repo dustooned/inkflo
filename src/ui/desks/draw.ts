@@ -1537,6 +1537,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
   function selectDown(p: Pt, e: PointerEvent): void {
     const held = heldBy();
+    if (picked === 'pixels' && pixels.wantsPress()) { pixels.down(p, e, 'rectangle'); return; }
     if (e.shiftKey && picked === 'selection' && selection.hasSelection() && hitVector(p) && selection.addAt(p, 8 / ctx.scale())) return;
     if (held?.tryGrab(p, e)) return;
     if (held?.pending()) { toast('Apply or cancel the transform before selecting something else.'); return; }
@@ -1951,7 +1952,11 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
         ...(mode.tool === 'clone' ? [h('button', { class: 'btn', type: 'button', 'aria-pressed': String(pickingClone), onclick: () => { pickingClone = !pickingClone; ctx.chrome(); } }, pickingClone ? 'Tap the source' : 'Set source')] : []),
         brushControl('Size', 'pt', smudgeSize, 1, 72, 0.5, (v) => { smudgeSize = v; ctx.request(); }, () => {}),
         brushControl('Strength', '%', smudgeStrength * 100, 1, 100, 1, (v) => { smudgeStrength = v / 100; }, () => {}),
-        h('span', { class: 'hint' }, mode.tool === 'clone' ? 'Alt-click or tap Set source, then paint on the same layer.' : 'Drag through paint to blend it'),
+        ...(mode.tool === 'liquify' ? [seg<LiquifyMode>([
+          { id: 'push', label: 'Push', icon: 'liquifyPush', hint: 'Drag paint along the stroke' }, { id: 'twirl', label: 'Twirl', icon: 'liquifyTwirl', hint: 'Swirl paint round the brush' },
+          { id: 'pinch', label: 'Pinch', icon: 'liquifyPinch', hint: 'Draw paint in towards the brush centre' }, { id: 'bloat', label: 'Bloat', icon: 'liquifyBloat', hint: 'Push paint out from the brush centre' },
+        ], liquifyMode(), (v) => { ctx.setVariant('liquify', v); }, 'Liquify mode')] : []),
+        h('span', { class: 'hint' }, mode.tool === 'clone' ? 'Alt-click or tap Set source, then paint on the same layer.' : mode.tool === 'liquify' ? 'Drag over paint to bend it' : 'Drag through paint to blend it'),
       );
       if (bt) {
         const stroke = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog' }, 'Stroke ▾');

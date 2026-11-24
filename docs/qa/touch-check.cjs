@@ -14,7 +14,6 @@ const { chromium } = require('playwright');
   await page.goto(`http://127.0.0.1:5199/#/desk/${ids[0]}/${ids[1]}/draw`); await sleep(1200);
   // two vector strokes (mouse), then Select
   await page.keyboard.press('v'); await sleep(200);
-  await 
   const drag = async (pts) => { await page.mouse.move(...pts[0]); await page.mouse.down(); for (const q of pts) await page.mouse.move(...q, { steps: 8 }); await page.mouse.up(); };
   await drag([[450, 300], [520, 340], [600, 300]]); await drag([[450, 600], [520, 640], [600, 600]]);
   await page.keyboard.press('q'); await sleep(200);

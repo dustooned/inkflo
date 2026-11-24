@@ -16,14 +16,13 @@ function sampleInto(src: Uint8ClampedArray, w: number, h: number, x: number, y: 
   const u = Math.min(Math.max(x - 0.5, 0), w - 1), v = Math.min(Math.max(y - 0.5, 0), h - 1);
   const x0 = Math.floor(u), y0 = Math.floor(v), x1 = Math.min(w - 1, x0 + 1), y1 = Math.min(h - 1, y0 + 1);
   const fx = u - x0, fy = v - y0;
-  const wt = [(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy];
-  const idx = [(y0 * w + x0) * 4, (y0 * w + x1) * 4, (y1 * w + x0) * 4, (y1 * w + x1) * 4];
-  let r = 0, g = 0, b = 0, a = 0;
-  for (let k = 0; k < 4; k++) {
-    const al = src[idx[k]! + 3]! * wt[k]!;
-    a += al;
-    r += src[idx[k]!]! * al; g += src[idx[k]! + 1]! * al; b += src[idx[k]! + 2]! * al;
-  }
+  const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+  const i00 = (y0 * w + x0) * 4, i10 = (y0 * w + x1) * 4, i01 = (y1 * w + x0) * 4, i11 = (y1 * w + x1) * 4;
+  const a00 = src[i00 + 3]! * w00, a10 = src[i10 + 3]! * w10, a01 = src[i01 + 3]! * w01, a11 = src[i11 + 3]! * w11;
+  const a = a00 + a10 + a01 + a11;
+  const r = src[i00]! * a00 + src[i10]! * a10 + src[i01]! * a01 + src[i11]! * a11;
+  const g = src[i00 + 1]! * a00 + src[i10 + 1]! * a10 + src[i01 + 1]! * a01 + src[i11 + 1]! * a11;
+  const b = src[i00 + 2]! * a00 + src[i10 + 2]! * a10 + src[i01 + 2]! * a01 + src[i11 + 2]! * a11;
   if (a < 0.5) { out[at] = out[at + 1] = out[at + 2] = out[at + 3] = 0; return; }
   out[at] = r / a; out[at + 1] = g / a; out[at + 2] = b / a; out[at + 3] = a;
 }

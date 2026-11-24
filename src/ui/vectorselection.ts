@@ -154,7 +154,11 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       if (!g) {
         const ended = xf.moved() && s;
         xf.pinch(null);
-        if (ended) { const next = shaped(s); if (next) apply('Transform selected lines', next); }
+        if (ended) {
+          const next = shaped(s);
+          liveStrokes = null; preview = null; rendered = null;
+          if (next) apply('Transform selected lines', next);
+        }
         return false;
       }
       if (!s) return false;
