@@ -705,6 +705,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         ctx.chrome();
       }
     },
+    pinchTransform: (g) => mode.tool === 'place' ? placement.pinch(g) : false,
     layoutPreview: () => placement.preview() ?? preview,
     viewBleed: () => mode.tool === 'place' && placement.showBleed(),
     overlay(g, s) {

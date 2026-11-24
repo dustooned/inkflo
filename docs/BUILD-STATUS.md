@@ -587,8 +587,9 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   Fit to page and Reset. Two fingers pinch, twist and drag the box instead of the view while art is
   selected (`DeskMode.pinchTransform`). Transform with *Draw on: Selected layer* takes the layer's
   paint as soon as it is chosen, and **Whole layer** does so on demand. Paint transforms can use
-  **Crisp** (nearest-neighbour) resampling, saved as `crisp` on the edit. Not yet: Distort and Warp,
-  and the same box for Transform panel (Layout), which still uses the older axis-aligned frame.
+  **Crisp** (nearest-neighbour) resampling, saved as `crisp` on the edit. Transform panel (Layout, one panel) uses the same box,
+  turning with the placed panel, with pinch/twist and the bar controls; All panels keeps the older
+  axis-aligned resize. Not yet: Distort and Warp.
 
 ## Touch workspace and book assets
 
