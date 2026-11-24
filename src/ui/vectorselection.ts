@@ -192,6 +192,23 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       return true;
     },
     hasSelection: () => !!current(),
+    /** Shift-tap: add the line(s) under `p` to the selection (same layer). True when something was added. */
+    addAt(p: Pt, reach: number): boolean {
+      const s = current();
+      if (!s) return false;
+      const layer = findLayer(page, s.id)?.layer;
+      if (!layer) return false;
+      const at = toSource(s.place, p);
+      const area = [{ x: at.x - reach, y: at.y - reach }, { x: at.x + reach, y: at.y - reach }, { x: at.x + reach, y: at.y + reach }, { x: at.x - reach, y: at.y + reach }];
+      const indices = new Set(s.indices);
+      layer.strokes.forEach((stroke, i) => { if (strokeTouchesOutline(stroke, area)) indices.add(i); });
+      if (indices.size === s.indices.size) return false;
+      selected = { ...s, indices };
+      xf.start(boxFromBounds(boundsOf(s.source, indices)));
+      ctx.chrome();
+      ctx.request();
+      return true;
+    },
     /** Arrow-key step, in page inches; applied at once like any other gesture here. */
     nudge(dx: number, dy: number): boolean {
       const s = current();

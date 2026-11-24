@@ -1537,6 +1537,7 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
   }
   function selectDown(p: Pt, e: PointerEvent): void {
     const held = heldBy();
+    if (e.shiftKey && picked === 'selection' && selection.hasSelection() && hitVector(p) && selection.addAt(p, 8 / ctx.scale())) return;
     if (held?.tryGrab(p, e)) return;
     if (held?.pending()) { toast('Apply or cancel the transform before selecting something else.'); return; }
     clearPicks();
@@ -1548,6 +1549,15 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       if (paint && pixels.pickLayer(paint)) {
         picked = 'pixels';
         pixels.tryGrab(p, e);
+      } else if (images.hits(p)) {
+        // a placed image: its own tool moves and resizes it (Q returns to Select)
+        picked = null;
+        mode.tool = 'image';
+        images.start(p);
+      } else if (marks.hits(p)) {
+        picked = null;
+        mode.tool = 'mark';
+        marks.down(p);
       } else {
         // empty space: drag a box round lines
         picked = 'selection';

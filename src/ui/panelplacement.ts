@@ -53,7 +53,8 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
   /** Keep the box on the selected panel; restart it when the panel or its placement changes. */
   function sync(panel: Panel | undefined): void {
     if (!panel || resizeAll) { if (!xf.dragging()) { xf.clear(); single = null; tracked = ''; } return; }
-    const key = `${panel.index}:${JSON.stringify(panel.transform?.matrix ?? 0)}`;
+    const b = panel.bbox;
+    const key = `${panel.index}:${JSON.stringify(panel.transform?.matrix ?? 0)}:${[b.x0, b.y0, b.x1, b.y1].map((n) => n.toFixed(4)).join(',')}`;
     if (key === tracked || xf.dragging()) return;
     tracked = key;
     single = { panel, base: panel.transform?.matrix ?? [...IDENTITY_MATRIX] as PanelTransform['matrix'] };
@@ -147,6 +148,16 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
       clear();
       if (layout && e.type !== 'pointercancel') commit(layout, all ? 'Resize all panels' : 'Transform panel');
       else ctx.chrome();
+    },
+    /** Take hold of a handle or knob on the selected panel's box, without selecting anything new. */
+    tryGrab(p: Pt, e: PointerEvent): boolean {
+      if (resizeAll) return false;
+      const panel = current();
+      sync(panel);
+      if (!panel || !xf.down(p, e, { extent: extent() })) return false;
+      if (xf.grab()?.kind === 'move') { xf.cancel(); return false; }
+      boxDrag = true;
+      return true;
     },
     /** Two fingers pinch, twist and drag the selected panel instead of the view. */
     pinch(g: PinchGesture | null): boolean {

@@ -576,6 +576,10 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
 - **Select** (Draw, Q) is the pointer: tap a vector line to select it, tap painted art to select that
   layer's paint, or drag on empty space to box-select lines. Either way the transform box takes over
   (drag to move, handles, knob, pinch). Select lines and Transform remain for lasso shapes.
+  Select also picks placed images and Artist marks (handing off to Position image / Artist mark), and
+  Shift-tap adds more lines to a line selection. In **Layout**, Select (Q) is the pointer: a box handle
+  turns or stretches the selected panel, a gutter or its handle resizes the cut, and a panel body selects
+  and moves it. Arrow keys nudge (Shift for ten times the step) in Draw and Layout.
 - **Transform box** (`src/geom/xformbox.ts`, `src/ui/transformbox.ts`, shared by Transform and Select
   lines). The box turns with the art: four corner and four side handles, a rotate knob on a stem, and
   a corner's outside also rotates. Handles work along the box's own axes, so a turned box stretches

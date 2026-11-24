@@ -83,6 +83,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   let sel: number | null = null;
   const placement = panelPlacement(ctx, () => sel, (index) => { sel = index; });
   let hoverCut: CutMove | null = null;
+  /** What the Select tool's current press went to. */
+  let routed: 'place' | 'resize' | null = null;
   let drag: { moves: CutMove[]; start: Pt; before: Cut[]; count: number; blocked: boolean; whole: boolean } | null = null;
   let preview: ReturnType<NonNullable<DeskMode['layoutPreview']>>;
   let curveId: string | undefined;
@@ -386,6 +388,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       ] },
       { id: 'erase', label: 'Uncut', glyph: '⌫', key: 'e', group: 'cut' },
       { id: 'resize', label: 'Resize gutters', glyph: '⇔', key: 'r', group: 'edit' },
+      { id: 'select', label: 'Select', glyph: '↖', key: 'q', group: 'edit' },
       { id: 'place', label: 'Transform panel', glyph: '↗', key: 'v', group: 'edit' },
       { id: 'curve', label: 'Curve edges', glyph: '⌒', key: 'b', group: 'edit' },
       { id: 'order', label: 'Reading order', glyph: '①', key: 'o', group: 'edit' },
@@ -395,6 +398,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool === 'knife') return 'cross';
       if (mode.tool === 'curve') return 'cross';
       if (mode.tool === 'place') return 'move';
+      if (mode.tool === 'select') { const edge = drag?.moves[0] ?? hoverCut; return !edge ? 'default' : edge.axis === 'x' ? 'ew-resize' : 'ns-resize'; }
       if (mode.tool === 'order') return 'pointer';
       if (mode.tool !== 'resize') return '';
       const edge = drag?.moves[0] ?? hoverCut;
@@ -404,7 +408,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       if (mode.tool !== 'order' && taps.length) taps = [];
       bar.append(h('button', { class: 'btn document-option', type: 'button', 'aria-pressed': String(codeOpen), title: 'Edit the layout as numbers and code in the sidebar', onclick: () => setCodeOpen(!codeOpen) }, codeOpen ? 'Close code' : 'Code'));
       const L = layoutOf(page);
-      if (mode.tool === 'place') {
+      if (mode.tool === 'place' || mode.tool === 'select') {
+        if (mode.tool === 'select') bar.append(h('span', { class: 'hint' }, 'Tap a panel to select it, drag to move it, or drag a gutter to resize.'));
         bar.append(...placement.controls());
         return;
       }
@@ -545,6 +550,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         { label: 'One panel', checked: mode.tool === 'knife' && knife === 'panel', run: use('knife', 'panel') },
         { label: 'Uncut', key: 'E', checked: mode.tool === 'erase', run: use('erase') },
         { label: 'Resize gutters', key: 'R', checked: mode.tool === 'resize', run: use('resize') },
+        { label: 'Select', key: 'Q', checked: mode.tool === 'select', run: use('select') },
         { label: 'Transform panel', key: 'V', checked: mode.tool === 'place', run: use('place') },
         { label: 'Curve edges', key: 'B', checked: mode.tool === 'curve', run: use('curve') },
         { label: 'Reading order', key: 'O', checked: mode.tool === 'order', run: use('order') },
@@ -583,9 +589,26 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         ctx.chrome();
         return;
       }
+      if (mode.tool === 'select') {
+        // pointer: a box handle first, then a gutter or its handle, otherwise the panel under the tap
+        const reach = (e.pointerType === 'touch' ? 15 : 8) / ctx.scale();
+        routed = null;
+        if (placement.tryGrab(p, e)) { routed = 'place'; return; }
+        const edge = handleAt(p, reach) ?? gutterAt(p, reach);
+        if (edge) {
+          routed = 'resize';
+          drag = { moves: [edge], start: p, before: page.cuts, count: ctx.panels().length, blocked: false, whole: false };
+          ctx.chrome();
+          return;
+        }
+        routed = 'place';
+        placement.down(p, e);
+        ctx.chrome();
+        return;
+      }
     },
     move(p, e) {
-      if (mode.tool === 'place') { placement.move(p, e); return; }
+      if (mode.tool === 'place' || (mode.tool === 'select' && routed === 'place')) { placement.move(p, e); return; }
       if (curveDrag !== undefined) {
         const original = page.cuts.find((c) => c.id === curveId);
         if (!original) return;
@@ -642,10 +665,10 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     hover(p) {
       hoverCut = null;
-      if (p && (mode.tool === 'erase' || mode.tool === 'resize')) hoverCut = gutterAt(p, 8 / ctx.scale());
+      if (p && (mode.tool === 'erase' || mode.tool === 'resize' || mode.tool === 'select')) hoverCut = gutterAt(p, 8 / ctx.scale());
     },
     up(p, e) {
-      if (mode.tool === 'place') { placement.up(p, e); return; }
+      if (mode.tool === 'place' || (mode.tool === 'select' && routed === 'place')) { placement.up(p, e); return; }
       clearTimeout(holdTimer);
       if (e.type === 'pointercancel') { cancelDrag(); ctx.chrome(); return; }
       if (mode.tool === 'erase') {
@@ -705,7 +728,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         ctx.chrome();
       }
     },
-    pinchTransform: (g) => mode.tool === 'place' ? placement.pinch(g) : false,
+    pinchTransform: (g) => mode.tool === 'place' || mode.tool === 'select' ? placement.pinch(g) : false,
     layoutPreview: () => placement.preview() ?? preview,
     viewBleed: () => mode.tool === 'place' && placement.showBleed(),
     overlay(g, s) {
@@ -753,7 +776,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         g.fillText(label, at.x * s, at.y * s + 1);
       }
       const p = selected();
-      if (mode.tool === 'place') placement.overlay(g, s, p);
+      if (mode.tool === 'place' || (mode.tool === 'select' && p)) placement.overlay(g, s, p);
       else if (p) {
         g.fillStyle = 'rgba(47,111,126,.10)';
         g.fill(panelPath(p.pts, s));
@@ -763,7 +786,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         g.stroke(panelPath(p.pts, s));
         g.setLineDash([]);
       }
-      if (mode.tool === 'resize') {
+      if (mode.tool === 'resize' || mode.tool === 'select') {
         for (const hd of handles()) {
           g.fillStyle = '#FFFDF7';
           g.strokeStyle = '#2F6F7E';
@@ -823,7 +846,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     key(e) {
       const arrow = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number] | undefined>)[e.key];
-      if (arrow && mode.tool === 'place' && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
+      if (arrow && (mode.tool === 'place' || mode.tool === 'select') && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
         const step = e.shiftKey ? 0.1 : 0.01;
         if (placement.nudge(arrow[0] * step, arrow[1] * step)) return true;
       }
