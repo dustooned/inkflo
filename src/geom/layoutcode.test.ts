@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newPage } from '../doc/model';
 import { derivePanels, layoutOf, presetCuts } from './carve';
-import { describeTransform, formatLayoutCode, parseLayoutCode, transformMatrix } from './layoutcode';
+import { describeTransform, formatLayoutCode, isHandDrawn, parseLayoutCode, smoothDrawnCuts, transformMatrix } from './layoutcode';
 
 const page = () => newPage();
 
@@ -172,5 +172,30 @@ describe('page data for games', () => {
       expect(back.cuts[0]!.id).toBe('cwave');
       expect(back.cuts[0]!.pts).toHaveLength(2);
     });
+  });
+});
+
+describe('smooth cuts', () => {
+  const wobbly = () => {
+    const p = newPage();
+    const pts = Array.from({ length: 80 }, (_, i) => ({ x: -0.5 + i * 0.09, y: 5 + ((i * 13) % 7 - 3) * 0.012 })); // a nearly straight, shaky line
+    p.cuts = [{ id: 'cshaky', mode: 'across', pts, bounded: true }, { id: 'cstraight', mode: 'across', pts: [{ x: 2, y: -1 }, { x: 2, y: 11 }], bounded: true }];
+    return p;
+  };
+
+  it('straightens a shaky line, keeps its ends, and leaves straight cuts alone', () => {
+    const p = wobbly();
+    const next = smoothDrawnCuts(p, 100);
+    expect(next[0]!.pts.length).toBeLessThanOrEqual(3);
+    expect(next[0]!.pts[0]!.x).toBeCloseTo(p.cuts[0]!.pts[0]!.x, 0);
+    expect(Math.abs(next[0]!.pts.at(-1)!.y - 5)).toBeLessThan(0.1);
+    expect(next[1]).toBe(p.cuts[1]); // untouched
+    expect(next[0]!.id).toBe('cshaky');
+  });
+
+  it('recognises which cuts are hand-drawn', () => {
+    const p = wobbly();
+    expect(isHandDrawn(p.cuts[0]!, p)).toBe(true);
+    expect(isHandDrawn(p.cuts[1]!, p)).toBe(false);
   });
 });

@@ -216,7 +216,7 @@ export const ICON_BY_LABEL: Record<string, IconName> = {
   'Whole layer': 'layers', Snapping: 'snap', Pivot: 'pivot', 'Flip horizontal': 'flip', 'Flip vertical': 'flipV', 'Rotate 45°': 'rotate',
   'Fit to page': 'fit', Arrange: 'moveLine', 'Keep original': 'copy', Duplicate: 'copy',
   // layout
-  Knife: 'knife', 'Across page': 'cutAcross', 'One panel': 'cutPanel', 'All panels': 'templates', 'Reading order': 'readingOrder', Uncut: 'uncut', 'Resize gutters': 'resizeGutters',
+  'Smooth cuts': 'cutSmooth', Knife: 'knife', 'Across page': 'cutAcross', 'One panel': 'cutPanel', 'All panels': 'templates', 'Reading order': 'readingOrder', Uncut: 'uncut', 'Resize gutters': 'resizeGutters',
   'Straight line': 'cutStraight', Arc: 'cutArc', 'Zig-zag': 'cutZigzag', 'Smooth curve': 'cutSmooth',
   'Layout as code': 'layoutCode', 'Edit layout code': 'layoutCode',
   'Transform panel': 'panelTransform', 'Curve edges': 'curve', 'Page templates': 'templates', 'Even out': 'evenOut',

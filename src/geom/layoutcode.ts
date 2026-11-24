@@ -1,6 +1,7 @@
 import { newId, type Cut, type Page, type PageLayout, type PanelTransform, type Pt } from '../doc/model';
 import { DEFAULT_LAYOUT, derivePanels, layoutOf, type Panel } from './carve';
 import { anchorFor } from './groups';
+import { recognizeCut } from './cutshape';
 
 /**
  * Layout as code: the page's cuts and panel styling as short lines of text, in inches.
@@ -79,13 +80,34 @@ function thin(pts: readonly Pt[], eps: number): Pt[] {
  * it short; editing the line replaces the cut with what the line says.
  */
 export function cutWords(c: Cut, page?: Pick<Page, 'widthIn' | 'heightIn'>): string {
+  return readableCutPoints(c, page).map(pt2).join(' -> ') + (c.handles ? ` bend ${pt2(c.handles[0])} ${pt2(c.handles[1])}` : '');
+}
+
+/** The points of a cut as they are shown: a drawn path thinned, and its ends pulled in near the page. */
+export function readableCutPoints(c: Cut, page?: Pick<Page, 'widthIn' | 'heightIn'>): Pt[] {
   let pts = c.pts.length > 2 ? thin(c.pts, HAND_DRAWN_EPS) : c.pts;
   if (page && pts.length > 1) pts = pullEndsIn(pts, page);
-  return pts.map(pt2).join(' -> ') + (c.handles ? ` bend ${pt2(c.handles[0])} ${pt2(c.handles[1])}` : '');
+  return pts;
+}
+
+/** A cut drawn by hand: a path of several points with no curve handles. */
+export const isHandDrawn = (c: Cut, page?: Pick<Page, 'widthIn' | 'heightIn'>): boolean => !c.handles && c.mode !== 'panel' && readableCutPoints(c, page).length > 2;
+
+/**
+ * Tidy every hand-drawn cut: the wobble comes out, and a nearly straight one becomes straight, a
+ * circular one an arc, a cornered one a zig-zag. Ends stay where they were. `scale` is pixels per inch,
+ * which the shape recogniser needs to judge what counts as a wobble.
+ */
+export function smoothDrawnCuts(page: Page, scale: number): Cut[] {
+  return page.cuts.map((c) => {
+    if (!isHandDrawn(c, page)) return c;
+    const pts = recognizeCut(readableCutPoints(c, page), scale).pts;
+    return pts.length >= 2 ? { ...c, pts: thin(pts, 0.01), bounded: true } : c;
+  });
 }
 
 /** A drawn cut is shown thinned to this much (inches): about 1.5 mm, too fine to see on a printed page. */
-const HAND_DRAWN_EPS = 0.06;
+export const HAND_DRAWN_EPS = 0.06;
 /** How far past the page a cut's ends are shown (they are stored running on well beyond it). */
 const END_MARGIN = 0.5;
 

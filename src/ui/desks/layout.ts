@@ -24,7 +24,7 @@ import { icon, ICON_BY_LABEL } from '../icons';
 import { snapCutEnd } from '../../geom/cutangle';
 import { drawCutAngle } from '../cutangleoverlay';
 import { panelPlacement } from '../panelplacement';
-import { describeTransform, formatLayoutCode, LAYOUT_LEGEND, parseLayoutCode, transformMatrix } from '../../geom/layoutcode';
+import { describeTransform, formatLayoutCode, isHandDrawn, LAYOUT_LEGEND, parseLayoutCode, smoothDrawnCuts, transformMatrix } from '../../geom/layoutcode';
 import { pageData } from '../../geom/pagedata';
 import { codeEditor, jsonButtons } from '../codeeditor';
 
@@ -158,6 +158,15 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     preview = undefined;
   }
 
+  /** One undo step: every hand-drawn cut loses its wobble. */
+  function smoothCuts(): void {
+    const next = smoothDrawnCuts(page, ctx.scale());
+    if (JSON.stringify(next) === JSON.stringify(page.cuts)) { ctx.hint('These cuts are already smooth.', { timeout: 2500 }); return; }
+    studio.editPage(page, 'Smooth cuts', ['cuts'], (p) => { p.cuts = smoothDrawnCuts(p, ctx.scale()); });
+    ctx.chrome();
+    ctx.request();
+  }
+
   // ---- Layout as code (in the sidebar, applied live to the canvas)
   let codeOpen = (() => { try { return localStorage.getItem('inkflo:layout-code') === '1'; } catch { return false; } })();
   let codeBefore: { cuts: Cut[]; layout: PageLayout | undefined } | null = null;
@@ -209,7 +218,8 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       h('div', { class: 'sec' }, h('h4', {}, 'Panels'), livePanels),
       h('details', { class: 'sec' }, h('summary', {}, 'Legend'),
         h('dl', { class: 'code-legend' }, LAYOUT_LEGEND.flatMap((l) => [h('dt', {}, h('code', {}, l.code)), h('dd', {}, l.means)]))),
-      h('div', { class: 'sec' }, jsonButtons(`${book.title} page ${book.pages.indexOf(page) + 1}`, () => pageData(book, page))));
+      h('details', { class: 'sec' }, h('summary', {}, 'For developers: page data (JSON)'),
+        jsonButtons(`${book.title} page ${book.pages.indexOf(page) + 1}`, () => pageData(book, page))));
   }
   function setCodeOpen(on: boolean): void {
     codeOpen = on;
@@ -378,6 +388,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     id: 'layout',
     actions: [
       { label: 'Page templates', glyph: '▦', run: templates },
+      { label: 'Smooth cuts', glyph: '〜', disabled: () => !page.cuts.some((c) => isHandDrawn(c, page)), run: smoothCuts },
       { label: 'Even out', glyph: '⇔', disabled: () => !canEvenOut(page), run: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) },
       { label: 'Uncut', glyph: '⌫', run: () => { mode.tool = 'erase'; ctx.chrome(); ctx.request(); } },
     ],
@@ -433,6 +444,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
         slider('Border', 0, 0.12, 0.005, L.border, (v) => `${(v * 72).toFixed(1)}pt`, (v) => setLayout({ border: v }, false), (v) => setLayout({ border: v }, true)),
         h('span', { title: 'Rounds the bends in cuts you draw with the Knife. Straight cuts stay straight: bend a gutter with Curve edges (B).' },
           slider('Smoothing', 0, 100, 5, Math.round(smoothOf(L) * 100), (v) => `${v}%`, (v) => setLayout({ smooth: v / 100 }, false), (v) => setLayout({ smooth: v / 100 }, true))),
+        h('button', { class: 'btn', type: 'button', disabled: !page.cuts.some((c) => isHandDrawn(c, page)), title: 'Take the wobble out of hand-drawn cuts: straight where they are nearly straight, curved where they curve', onclick: smoothCuts }, 'Smooth cuts'),
         h('button', { class: 'btn document-option', type: 'button', disabled: !canEvenOut(page), title: 'Evenly space a straight grid', onclick: () => studio.editPage(page, 'Even out', ['cuts'], (p) => (p.cuts = evenOut(p))) }, 'Even out'),
         h('span', { class: 'hint' }, mode.tool === 'knife' ? (cutMode() === 'panel' ? 'Draw a line through a panel. It runs on to the panel’s borders.' : 'Draw a line across the page. It runs on to the page edges.') : mode.tool === 'resize' ? 'Drag a gutter or panel handle' : mode.tool === 'curve' ? 'Select a gutter, then drag a Bézier handle' : 'Click a gutter to remove it'),
       );
