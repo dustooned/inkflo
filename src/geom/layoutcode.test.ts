@@ -132,4 +132,45 @@ describe('page data for games', () => {
     expect(d.panels[1]!.description).toBe('');
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
   });
+
+  describe('a hand-drawn cut stays readable', () => {
+    /** A wobbly wave across the page, running on far past both edges the way a drawn cut is stored. */
+    const wavy = () => {
+      const p = page();
+      const pts = Array.from({ length: 60 }, (_, i) => ({ x: -1.3 + i * 0.12, y: 4.2 + Math.sin(i / 4) * 0.4 + ((i * 7) % 5 - 2) * 0.004 }));
+      pts.push({ x: 20.11, y: -6.05 });
+      p.cuts = [{ id: 'cwave', mode: 'across', pts, bounded: true }];
+      return p;
+    };
+
+    it('is shown with far fewer points, its ends pulled in near the page, and labelled', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p);
+      const line = code.split('\n').find((l) => l.startsWith('cut '))!;
+      const shown = line.split('#')[0]!.split('->');
+      expect(shown.length).toBeLessThan(20);
+      expect(line).toMatch(/# hand-drawn/);
+      const last = shown.at(-1)!.trim().split(',').map(Number);
+      expect(last[0]).toBeLessThanOrEqual(p.widthIn + 0.5 + 0.01); // shown to 0.01 in
+      expect(last[1]).toBeGreaterThanOrEqual(-0.5 - 0.01);
+    });
+
+    it('reads back as the very same cut when its line is untouched, even after another line changes', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p).replace(/^gutter .*$/m, 'gutter 0.3');
+      const back = parseLayoutCode(code, p);
+      expect(back.errors).toEqual([]);
+      expect(back.cuts[0]).toBe(p.cuts[0]); // same object: every drawn point kept
+      expect(back.layout.gutter).toBe(0.3);
+    });
+
+    it('still reads a line the student edits, and keeps that cut\'s id', () => {
+      const p = wavy();
+      const code = formatLayoutCode(p).replace(/^cut .*$/m, 'cut 0,5 -> 6.6,5');
+      const back = parseLayoutCode(code, p);
+      expect(back.errors).toEqual([]);
+      expect(back.cuts[0]!.id).toBe('cwave');
+      expect(back.cuts[0]!.pts).toHaveLength(2);
+    });
+  });
 });

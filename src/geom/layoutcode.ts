@@ -78,9 +78,39 @@ function thin(pts: readonly Pt[], eps: number): Pt[] {
  * shape needs. An unchanged line reads back as the very same cut, so nothing is lost by showing
  * it short; editing the line replaces the cut with what the line says.
  */
-export function cutWords(c: Cut): string {
-  const pts = c.pts.length > 2 ? thin(c.pts, 0.02) : c.pts;
+export function cutWords(c: Cut, page?: Pick<Page, 'widthIn' | 'heightIn'>): string {
+  let pts = c.pts.length > 2 ? thin(c.pts, HAND_DRAWN_EPS) : c.pts;
+  if (page && pts.length > 1) pts = pullEndsIn(pts, page);
   return pts.map(pt2).join(' -> ') + (c.handles ? ` bend ${pt2(c.handles[0])} ${pt2(c.handles[1])}` : '');
+}
+
+/** A drawn cut is shown thinned to this much (inches): about 1.5 mm, too fine to see on a printed page. */
+const HAND_DRAWN_EPS = 0.06;
+/** How far past the page a cut's ends are shown (they are stored running on well beyond it). */
+const END_MARGIN = 0.5;
+
+/**
+ * Cuts are stored already running on past the page, so their ends can sit far away (20 in off a 6 in page).
+ * For reading, pull each end back along its last segment to half an inch past the page edge. The shown line
+ * is what editing writes back, and every part of the cut on the page is unchanged.
+ */
+function pullEndsIn(pts: Pt[], page: Pick<Page, 'widthIn' | 'heightIn'>): Pt[] {
+  const lo = { x: -END_MARGIN, y: -END_MARGIN }, hi = { x: page.widthIn + END_MARGIN, y: page.heightIn + END_MARGIN };
+  const inside = (p: Pt) => p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y;
+  const pull = (from: Pt, end: Pt): Pt => {
+    if (inside(end) || !inside(from)) return end;
+    // the largest step along from → end that stays in the box
+    let t = 1;
+    for (const [a, d, min, max] of [[from.x, end.x - from.x, lo.x, hi.x], [from.y, end.y - from.y, lo.y, hi.y]] as const) {
+      if (d > 0) t = Math.min(t, (max - a) / d);
+      else if (d < 0) t = Math.min(t, (min - a) / d);
+    }
+    return { x: from.x + (end.x - from.x) * t, y: from.y + (end.y - from.y) * t };
+  };
+  const out = [...pts];
+  out[0] = pull(out[1]!, out[0]!);
+  out[out.length - 1] = pull(out[out.length - 2]!, out.at(-1)!);
+  return out;
 }
 
 /** Write a page's layout as code: the build (cuts, then panels), then its look. */
@@ -89,7 +119,9 @@ export function formatLayoutCode(page: Page): string {
   const out = [`# page ${r3(page.widthIn)} × ${r3(page.heightIn)} in`];
   for (const c of page.cuts) {
     if (c.mode === 'panel') { out.push(`keep ${short(c.id)}  # one-panel cut drawn in Layout`); continue; }
-    out.push(`cut ${cutWords(c)}`);
+    const words = cutWords(c, page);
+    // a path of several points is a hand-drawn shape: say so, and that it is kept exactly unless the line is edited
+    out.push(`cut ${words}${!c.handles && words.split(' -> ').length > 2 ? '  # hand-drawn: kept as drawn unless you edit this line' : ''}`);
   }
   const panels = derivePanels({ ...page, layout: { ...L, panelTransforms: [] } });
   for (const p of panels) {
@@ -212,7 +244,7 @@ export function parseLayoutCode(src: string, page: Page): ParsedLayout {
       // reuse the id of the cut in the same place, so gutters keep their identity
       const old = oldAcross[acrossIndex++];
       // an unchanged line is the very same cut, with all its drawn points
-      if (old && cutWords(old) === args.join(' ')) { cuts.push(old); lines.push({ tokens }); return; }
+      if (old && cutWords(old, page) === args.join(' ')) { cuts.push(old); lines.push({ tokens }); return; }
       const outside = p.some((q) => q.x < -1e-6 || q.y < -1e-6 || q.x > page.widthIn + 1e-6 || q.y > page.heightIn + 1e-6);
       const cut: Cut = { id: old?.id ?? newId('c'), mode: 'across', pts: p, ...(outside ? { bounded: true } : {}) };
       if (handles.length === 2) cut.handles = handles as [Pt, Pt];
