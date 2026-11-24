@@ -1131,5 +1131,5 @@ dialog.gesture-dialog { width: min(760px, calc(100vw - 32px)); }
 .arrange .mini input { width: 64px; min-width: 0; }
 
 /* icon-only segmented control (names stay in the tooltip and aria-label) */
-.seg.seg-compact button { font-size: 0; gap: 0; padding-inline: 10px; }
+.seg.seg-compact button { font-size: calc(0 * 1px); gap: 0; padding-inline: 10px; }
 .seg.seg-compact button svg { width: 18px; height: 18px; }
