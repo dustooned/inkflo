@@ -569,6 +569,9 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   the gesture.
 - **Caption balloons** keep their own box (rotate knob, edge handles, tails). They also take arrow-key nudges
   (1 pt, Shift for 10) and two-finger pinch (size, to readable steps), twist and drag, each one undo step.
+- **Classroom mode** (Display settings, on desks): opens Simple layout and hides the code tools (Layout's Code
+  button and panel, Script's Code view). Student-facing options such as Script dialogue and Style sheet stay.
+  The choice is remembered (`Prefs.classroom`).
 - **Liquify** (Draw, U; Push, Twirl, Pinch, Bloat in its variants) pushes, turns, pinches or swells the paint
   under the brush with a soft falloff (`src/draw/liquify.ts`). Like Smudge it is a saved pixel edit
   (`LiquifyStroke`), replayed from its points, undoable per stroke, and exact between preview and replay.

@@ -76,6 +76,8 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
     vignette.addEventListener('change', () => setPrefs({ vignette: vignette.checked }));
     const guide = h('select', { 'aria-label': 'Composition guides' }, GUIDES.map((g) => h('option', { value: g.id, selected: g.id === p.guide }, g.label)));
     guide.addEventListener('change', () => setPrefs({ guide: guide.value as Guide }));
+    const classroom = h('input', { type: 'checkbox', checked: p.classroom });
+    classroom.addEventListener('change', () => { setPrefs({ classroom: classroom.checked, ...(classroom.checked ? { layout: 'simple' as Layout } : {}) }); rebuild(); });
     const snap = h('input', { type: 'checkbox', checked: p.snapGuide });
     snap.addEventListener('change', () => setPrefs({ snapGuide: snap.checked }));
     return h('div', { class: 'w-240' },
@@ -95,6 +97,7 @@ export function displayMenu(anchor: HTMLElement, opts: { layout?: boolean; compo
         ? [h('div', { class: 'sep' }), h('h4', {}, 'Layout'),
           seg<Layout>([{ id: 'studio', label: 'Studio' }, { id: 'simple', label: 'Simple' }, { id: 'focus', label: 'Focus' }], p.layout, switchLayout, 'Layout'),
           h('div', { class: 'row' }, h('label', {}, finger, 'Draw with finger')),
+          h('div', { class: 'row' }, h('label', { title: 'For classes: opens Simple layout and hides code and developer tools' }, classroom, 'Classroom mode')),
           opts.shell ? h('div', { class: 'row' },
             h('label', {}, 'Brush sidebar', h('select', { 'aria-label': 'Handedness', onchange: (e) => {
               setPrefs({ handed: (e.target as HTMLSelectElement).value === 'left' ? 'left' : 'right' });

@@ -1053,6 +1053,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
   const idle = autoHideChrome(screen, [top, ctxBar, toolRail, insp, compactStatus, message.el, ...(mode.sidebar ? [mode.sidebar] : [])]);
 
   function applyLayout(): void {
+    screen.classList.toggle('classroom', prefs().classroom);
     screen.classList.toggle('focus', prefs().layout === 'focus');
     screen.classList.toggle('simple', prefs().layout === 'simple' && stage === 'draw');
     const compact = screen.matches('.focus, .simple');

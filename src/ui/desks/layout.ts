@@ -1,3 +1,4 @@
+import { prefs } from '../prefs';
 import { panelCraftSection } from '../panelcraft';
 import { newId, type Beat, type Cut,type CutMode, type PageLayout, type Pt } from '../../doc/model';
 import { rhythmSection } from '../rhythm';
@@ -168,7 +169,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
   }
 
   // ---- Layout as code (in the sidebar, applied live to the canvas)
-  let codeOpen = (() => { try { return localStorage.getItem('inkflo:layout-code') === '1'; } catch { return false; } })();
+  let codeOpen = (() => { try { return localStorage.getItem('inkflo:layout-code') === '1' && !prefs().classroom; } catch { return false; } })();
   let codeBefore: { cuts: Cut[]; layout: PageLayout | undefined } | null = null;
   let lastWritten = '';
   const livePanels = h('ol', { class: 'script-code-live', 'aria-label': 'Panels as read so far' });
@@ -417,7 +418,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
     },
     ctx(bar) {
       if (mode.tool !== 'order' && taps.length) taps = [];
-      bar.append(h('button', { class: 'btn document-option', type: 'button', 'aria-pressed': String(codeOpen), title: 'Edit the layout as numbers and code in the sidebar', onclick: () => setCodeOpen(!codeOpen) }, codeOpen ? 'Close code' : 'Code'));
+      bar.append(h('button', { class: 'btn document-option code-tool', type: 'button', 'aria-pressed': String(codeOpen), title: 'Edit the layout as numbers and code in the sidebar', onclick: () => setCodeOpen(!codeOpen) }, codeOpen ? 'Close code' : 'Code'));
       const L = layoutOf(page);
       if (mode.tool === 'place' || mode.tool === 'select') {
         if (mode.tool === 'select') bar.append(h('span', { class: 'hint' }, 'Tap a panel to select it, drag to move it, or drag a gutter to resize.'));
@@ -450,7 +451,7 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       );
     },
     inspector(el) {
-      if (codeOpen) { el.append(codePanel()); return; }
+      if (codeOpen && !prefs().classroom) { el.append(codePanel()); return; }
       el.append(side.switcher());
       if (side.bins()) { bins.refresh(); el.append(bins.el); return; }
       const ps = displayPanels();

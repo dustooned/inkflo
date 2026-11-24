@@ -1133,3 +1133,6 @@ dialog.gesture-dialog { width: min(760px, calc(100vw - 32px)); }
 /* icon-only segmented control (names stay in the tooltip and aria-label) */
 .seg.seg-compact button { font-size: calc(0 * 1px); gap: 0; padding-inline: 10px; }
 .seg.seg-compact button svg { width: 18px; height: 18px; }
+
+/* Classroom mode: no code or developer tools (the layout opens as Simple) */
+.screen.classroom :is(.code-tool, .layout-code, .script-code-input) { display: none; }

@@ -1,3 +1,4 @@
+import { prefs } from '../prefs';
 import type { Beat, Letter } from '../../doc/model';
 import { dialogueText, linesFromDialogueText, reconcileDialogue, replaceDialogue } from '../../geom/lettering';
 import { newId } from '../../doc/model';
@@ -227,7 +228,10 @@ export function scriptDesk(ctx: DeskCtx): DeskMode {
       el.replaceChildren(list, actions);
     },
     ctx(bar) {
-      bar.append(seg<'cards' | 'code'>([{ id: 'cards', label: 'Cards' }, { id: 'code', label: 'Code' }], view, (v) => { if (view === 'code') { applyCode(); commit('Edit script'); } setView(v); }, 'Script view'));
+      if (prefs().classroom && view === 'code') { applyCode(); setView('cards'); }
+      const views = seg<'cards' | 'code'>([{ id: 'cards', label: 'Cards' }, { id: 'code', label: 'Code' }], view, (v) => { if (view === 'code') { applyCode(); commit('Edit script'); } setView(v); }, 'Script view');
+      views.classList.add('code-tool'); // hidden in classroom mode
+      bar.append(views);
       bar.append(h('button', { class: 'btn document-option', type: 'button', onclick: () => openDialogue(ctx) }, 'Dialogue & panels'));
       const panels = ctx.panels().length;
       const mismatch = page.beats.length > 0 && panels !== page.beats.length;
