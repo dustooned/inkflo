@@ -419,7 +419,7 @@ export async function renderDesk(root: HTMLElement, studio: Studio, bookId: stri
       if (pinch.moved) {
         const separation = Math.hypot(a.x - b.x, a.y - b.y);
         const turn = separation > 8 ? bearing(a, b) - pinch.bearing : view.angle - angle;
-        const twist = separation > 8 ? Math.atan2(Math.sin(turn), Math.cos(turn)) : 0;
+        const twist = separation > 8 ? normalizeAngle(turn) * Math.PI / 180 : 0; // the desk works in degrees, tools in radians
         const used = mode.pinchTransform?.({ anchor, to: geom().toPage(local(midpoint(a, b))), scale: separation / distance, turn: twist });
         if (!used) changeView(local(midpoint(a, b)), anchor, zoom * separation / distance, angle + turn);
       }

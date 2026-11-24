@@ -64,6 +64,8 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
   const H = page.heightIn;
   const toPt = (p: Pt): Pt => ({ x: p.x * PT, y: p.y * PT });
   const sel = () => page.balloons.find((b) => b.id === selId) ?? null;
+  /** A two-finger transform in progress on a balloon (one undo step when the fingers lift). */
+  let pinchEdit: { id: string; orig: CaptionSpec; rotation: number | undefined; before: Letter[]; beforeBeats: string } | null = null;
   const outline = (l: Letter) => letterBodyOutline(l, sheet(), W, H);
   const box = (l: Letter) => letterBodyBox(l, sheet(), W, H);
   const localBox = (l: Letter) => box({ ...l, rotation: undefined });
@@ -809,8 +811,46 @@ export function captionDesk(ctx: DeskCtx): DeskMode {
       }
       g.restore();
     },
+    /** Two fingers on a selected balloon: pinch resizes (to readable steps), twist turns, drift moves. */
+    pinchTransform(g) {
+      if (!g) {
+        const done = pinchEdit;
+        pinchEdit = null;
+        if (done) { studio.drawing = false; commit('Transform balloon', done.before, done.beforeBeats); ctx.chrome(); }
+        return false;
+      }
+      const l = sel();
+      if (!l || mode.tool === 'type') return false;
+      pinchEdit ??= { id: l.id, orig: structuredClone(l.cap), rotation: l.rotation, before: structuredClone(page.balloons), beforeBeats: JSON.stringify(page.beats) };
+      if (pinchEdit.id !== l.id) return false;
+      studio.drawing = true;
+      const o = pinchEdit.orig;
+      const a = toPt(g.anchor), t = toPt(g.to);
+      const dx = t.x - a.x, dy = t.y - a.y;
+      const scale = snapScale(o, sheet(), (o.scale ?? 1) * g.scale, state.keepReadable && !l.smallOk, true);
+      l.cap = { ...o, scale, x: o.x + dx, y: o.y + dy, tails: o.tails.map((tail) => followBody(tail, dx, dy)),
+        ...(o.links ? { links: o.links.map((k) => ({ ...k, x: k.x + dx, y: k.y + dy })) } : {}) };
+      const degrees = (((((pinchEdit.rotation ?? 0) + g.turn * 180 / Math.PI) + 180) % 360) + 360) % 360 - 180;
+      if (Math.abs(degrees) > 0.05) l.rotation = degrees; else delete l.rotation;
+      clampLetter(l, page);
+      ctx.request();
+      return true;
+    },
     key(e) {
       const l = sel();
+      const arrow = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number] | undefined>)[e.key];
+      if (l && arrow && mode.tool !== 'type' && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
+        // one point a press (ten with Shift); the tails stay on their speakers
+        const step = e.shiftKey ? 10 : 1;
+        edit('Nudge balloon', () => {
+          const o = l.cap, mx = arrow[0] * step, my = arrow[1] * step;
+          l.cap = { ...o, x: o.x + mx, y: o.y + my, tails: o.tails.map((tail) => followBody(tail, mx, my)),
+            ...(o.links ? { links: o.links.map((k) => ({ ...k, x: k.x + mx, y: k.y + my })) } : {}) };
+          clampLetter(l, page);
+        });
+        ctx.request();
+        return true;
+      }
       if (l && (e.key === 'Delete' || e.key === 'Backspace')) {
         edit('Delete balloon', () => removeLetter(l));
         selId = null;

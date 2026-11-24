@@ -567,6 +567,8 @@ src/engine/              vendored 2Dope engine (see 2DOPE-REUSE-INVENTORY.md)
   page center. Hue, saturation, brightness and Gaussian blur apply to an unlocked paint layer
   with one undo step. Touch on the board pans, and adding a second finger there zooms around
   the gesture.
+- **Caption balloons** keep their own box (rotate knob, edge handles, tails). They also take arrow-key nudges
+  (1 pt, Shift for 10) and two-finger pinch (size, to readable steps), twist and drag, each one undo step.
 - **Liquify** (Draw, U; Push, Twirl, Pinch, Bloat in its variants) pushes, turns, pinches or swells the paint
   under the brush with a soft falloff (`src/draw/liquify.ts`). Like Smudge it is a saved pixel edit
   (`LiquifyStroke`), replayed from its points, undoable per stroke, and exact between preview and replay.
