@@ -1122,3 +1122,14 @@ dialog.gesture-dialog { width: min(760px, calc(100vw - 32px)); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .chips .btn.chosen { font-weight: 700; outline: 2px solid currentColor; }
 .rhythm-dot { display: inline-block; width: 8px; height: 8px; border-radius: var(--r-pill); margin-right: 4px; }
+
+/* Transform "Arrange" menu: toggles, actions and exact numbers */
+.arrange { display: grid; gap: 8px; padding: 4px; min-width: 260px; }
+.arrange-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.arrange-row .btn { flex: 1 1 auto; }
+.arrange .mini { display: flex; align-items: center; gap: 6px; flex: 1 1 0; font-size: var(--fs-xs); color: var(--text-faint); }
+.arrange .mini input { width: 64px; min-width: 0; }
+
+/* icon-only segmented control (names stay in the tooltip and aria-label) */
+.seg.seg-compact button { font-size: 0; gap: 0; padding-inline: 10px; }
+.seg.seg-compact button svg { width: 18px; height: 18px; }

@@ -42,7 +42,7 @@ import { groupAt, groupLabel, insertIndex, layerOfType, panelForGroup } from '..
 import { outlinesOverlap } from '../../geom/selection';
 import { browserPlaneOps } from '../../io/canvasops';
 import { variantOf, type DeskCtx, type DeskMode } from '../desk';
-import { confirmDialog, h, seg, slider, toast } from '../dom';
+import { compactSeg, confirmDialog, h, seg, slider, toast } from '../dom';
 import { layersPanel, type LayerScope, type LayerTarget, type LayerView } from '../layerspanel';
 import { drawVectorStroke, renderVectorLayer } from '../../render/vector';
 import { applyPanelTransform, renderPage } from '../../render/page';
@@ -2076,13 +2076,13 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       bar.prepend(actions, contextLayers, h('button', { class: 'btn', type: 'button', onclick: () => openBookAssets(studio, images.open) }, 'Assets'));
       if (mode.tool === 'image') bar.append(h('span', { class: 'hint' }, 'Drag the image to move it. Drag its corner to resize.'));
       if (mode.tool === 'selection') bar.append(
-        seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'selection')), (x) => { selection.resetMarquee(); ctx.setVariant('selection', x); }, 'Selection shape'),
+        compactSeg(seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'selection')), (x) => { selection.resetMarquee(); ctx.setVariant('selection', x); }, 'Selection shape')),
         ...selection.controls(),
       );
       if (mode.tool === 'select') bar.append(...(picked === 'pixels' ? pixels.controls() : picked === 'selection' ? selection.controls() : []),
         ...(picked && (picked === 'pixels' ? pixels.hasSelection() : selection.hasSelection()) ? [] : [h('span', { class: 'hint' }, 'Tap a line or painted art to select it, then drag to move, or use the handles. Drag on empty space to box-select lines.')]));
       if (mode.tool === 'pixels') bar.append(
-        seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'pixels')), (x) => { pixels.resetMarquee(); ctx.setVariant('pixels', x); }, 'Pixel selection shape'),
+        compactSeg(seg([...MARQUEE_SHAPES], marqueeShape(variantOf(mode, 'pixels')), (x) => { pixels.resetMarquee(); ctx.setVariant('pixels', x); }, 'Pixel selection shape')),
         ...pixels.controls(),
       );
       refreshPicker();
@@ -2379,6 +2379,12 @@ export function drawDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
+      const arrow = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number] | undefined>)[e.key];
+      if (arrow && (using('pixels') || using('selection')) && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
+        const step = (e.shiftKey ? 10 : 1) / book.dpi;
+        const moved = using('pixels') ? pixels.nudge(arrow[0] * step, arrow[1] * step) : selection.nudge(arrow[0] * step, arrow[1] * step);
+        if (moved) return true;
+      }
       if (e.key === 'Enter' && mode.tool === 'selection' && selection.isMarquee()) { selection.closePolygon(); return true; }
       if (e.key === 'Enter' && mode.tool === 'pixels' && pixels.isMarquee()) { pixels.closePolygon(); return true; }
       if (mode.tool === 'tone' && tone.isMarquee()) {

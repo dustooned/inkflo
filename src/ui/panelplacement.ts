@@ -49,7 +49,7 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
     const styled = { ...page, layout: withTransforms([single.panel], [placement(single.panel, matrix)]) };
     draft = { page: styled, panels: derivePanels(styled) };
   }
-  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.15, changed: () => { refresh(); ctx.request(); }, chrome: () => ctx.chrome() });
+  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.15, unit: { label: 'in', scale: 1 }, changed: () => { refresh(); ctx.request(); }, chrome: () => ctx.chrome() });
   /** Keep the box on the selected panel; restart it when the panel or its placement changes. */
   function sync(panel: Panel | undefined): void {
     if (!panel || resizeAll) { if (!xf.dragging()) { xf.clear(); single = null; tracked = ''; } return; }
@@ -155,6 +155,15 @@ export function panelPlacement(ctx: DeskCtx, selected: () => number | null, sele
       sync(panel);
       if (!g) { xf.pinch(null); commitDraft('Transform panel'); return false; }
       return !!panel && xf.pinch(g);
+    },
+    /** Arrow-key step, in page inches; the nudge is applied at once. */
+    nudge(dx: number, dy: number): boolean {
+      if (resizeAll || xf.dragging()) return false;
+      const panel = current();
+      sync(panel);
+      if (!panel || !xf.nudge(dx, dy)) return false;
+      commitDraft('Nudge panel');
+      return true;
     },
     showBleed: () => guides && !!draft,
     overlay(g: CanvasRenderingContext2D, s: number, panel: Panel | null) {

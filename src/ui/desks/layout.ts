@@ -822,6 +822,11 @@ export function layoutDesk(ctx: DeskCtx): DeskMode {
       g.restore();
     },
     key(e) {
+      const arrow = ({ ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] } as Record<string, [number, number] | undefined>)[e.key];
+      if (arrow && mode.tool === 'place' && !(e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]'))) {
+        const step = e.shiftKey ? 0.1 : 0.01;
+        if (placement.nudge(arrow[0] * step, arrow[1] * step)) return true;
+      }
       if (e.key === 'Escape') {
         cancelDrag();
         sel = null;

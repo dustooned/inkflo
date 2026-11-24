@@ -29,7 +29,7 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   let selected: Selection | null = null;
   /** The last area selected (page inches), kept after the tool changes: a gradient can use it. */
   let lastArea: Pt[] | null = null;
-  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true });
+  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 1 / dpi, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true, unit: { label: 'px', scale: dpi } });
   const marquee = createMarquee(ctx, (polygon, from) => pick(polygon, from));
   function pick(polygon: Pt[], from: Pt, only?: Layer): void {
     lastArea = polygon.map((p) => ({ ...p }));
@@ -181,6 +181,11 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       ctx.request();
     },
     hasSelection: () => !!current(),
+    /** Arrow-key step, in page inches. */
+    nudge(dx: number, dy: number): boolean {
+      if (!current() || xf.dragging()) return false;
+      return xf.nudge(dx, dy);
+    },
     /** Unapplied changes are waiting (a new selection must not silently drop them). */
     pending: () => !!current() && xf.moved(),
     /** Pointer-style pick: everything painted on this layer. */
@@ -249,10 +254,14 @@ export function rasterSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
         h('button', { class: 'btn primary', type: 'button', disabled: !s || !xf.moved(), onclick: apply }, 'Apply'),
         h('button', { class: 'btn', type: 'button', disabled: !s && !marquee.active(), onclick: () => { clear(); ctx.chrome(); ctx.request(); } }, 'Cancel'),
         h('button', { class: 'btn', type: 'button', title: 'Select everything painted on this layer', onclick: () => this.selectLayer() }, 'Whole layer'),
-        ...xf.controls({ extent: () => (s && !s.place ? { w: page.widthIn, h: page.heightIn } : null) }),
-        h('button', { class: 'btn', type: 'button', disabled: !s, 'aria-pressed': String(copy), title: 'Leave the original in place and place a copy', onclick: () => { copy = !copy; ctx.chrome(); ctx.request(); } }, 'Keep original'),
-        seg<'smooth' | 'crisp'>([{ id: 'smooth', label: 'Smooth', hint: 'Blend edges when resizing or turning' }, { id: 'crisp', label: 'Crisp', hint: 'Hard pixel edges, nothing blended' }],
-          crisp ? 'crisp' : 'smooth', (v) => { crisp = v === 'crisp'; ctx.chrome(); ctx.request(); }, 'Resampling'),
+        ...xf.controls({
+          extent: () => (s && !s.place ? { w: page.widthIn, h: page.heightIn } : null),
+          extras: (refresh) => [
+            h('div', { class: 'arrange-row' }, h('button', { class: 'btn', type: 'button', disabled: !s, 'aria-pressed': String(copy), title: 'Leave the original in place and place a copy', onclick: () => { copy = !copy; ctx.request(); refresh(); } }, 'Keep original')),
+            seg<'smooth' | 'crisp'>([{ id: 'smooth', label: 'Smooth', hint: 'Blend edges when resizing or turning' }, { id: 'crisp', label: 'Crisp', hint: 'Hard pixel edges, nothing blended' }],
+              crisp ? 'crisp' : 'smooth', (v) => { crisp = v === 'crisp'; ctx.request(); refresh(); }, 'Resampling'),
+          ],
+        }),
         h('span', { class: 'hint' }, s ? `${s.name} · Drag inside to move, a handle to resize, the knob or a corner's outside to turn · two fingers pinch and twist` : 'Draw around paint, or choose Whole layer. For vector ink, use Select lines.')];
     },
     overlay(g: CanvasRenderingContext2D, scale: number) {

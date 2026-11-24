@@ -30,7 +30,7 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
   placement: (id: string) => Placement | null, emptyHint: () => string) {
   const { page, art, book, studio } = ctx;
   let selected: Selection | null = null;
-  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true });
+  const xf = createTransformBox({ scale: () => ctx.scale(), minSize: 0.005, changed: () => ctx.request(), chrome: () => ctx.chrome(), meshModes: true, unit: { label: 'px', scale: book.dpi } });
   const marquee = createMarquee(ctx, (poly, from) => pick(poly, from, false));
   function pick(poly: Pt[], from: Pt, quiet: boolean): void {
     for (const l of layersIn(poly, from)) {
@@ -192,6 +192,14 @@ export function vectorSelection(ctx: DeskCtx, layersIn: (polygon: Pt[], from: Pt
       return true;
     },
     hasSelection: () => !!current(),
+    /** Arrow-key step, in page inches; applied at once like any other gesture here. */
+    nudge(dx: number, dy: number): boolean {
+      const s = current();
+      if (!s || xf.dragging() || !xf.nudge(dx, dy)) return false;
+      const next = shaped(s);
+      if (next) apply('Nudge selected lines', next);
+      return true;
+    },
     pending: () => false,
     hover: marquee.hover,
     closePolygon: marquee.closePolygon,

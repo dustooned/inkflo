@@ -5,7 +5,8 @@ import {
   boxFrame, changeMatrix, fitBox, flipBox, grabBox, moveBox, pinchBox, pivotFraction, pivotPoint, resizeOBox, rotateOBox,
   sameBox, snapBoxToPage, turnBox, wrapDegrees, type BoxGrab, type OBox,
 } from '../geom/xformbox';
-import { h, seg } from './dom';
+import { compactSeg, h, seg } from './dom';
+import { popover } from './popover';
 import { icon, type IconName } from './icons';
 import { drawMeshHandles, drawTransformBox } from './selectiongesture';
 
@@ -34,6 +35,8 @@ export interface TransformBoxOptions {
   chrome: () => void;
   /** Offer Distort and Warp (tools whose art can be bent, not just placed). */
   meshModes?: boolean;
+  /** How document units show in the numeric fields: `scale` units per displayed unit (px for a paint tool, inches for panels). */
+  unit?: { label: string; scale: number };
 }
 
 export interface GestureView {
@@ -248,37 +251,93 @@ export function createTransformBox(o: TransformBoxOptions) {
       });
     },
 
-    /** The bar: how it scales, snapping, the pivot, flips, turn, fit and reset. */
+    /** Numeric fields read from and written to the box: centre, size along its axes, turn from the original. */
+    fields(): { x: number; y: number; w: number; h: number; angle: number } | null {
+      return box ? { x: box.cx, y: box.cy, w: box.w, h: box.h, angle: api.angle() } : null;
+    },
+    setField(key: 'x' | 'y' | 'w' | 'h' | 'angle', value: number): boolean {
+      if (!box || !orig || !Number.isFinite(value) || inMesh()) return false;
+      const next = { ...box };
+      if (key === 'x') next.cx = value;
+      else if (key === 'y') next.cy = value;
+      else if (key === 'w') next.w = Math.max(o.minSize, value);
+      else if (key === 'h') next.h = Math.max(o.minSize, value);
+      else next.a = orig.a + value * Math.PI / 180;
+      if (!set(next)) return false;
+      o.changed();
+      return true;
+    },
+    /** Move by a fixed step (arrow keys). */
+    nudge(dx: number, dy: number): boolean {
+      if (!box || inMesh()) return false;
+      if (!set(moveBox(box, { x: dx, y: dy }))) return false;
+      o.changed();
+      return true;
+    },
+
+    /**
+     * The bar: how it scales, then one Arrange menu for the rest (snapping, pivot, flips, turn, fit, reset and
+     * exact numbers). `extras` adds tool-specific rows to that menu.
+     */
     controls(view: {
       extent?: () => { w: number; h: number } | null;
       /** For tools that apply each change as it happens: called with a label after a button changes the box. */
       commit?: (label: string) => void;
       /** Offer Reset (tools that apply as they go have nothing to reset to). Default true. */
       reset?: boolean;
+      extras?: (refresh: () => void) => HTMLElement[];
     } = {}): HTMLElement[] {
-      const bent = inMesh();
-      const on = !!box && !bent;
-      const toggle = (label: string, pressed: boolean, title: string, run: () => void) =>
-        h('button', { class: 'btn', type: 'button', 'aria-pressed': String(pressed), disabled: !on, title, onclick: run }, label);
-      const action = (label: string, title: string, run: () => void, disabled = !on, glyph?: IconName) =>
-        h('button', { class: 'btn', type: 'button', disabled, title, onclick: run }, glyph ? icon(glyph, 16) : null, label);
-      const extent = view.extent?.() ?? null;
+      const unit = o.unit ?? { label: 'in', scale: 1 };
+      const arrange = h('button', { class: 'btn', type: 'button', 'aria-haspopup': 'dialog', title: 'Flip, turn, fit, snapping, pivot and exact numbers', disabled: !box }, 'Arrange ▾');
+      arrange.addEventListener('click', () => {
+        const holder = h('div', { class: 'arrange' });
+        const again = () => holder.replaceChildren(...build());
+        const build = (): HTMLElement[] => {
+          const bent = inMesh();
+          const on = !!box && !bent;
+          const row = (...items: (HTMLElement | null)[]) => h('div', { class: 'arrange-row' }, ...items.filter((x): x is HTMLElement => !!x));
+          const toggle = (label: string, pressed: boolean, title: string, run: () => void) =>
+            h('button', { class: 'btn', type: 'button', 'aria-pressed': String(pressed), disabled: !on, title, onclick: () => { run(); again(); } }, label);
+          const action = (label: string, title: string, run: () => void, disabled = !on, glyph?: IconName) =>
+            h('button', { class: 'btn', type: 'button', disabled, title, onclick: () => { run(); again(); } }, glyph ? icon(glyph, 16) : null, label);
+          const extent = view.extent?.() ?? null;
+          const f = api.fields();
+          const num = (label: string, key: 'x' | 'y' | 'w' | 'h' | 'angle', value: number | undefined, suffix: string) => {
+            const input = h('input', { type: 'number', step: key === 'angle' ? '1' : 'any', 'aria-label': label, disabled: !on || value === undefined }) as HTMLInputElement;
+            if (value !== undefined) input.value = String(Math.round((key === 'angle' ? value : value * unit.scale) * 100) / 100);
+            input.addEventListener('change', () => {
+              const v = Number(input.value);
+              if (api.setField(key, key === 'angle' ? v : v / unit.scale)) view.commit?.(`Set ${label.toLowerCase()}`);
+              again();
+            });
+            return h('label', { class: 'mini' }, label, input, suffix);
+          };
+          return [
+            row(toggle('Snapping', snapping, 'Snap turns to 15°, size to 100%, and position to the page edges and centre', () => { snapping = !snapping; o.chrome(); }),
+              toggle('Pivot', pivotOn, 'Show the pivot the box turns about. Drag it to move it', () => { pivotOn = !pivotOn; o.chrome(); o.changed(); })),
+            row(action('Flip horizontal', 'Mirror left and right', () => { api.flip('h'); view.commit?.('Flip selection horizontally'); }),
+              action('Flip vertical', 'Mirror top and bottom', () => { api.flip('v'); view.commit?.('Flip selection vertically'); })),
+            row(action('Rotate 45°', 'Turn a further 45° about the centre', () => { api.rotateBy(45); view.commit?.('Rotate selection'); }),
+              ...(extent ? [action('Fit to page', 'Scale to fill the page, keeping proportions', () => { api.fit(extent); view.commit?.('Fit selection to page'); })] : []),
+              ...(view.reset === false ? [] : [action('Reset', 'Put it back as it was selected', () => api.reset(), !api.moved(), 'resetBox')])),
+            row(num('X', 'x', f?.x, unit.label), num('Y', 'y', f?.y, unit.label)),
+            row(num('W', 'w', f?.w, unit.label), num('H', 'h', f?.h, unit.label), num('Angle', 'angle', f?.angle, '°')),
+            ...(view.extras?.(again) ?? []),
+          ];
+        };
+        holder.replaceChildren(...build());
+        popover(arrange, holder, 'below', 'Arrange');
+      });
       return [
-        seg<ScaleMode>([
+        compactSeg(seg<ScaleMode>([
           { id: 'freeform', label: 'Freeform', icon: 'scaleFreeform', hint: 'Each side stretches on its own' },
           { id: 'uniform', label: 'Uniform', icon: 'scaleUniform', hint: 'Keep proportions. Shift does this for one drag' },
           ...(o.meshModes ? [
             { id: 'distort' as const, label: 'Distort', icon: 'scaleDistort' as const, hint: 'Pull each corner on its own, with perspective' },
             { id: 'warp' as const, label: 'Warp', icon: 'scaleWarp' as const, hint: 'Bend the art by pulling points on a grid' },
           ] : []),
-        ], scaleMode, (v) => { scaleMode = v; nodes = null; meshMoved = false; nodeBase = null; o.chrome(); o.changed(); }, 'Transform scale'),
-        toggle('Snapping', snapping, 'Snap turns to 15°, size to 100%, and position to the page edges and centre', () => { snapping = !snapping; o.chrome(); }),
-        toggle('Pivot', pivotOn, 'Show the pivot the box turns about. Drag it to move it', () => { pivotOn = !pivotOn; o.chrome(); o.changed(); }),
-        action('Flip horizontal', 'Mirror left and right', () => { api.flip('h'); view.commit?.('Flip selection horizontally'); }),
-        action('Flip vertical', 'Mirror top and bottom', () => { api.flip('v'); view.commit?.('Flip selection vertically'); }),
-        action('Rotate 45°', 'Turn a further 45° about the centre', () => { api.rotateBy(45); view.commit?.('Rotate selection'); }),
-        ...(extent ? [action('Fit to page', 'Scale to fill the page, keeping proportions', () => { api.fit(extent); view.commit?.('Fit selection to page'); })] : []),
-        ...(view.reset === false ? [] : [action('Reset', 'Put it back as it was selected', () => api.reset(), !api.moved(), 'resetBox')]),
+        ], scaleMode, (v) => { scaleMode = v; nodes = null; meshMoved = false; nodeBase = null; o.chrome(); o.changed(); }, 'Transform scale')),
+        arrange,
       ];
     },
   };

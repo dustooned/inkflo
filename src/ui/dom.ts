@@ -68,6 +68,13 @@ export function seg<T extends string>(options: { id: T; label: string; icon?: Ic
   return el;
 }
 
+/** Make a segmented control icon-only: each button keeps its name as a tooltip and accessible name. */
+export function compactSeg(el: HTMLElement): HTMLElement {
+  el.classList.add('seg-compact');
+  for (const b of el.querySelectorAll('button')) b.setAttribute('aria-label', b.textContent ?? '');
+  return el;
+}
+
 export function confirmDialog(title: string, body: string, ok = 'OK'): Promise<boolean> {
   const modal = openModal<'cancel' | 'ok'>({ title, content: body, actions: [{ id: 'cancel', label: 'Cancel' }, { id: 'ok', label: ok, primary: true }] });
   return modal.done.then((id) => id === 'ok');
